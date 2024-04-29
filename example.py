@@ -22,6 +22,7 @@ r.set_gain(1.1)
 r.set_offset(2)
 
 # none of the above commands are executed yet until we commit.
+# It's safe to do it because the rtc is not running yet.
 r.commit()
 
 # Create an async runner. This component will run the rtc in a separate thread.
@@ -30,15 +31,25 @@ runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
 
 runner.start()
 
-print(runner.state())
-
 sleep(1)
+print_n_last_lines(runner.flush(), 6)
+
+
+r.set_slope_offsets(slope_offsets[1])
+r.set_gain(0)
+r.set_offset(-1)
+
+# request a commit. The runner will commit the new values at the next iteration.
+r.request_commit()
+
+sleep(.2)
+
 # pause keep the thread alive but stop the execution of the rtc.
 # this can be resume later using runner.resume()
 runner.pause()
 
-# get the output of the runner but just keep the last 11 lines.
-print_n_last_lines(runner.flush(), 11)
+# get the output of the runner but just keep the last 6 lines.
+print_n_last_lines(runner.flush(), 6)
 
 # kill the thread. A new thread can still be recreated using `start` later.
 runner.stop()

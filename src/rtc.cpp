@@ -36,7 +36,7 @@ struct updatable {
      * This pointer is atomic to allow for thread-safe access and modification of the current value.
      *
      */
-    std::atomic<T*> current_;
+    T* current_; /**< A pointer to the current value. */
     T* next_; /**< A pointer to the next value. */
     bool has_changed; /**< A flag indicating whether the value has changed. */
 
@@ -121,7 +121,7 @@ struct updatable {
     void commit()
     {
         if (has_changed) {
-            next_ = current_.exchange(next_);
+            std::swap(current_, next_);
             has_changed = false;
         }
     }
@@ -193,6 +193,10 @@ struct RTC {
 
     /**
      * @brief Commits the updated values of slope offsets, gain, and offset.
+     *
+     * This function should only be called when RTC is not running.
+     * Otherwise, call request_commit to ask for a commit to be performed after  the next iteration.
+     *
      */
     void commit() {
         slope_offsets.commit();
