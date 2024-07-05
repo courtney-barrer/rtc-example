@@ -16,6 +16,20 @@ find_package(nanobind CONFIG REQUIRED)
 # Note: python and nanobind are automatically added as dependencies with `nanobind_add_module`.
 nanobind_add_module(_rtc src/rtc.cpp)
 
+
+
+target_link_libraries(_rtc PRIVATE BMC FliSdk)
+
+target_include_directories(_rtc PRIVATE
+  "/opt/Boston Micromachines/include"
+  "/opt/FirstLightImaging/FliSdk/include"
+)
+
+target_link_directories(_rtc PRIVATE
+  "/opt/Boston Micromachines/lib"
+  "/opt/FirstLightImaging/FliSdk/lib/release"
+)
+
 target_include_directories(_rtc PRIVATE include)
 target_compile_features(_rtc PRIVATE cxx_std_20)
 

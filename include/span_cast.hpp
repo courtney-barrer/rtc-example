@@ -59,7 +59,7 @@ namespace nanobind::detail
         static handle from_cpp(std::span<T> src, rv_policy, cleanup_list *cleanup) noexcept {
             // Create a non owning ndarray from the span and cast it to Python handle.
             return internal_caster::from_cpp(
-                nd_array_type(::detail::void_ptr(src.data()), {src.size()}),
+                nd_array_type(::detail::void_ptr(src.data()), {src.size()}, handle()),
                 rv_policy::reference, cleanup
             );
         }

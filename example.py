@@ -54,14 +54,11 @@ N0 = reco_fits['FPM_OUT'].data # calibration source reference intensity (FPM OUT
 nmodes = 140
 #CM = np.zeros( [140 , 640*512], dtype=np.float32).reshape(-1) # just use zeros
 
-pupil_pixels = np.ones(CM.shape[0], dtype=np.int32)# np.array( pup_classification['pupil_pixels'][:-2], dtype=np.int32)
+pupil_pixels = np.array( pup_classification['pupil_pixels'][:-2], dtype=np.int32)
 
 if len( pupil_pixels ) != CM.shape[0]:
-    raise TypeError("number of pupil pixels (for control) does not match\
+    raise typeError("number of pupil pixels (for control) does not match\
     control matrix size!!! CHeck why, did you input correct files?")
-
-
-
 # create 2 slope offsets buffer.
 slope_offsets = np.ones((2, 15), dtype=np.float32)
 
@@ -91,8 +88,9 @@ r.commit()
 plt.imshow( r.get_last_frame().reshape(512,640)); plt.show()
 
 
-# for playing with reconstructor / testing  
-# test filtering and matrix mult new image 
+# for playing with reconstructor / testing 
+r.compute_cmd() 
+# test filtering new image 
 r.test()#CM.reshape(-1))
 
 
@@ -126,4 +124,3 @@ print_n_last_lines(runner.flush(), 6)
 runner.stop()
 
 # `del runner`` will also stop the thread.
-

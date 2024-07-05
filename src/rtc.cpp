@@ -969,4 +969,3 @@ NB_MODULE(_rtc, m) {
         .def("state", &AsyncRunner::state)
         .def("flush", &AsyncRunner::flush);
 }
-

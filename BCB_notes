@@ -1,0 +1,67 @@
+RTC notes - easier to see in visual studio code - main menu
+===================
+
+nanobind to connect c++ to python 
+
+TO DO
+====
+ - in miniconda python still need to install python version of bmc (we installed c++ version and RTC class initializes DM). Now need to install FLi SDK for both python and c++ in this python environment.
+ - simulate a matrix multiplication to get a float DM command with basic error checking and send to the DM. 
+
+28/5/24 notes
+-----
+to go back to old python version. go to home directory->menu->show hidden files-> bashrc -> comment out last line "export PATH=/home/baldr/miniconda3/bin:$PATH"
+
+if making changes to rtc recompile 
+baldr@baldr-Precision-T1600:~/Documents/rtc-example$ pip install --no-build-isolation -e .
+
+to run in python 
+baldr@baldr-Precision-T1600:~/Documents/rtc-example$ ipython
+
+
+main python code in example.py, main cpp code in rtc.cpp
+
+
+import rtc
+r = rtc.RTC()
+
+can make shared variable in c++ by initializing it in RTC class . 
+e.g. 
+struct RTC {
+
+    DM hdm = {};
+
+    float value = 10;
+
+    etc etc
+
+then in python
+
+In [3]: r.value
+Out[3]: 10.0
+
+After adding in to CMake.txt file 
+
+target_link_directories(_rtc PRIVATE "/opt/FirstLightImaging/FliSdk/lib/release")
+
+target_include_directories(_rtc PRIVATE "/opt/FirstLightImaging/FliSdk/include")
+
+and adding in code to RTC module to open FLI camera. It compiles but when importing rtc  in pytho it complains 
+
+ImportError: /home/baldr/miniconda3/lib/python3.12/site-packages/rtc/_rtc.cpython-312-x86_64-linux-gnu.so: undefined symbol: _ZN6FliSdkC1Ev
+
+addign in CMake.txt target_link_libraries(_rtc PRIVATE FliSdk) gets rid of this but then complains that it doesnt have access
+
+ImportError: libFliSdk.so: cannot open shared object file: No such file or directory
+
+copying line from CMake in example code we use
+target_link_libraries(Example FliSdk)
+
+Cannot specify link libraries for target "Example" which is not built by
+        this project.
+
+In the end copied to libFliSdk.so /lib
+import rtc
+ImportError: libboost_filesystem.so.1.73.0: cannot open shared object file: No such file or directory
+deleted it from here after 
+
