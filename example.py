@@ -13,16 +13,6 @@ def print_n_last_lines(s: str, n: int = 10):
 
 
 """
-Questions for Julien - how to pass DM / camera object between python a c++? 
-given input reconstructor files we need to update camera settings - in python or C++,
-makes sense in C++.
-
-function - update_camera() based on reconstructotr input which has camera settings 
-git commits?
-
-how to save camera config file? 
-
-with updateables - why next and not current after commit. 
 
 
 """
