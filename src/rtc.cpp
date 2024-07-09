@@ -250,51 +250,46 @@ std::vector<T> getValuesAtIndices(const std::span<T>& data_span, std::span<const
     return values;
 }
 
-double** readCSV(const std::string& file_path, size_t& rows, size_t& cols) {
-    std::ifstream file(file_path);
+
+double* readCSV(const std::string& filePath) {
+    static const int ARRAY_SIZE = 140;
+    static double values[ARRAY_SIZE]; // Static array to return pointer to
+
+    std::ifstream file(filePath);
     if (!file.is_open()) {
-        std::cerr << "Failed to open file." << std::endl;
-        return nullptr;
+        throw std::runtime_error("Could not open file");
     }
 
     std::string line;
-    std::vector<double*> data;
-    cols = 0;
+    int count = 0;
 
-    // Read the file line by line
     while (std::getline(file, line)) {
-        std::stringstream line_stream(line);
-        std::string cell;
-        size_t column_index = 0;
+        std::stringstream ss(line);
+        std::string item;
+        int columnCount = 0;
 
-        // Allocate memory for a new row using calloc
-        double* row = (double*)calloc(cols, sizeof(double));
-
-        while (std::getline(line_stream, cell, ',')) {
-            double value = std::stod(cell);
-
-            // If it's the first row, determine the number of columns
-            if (data.size() == 0) {
-                cols++;
-                row = (double*)realloc(row, cols * sizeof(double));
-            }
-
-            row[column_index++] = value;
+        while (std::getline(ss, item, ',')) {
+            columnCount++;
         }
 
-        data.push_back(row);
-        rows++;
+        if (columnCount != 1) {
+            throw std::runtime_error("File must contain exactly one column");
+        }
+
+        // Parse the single column value
+        double value;
+        std::stringstream(line) >> value;
+        values[count] = value;
+        count++;
     }
 
-    // Allocate memory for the 2D array to return
-    double** array = (double**)calloc(rows, sizeof(double*));
-    for (size_t i = 0; i < rows; ++i) {
-        array[i] = data[i];
+    if (count != ARRAY_SIZE) {
+        throw std::runtime_error("File must contain exactly 140 rows");
     }
 
-    file.close();
-    return array;
+    return values;
 }
+
 
 
 
@@ -306,7 +301,46 @@ struct RTC {
     DM hdm = {};
     FliSdk* fli = {};
 
-    float value = 10;
+    // -----------  dimensions of image
+    uint16_t image_width;// i.e. cols in image
+    uint16_t image_height;// i.e. rows in image 
+    uint32_t full_image_length; // = image_width * image_height - must be updated 
+    // everytime these get changed! 
+    // this should only be in init of RTC and using method update_camera_settings()
+
+    // ----------- DM shapes 
+    // serial number to open DM 
+    const char * dm_serial_number = "17DW019#053";
+    // init DM map look up table
+    uint32_t *map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*140); //MAX_DM_SIZE = 140 (BMC multi-3.5 DM)
+ 
+    // paths to DM shape csv files 
+    const char * flat_dm_file = "/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
+    const char * checkers_file = "/home/baldr/Documents/baldr/DMShapes/waffle.csv";
+    const char * fourTorres_file = "/home/baldr/Documents/baldr/DMShapes/four_torres.csv";
+    
+    // BMC calibrated DM flat position  
+    double* flat_dm_array = readCSV(flat_dm_file);
+    // applies a waffle pattern on DM at frequency corresponding to interactuator spacing 
+    double* checkers_dm_array = readCSV(checkers_file); 
+    // pokes near each corner of the DM 
+    double* fourTorres_dm_array = readCSV(fourTorres_file); 
+
+    // TO DO 
+    // updatable basis used in reconstructor (iteract with my python BALDR module)
+
+    // ----------- camera settings 
+    //see update_camera method in RTC class to update camera settings 
+    // follow proceedure set->commit->update 
+    updatable<double> det_dit; // detector integration time (s)
+    updatable<double> det_fps; // frames per second (Hz)
+    updatable<std::string> det_gain; // "low" or "medium" or "high"
+    updatable<bool> det_crop_enabled; //true/false
+    updatable<bool> det_tag_enabled; //true/false
+    updatable<std::string> det_cropping_rows; //"r1-r2"
+    updatable<std::string> det_cropping_cols; //"c1-c2"
+
+    // ----------- updatable variables relating to phase control 
     updatable<std::span<const float>> slope_offsets; /**< container for slope offsets. */
     updatable<float> gain; /**< value for gain. */
     updatable<float> offset; /**< value for offset. */
@@ -315,6 +349,7 @@ struct RTC {
     updatable<std::span<float>> I0; /**< reference intensity with FPM in. */
     updatable<float> flux_norm; /**< sum of intensity across detector. */
     updatable<std::span<int>> pupil_pixels; /**< value for offset. */
+
 
     std::atomic<bool> commit_asked = false; /**< Flag indicating if a commit is requested. */
 
@@ -327,40 +362,15 @@ struct RTC {
     RTC() {
         /* open BMC DM */  
         BMCRC	rv = NO_ERR;
-        // pre-defined DM shapes
-        //const char DMshapes_path = "/home/baldr/Documents/baldr/DMShapes/"
-        const char * serial_number = "17DW019#053";
-        const char * flat_dm_file = "/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
-        const char * checkers_file = "/home/baldr/Documents/baldr/DMShapes/dm_checker_pattern.csv";
-        const char * fourTorres_file = "/home/baldr/Documents/baldr/DMShapes/four_torres.csv";
-        size_t rows = 0, cols = 0;
-        double** flat_dm_array = readCSV(flat_dm_file, rows, cols);
-        
-        if (flat_dm_array == nullptr) {
-            std::cerr << "Failed to read flat DM CSV file." << std::endl;
-            
-        }
-        cout << "no rows = " << rows << endl;
-        cout << "no cols = " << cols << endl;
-        /*
-        // Print the data to verify
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                std::cout << flat_dm_array[i][j] << " ";
-            }
-            std::cout << std::endl;
-            //free(flat_dm_array[i]);  // Free the allocated memory for each row
-        }
-        */
+ 
 
-        
-        rv = BMCOpen(&hdm, serial_number);
+        rv = BMCOpen(&hdm, dm_serial_number);
 
-        uint32_t *map_lut;
+        //uint32_t *map_lut; // <- we put this global in scope of struct
         uint32_t	k = 0;
 	    double	*test_array;
         //default lookup table of DM 
-        map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*MAX_DM_SIZE);
+        //map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*MAX_DM_SIZE); // <- we put this global in scope of struct
         //load it 
         rv = BMCLoadMap(&hdm, NULL, map_lut);
 
@@ -374,7 +384,6 @@ struct RTC {
         //rv = BMCSetSingle(&hdm, 65, 0.2);
 
         // try apply an array 
-        /*
         double *test_array1;
 	    double *test_array2;
 
@@ -386,12 +395,17 @@ struct RTC {
             test_array1[k] = 0.5;
             test_array2[k] = 0;
         }
-        */
+        
         
         //BMCSetArray(&hdm, test_array1, map_lut);
-        //cout << "hdm" << *hdm << endl;
+        BMCSetArray(&hdm, flat_dm_array, map_lut);
+        //cout << "flat_dm_array[140]" << flat_dm_array[0][140] << endl;
         
-
+        // Print the array to verify
+        for (int i = 0; i < 140; ++i) {
+            std::cout << flat_dm_array[i] << " ";
+        }
+        std::cout << std::endl;
 
         /*test_array = (double *)calloc(hdm->ActCount, sizeof(double));
 		for(k=0; k<*hdm->ActCount; k++) {
@@ -478,6 +492,9 @@ struct RTC {
         //take the first camera in the list
         fli->setCamera(cameraName);
 
+        // --------------- RESTORE DEFAULT SETTINGS ON INIT -----
+        //fli->serialCamera()->sendCommand("restorefactory");
+
         cout << "Setting mode Full." << endl;
         //set full mode
         fli->setMode(FliSdk::Mode::Full);
@@ -493,20 +510,27 @@ struct RTC {
         fli->imageProcessing()->enableAutoClip(true);
 
         //Seting up things
-        double fps = 0;
-		fli->serialCamera()->getFps(fps);
-        cout << "current Fps read: " << fps << endl;
-        cout << "input desired fps value" << endl;
-        cin >> fps;
-		fli->serialCamera()->setFps(fps);
-		fli->serialCamera()->getFps(fps);
-		cout << "new Fps read: " << fps << endl;
+        //double fps = 0;
+		//fli->serialCamera()->getFps(fps);
+        //cout << "current Fps read: " << fps << endl;
+        //cout << "input desired fps value" << endl;
+        //cin >> fps;
+		//fli->serialCamera()->setFps(fps);
+		//fli->serialCamera()->getFps(fps);
+		//cout << "new Fps read: " << fps << endl;
 
-        uint16_t width, height;
-        fli->getCurrentImageDimension(width, height);
-        cout << "width  =  " << width << endl;
-        cout << "height  =  " << height << endl;
-        cout << "input desired height" << endl;
+        // init image_width and height !! important for shapping raw image!! 
+        fli->getCurrentImageDimension(image_width, image_height);
+        cout << "width  =  " << image_width << endl;
+        cout << "height  =  " << image_height << endl;
+
+        full_image_length = static_cast<uint32_t>(image_width) * static_cast<uint32_t>(image_height);
+
+        cout << "full_image_length  =  " << full_image_length << endl;
+        
+        //image_width = width;
+        //image_height = height; 
+        
         //cin >> height;      
         //fli->setImageDimension(width, height);
         //fli->getCurrentImageDimension(width, height);
@@ -547,6 +571,91 @@ struct RTC {
  
     }
 
+    void update_camera_settings( ){
+
+        //print to check stuff 
+        double fps = 0;
+		fli->serialCamera()->getFps(fps);
+        cout << "fps prior = " << fps << endl;
+
+        fli->stop();
+
+        
+        // crop first
+        fli->serialCamera()->sendCommand("set cropping off"); //FliCamera_sendCommand("set cropping off");
+        if (det_crop_enabled.current()) {
+            //set cropping and enable
+            fli->serialCamera()->sendCommand("set cropping rows "+ det_cropping_rows.current());
+            fli->serialCamera()->sendCommand("set cropping columns "+ det_cropping_cols.current());
+            fli->serialCamera()->sendCommand("set cropping on");
+
+        }
+        
+
+        
+        if (det_tag_enabled.current()) {
+            // makes first pixels correspond to frame number and other info 
+            // 
+            //TO DO: should make corresponding mask for this to be added to 
+            //pixel_filter if this is turned on to ensure frame count etc
+            //does not get interpretted as intensities. 
+            //
+
+            fli->serialCamera()->sendCommand("set imagetags on");  
+        } else{
+            fli->serialCamera()->sendCommand("set imagetags off");  
+        }
+        
+
+        fli->serialCamera()->sendCommand("set cropping rows "+ det_cropping_rows.current());
+        fli->serialCamera()->sendCommand("set cropping cols "+ det_cropping_cols.current());
+
+        //set fps
+        fli->serialCamera()->setFps(det_fps.current());
+
+        //set int
+        //fli->serialCamera()->sendCommand("set tint " + std::to_string(det_dit))
+
+        fli->serialCamera()->getFps(fps);
+        cout << "fps despues = " << fps << endl;
+
+        fli->update();
+
+        //uint16_t width, height;
+        fli->getCurrentImageDimension(image_width, image_height);
+        cout << "image width  =  " << image_width << endl;
+        cout << "image height  =  " << image_height << endl;
+        full_image_length = static_cast<uint32_t>(image_width) * static_cast<uint32_t>(image_height);
+
+        cout << "image height  =  " << full_image_length << endl;
+
+        fli->start();
+
+    }
+
+    void dm_test(){
+        double *test_array1;
+	    double *test_array2;
+        int k;
+
+        test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
+        test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
+        
+        //std::vector<double> test_vec(140, 0); // can we pass vectors to BMCSetArray?
+        // ans is no..
+
+        for(k=0; k<(int)hdm.ActCount; k++) {
+            map_lut[k] = 0;
+            test_array1[k] = 0.5;
+            test_array2[k] = 0;
+        }
+
+        //double** flat_dm_array = readCSV(flat_dm_file, rows, cols);
+        BMCSetArray(&hdm, fourTorres_dm_array, map_lut);
+
+        // test if we can pass vectors? 
+        //BMCSetArray(&hdm, test_vec, map_lut); // NO! we cant 
+    }
 
     //void applyDMshape(double *array1){ 
     //    rv = BMCSetArray(hdm, array1, map_lut);
@@ -573,7 +682,13 @@ struct RTC {
 
     std::span<uint16_t> get_last_frame() { 
         
-        return {(uint16_t*)fli->getRawImage(), 512*640}; // full dimension for C-RED3 = 512*640 
+        return {(uint16_t*)fli->getRawImage(), full_image_length}; // full dimension for C-RED3 = 512*640 
+     
+    }
+
+    double* get_flat_shape() { 
+        
+        return flat_dm_array; 
      
     }
 
@@ -703,8 +818,7 @@ struct RTC {
      * @brief Performs computation using the current RTC values.
      * @param os The output stream to log some informations.
      */
-    void compute(std::ostream& os)
-    {
+    void compute(std::ostream& os){
         os << "computing with " << (*this) << '\n';
 
 
@@ -739,19 +853,22 @@ struct RTC {
      * @brief Sets the slope offsets.
      * @param new_offsets The new slope offsets to set.
      */
+
+    //legacy - can delete 
     void set_slope_offsets(std::span<const float> new_offsets) {
         slope_offsets.update(new_offsets);
     }
     
-
+    //RECONSTRUCTOR MATRIX 
     void set_ctrl_matrix(std::span<float> mat) {
         reconstructor.update(mat);
     }
-
+    // PHASE CONTROL REGION IN PUPIL
     void set_pupil_pixels(std::span<int> array) {
         pupil_pixels.update(array);
     }
 
+    // SIGNAL VARIABLES 
     void set_bias(std::span<uint16_t> array) {
         bias.update(array);
     }
@@ -764,12 +881,43 @@ struct RTC {
         flux_norm.update(value);
     }
 
+    // CAMERA SETTINGS 
+    void set_det_fps(double value){
+        det_fps.update(value);
+    }
+
+    void set_det_dit(double value){
+        det_dit.update(value);
+    }
+
+    void set_det_gain(std::string value){
+        det_gain.update(value);
+    }
+    
+    void set_det_tag_enabled(bool value){
+        det_tag_enabled.update(value);
+    }
+
+    void set_det_crop_enabled(bool value){
+        det_crop_enabled.update(value);
+    }
+
+    void set_det_cropping_rows(std::string value){
+        //should be "r1-r2" where r1, r2 are ints , r1 multiple of 4, r2 multiple 4-1
+        det_cropping_rows.update(value);
+    }
+
+    void set_det_cropping_cols(std::string value){
+        //should be "c1-c2" where c1, c2 are ints , c1 multiple of 32, c2 multiple 32-1
+        det_cropping_cols.update(value);
+    }
+    
 
     /**
      * @brief Sets the gain.
      * @param new_gain The new gain to set.
      */
-    void set_gain(float new_gain) {
+    void set_Ki_gain(float new_gain) {
         gain.update(new_gain);
     }
 
@@ -789,14 +937,36 @@ struct RTC {
      *
      */
     void commit() {
-        slope_offsets.commit();
-        gain.commit();
-        offset.commit();
+        //for now just commit everything - but we probably want to commit subgroups later 
+        
+        //slope_offsets.commit();
+        //gain.commit();
+        //offset.commit();
+ 
+ 
+        // REGION FILTERS 
         pupil_pixels.commit();
+
+        // RECONSTRUCTOR 
         reconstructor.commit();
         bias.commit();
         I0.commit();
         flux_norm.commit();
+
+        // DETECTOR 
+        det_dit.commit();
+        det_fps.commit();
+        det_gain.commit();
+        det_cropping_rows.commit();
+        det_cropping_cols.commit();
+        det_tag_enabled.commit();
+        det_crop_enabled.commit();
+
+        //det_crop_enabled.commit(); 
+        //det_crop_r1.commit();
+        //det_crop_r2.commit();
+        //det_crop_c1.commit();
+        //det_crop_c2.commit();
 
         std::cout << "commit done\n";
     }
@@ -937,20 +1107,33 @@ NB_MODULE(_rtc, m) {
     nb::class_<RTC>(m, "RTC")
         .def(nb::init<>())
         .def("compute", &RTC::compute)
-        .def_rw("value", &RTC::value)
+        //.def_rw("value", &RTC::value)
         .def("set_slope_offsets", &RTC::set_slope_offsets)
         .def("set_ctrl_matrix", &RTC::set_ctrl_matrix)
         .def("set_I0", &RTC::set_I0)
         .def("set_bias", &RTC::set_bias)
         .def("set_fluxNorm", &RTC::set_fluxNorm)
         .def("set_pupil_pixels", &RTC::set_pupil_pixels)
-        .def("set_gain", &RTC::set_gain)
+        .def("set_Ki_gain", &RTC::set_Ki_gain)
         .def("set_offset", &RTC::set_offset)
+        // detector 
+        .def("set_det_fps", &RTC::set_det_fps)
+        .def("set_det_dit", &RTC::set_det_dit)
+        .def("set_det_gain", &RTC::set_det_gain)
+        .def("set_det_crop_enabled", &RTC::set_det_crop_enabled)
+        .def("set_det_tag_enabled", &RTC::set_det_tag_enabled)
+        .def("set_det_cropping_rows", &RTC::set_det_cropping_rows)
+        .def("set_det_cropping_cols", &RTC::set_det_cropping_cols)
+
+        .def("update_camera_settings", &RTC::update_camera_settings)
+        
         .def("commit", &RTC::commit)
         .def("request_commit", &RTC::request_commit)
         .def("get_last_frame", &RTC::get_last_frame)
         .def("get_reconstructor", &RTC::get_reconstructor)
+        .def("get_flat_shape", &RTC::get_flat_shape) // test just returns first element of flat dm cmd
         //.def("normalizedImage", &RTC::normalizedImage)
+        .def("dm_test", &RTC::dm_test)
         .def("test", &RTC::test)
         .def("test_normalization",&RTC::test_normalization)
         .def("test_pixel_filter",&RTC::test_pixel_filter)
@@ -969,3 +1152,4 @@ NB_MODULE(_rtc, m) {
         .def("state", &AsyncRunner::state)
         .def("flush", &AsyncRunner::flush);
 }
+
