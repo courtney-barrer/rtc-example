@@ -22,8 +22,8 @@ def print_n_last_lines(s: str, n: int = 10):
 fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
 data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
 
-pupil_classification_filename = "pupil_classification_{tstamp}.pickle" #"pupil_classification_31-05-2024T15.26.52.pickle"
-reco_filename = "RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
+pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
+reco_filename = 'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
 
 """
 set up camera and DM settings based on reconstruction fits file
@@ -101,14 +101,14 @@ r.update_camera_settings()
 
 # -- update control matrix [FORCE TO ZERO FOR NOW!!! ]
 #=================== forced to zero  
-r.set_ctrl_matrix( 0* CM.reshape(-1) )  # check r.get_reconstructor()
+r.set_ctrl_matrix(  CM.reshape(-1) )  # check r.get_reconstructor()
 #========================================
 
 # set I0, bias, etc <- long term I should create a function to do this 
 # for now use reconstructor file 
 frame = r.get_last_frame() 
-r.set_bias( r.get_last_frame()  )
-r.set_I0(  np.array(r.get_last_frame(),dtype=np.float32) )
+r.set_bias( 0*r.get_last_frame()  )
+r.set_I0( (I0.reshape(-1) / np.sum(I0) ).astype(np.float32)  )
 r.set_fluxNorm(  np.sum(np.array(r.get_last_frame(),dtype=np.float32) ) )
 
 # init the rtc. Could have been done using constructor but requires to code it.
