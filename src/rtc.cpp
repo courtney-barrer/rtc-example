@@ -168,39 +168,44 @@ struct updatable {
 
 
 
-// Function for matrix multiplication - we do void so result vector's memory is managed correctly outside the function and then create a std::span from this vector
-// OLD DONT USE 
-void matrixMultiplication(std::span<float> matrix, std::span<const uint16_t> vector, std::vector<float>& result, size_t layers, size_t rows, size_t cols) {
-    std::fill(result.begin(), result.end(), 0.0f);  // Ensure result is zeroed out before computation
+/**
+ * @brief CircularBuffer t
+ *
+ * Option to hold dm cmds in circular buffer
+ *
+ */
+class CircularBuffer {
+public:
+    CircularBuffer(size_t array_size)
+        : array_size_(array_size), buffer_(3, std::vector<double>(array_size)), head_(0), count_(0) {}
 
-    for (size_t l = 0; l < layers; ++l) {
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                result[l] += matrix[l * rows * cols + i * cols + j] * vector[i * cols + j];
-            }
+    void addArray(const std::vector<double>& new_array) {
+        assert(new_array.size() == array_size_ && "Array size must match buffer element size");
+        buffer_[head_] = new_array;
+        head_ = (head_ + 1) % 3;
+        if (count_ < 3) {
+            ++count_;
         }
     }
-}
 
-/*
-void matrix_vector_multiply(std::span<const uint16_t> v, updatable<std::span<float>>& r, size_t N, size_t M, std::vector<float>& result) {
-    // Ensure that the input vector and matrix dimensions are compatible
-    assert(v.size() == M);
-    assert(r.current().size() == N * M);
-    
-    // Initialize result vector with zeros
-    result.resize(N);
-    std::fill(result.begin(), result.end(), 0.0f);
-    
-    // Perform multiplication without explicit reshaping
-    auto R = r.current();
-    for (size_t i = 0; i < N; ++i) {
-        for (size_t j = 0; j < M; ++j) {
-            result[i] += R[i * M + j] * v[j];
-        }
+    std::vector<double> getArray(size_t index) const {
+        assert(index < count_ && "Index out of range");
+        return buffer_[(head_ + 3 - count_ + index) % 3];
     }
-}
-*/
+
+    size_t size() const {
+        return count_;
+    }
+
+private:
+    size_t array_size_;
+    std::array<std::vector<double>, 3> buffer_;
+    size_t head_;
+    size_t count_;
+};
+
+
+
 
 void matrix_vector_multiply(std::span<const uint16_t> v, updatable<std::span<float>>& r, std::vector<float>& result) {
     size_t N = v.size();
@@ -310,9 +315,10 @@ struct RTC {
 
     // ----------- DM shapes 
     // serial number to open DM 
+    const size_t dm_size = 140 ;
     const char * dm_serial_number = "17DW019#053";
     // init DM map look up table
-    uint32_t *map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*140); //MAX_DM_SIZE = 140 (BMC multi-3.5 DM)
+    uint32_t *map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*dm_size); //MAX_DM_SIZE = 140 (BMC multi-3.5 DM)
  
     // paths to DM shape csv files 
     const char * flat_dm_file = "/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
@@ -325,6 +331,11 @@ struct RTC {
     double* checkers_dm_array = readCSV(checkers_file); 
     // pokes near each corner of the DM 
     double* fourTorres_dm_array = readCSV(fourTorres_file); 
+
+    // updatable DM command 
+    updatable<std::array<double, dm_size >> dm_cmd ; 
+    //or use ring buffer 
+    //CircularBuffer dm_cmd_buffer(dm_size);
 
     // TO DO 
     // updatable basis used in reconstructor (iteract with my python BALDR module)
@@ -348,8 +359,11 @@ struct RTC {
     updatable<std::span<uint16_t>> bias; /**< bias. */
     updatable<std::span<float>> I0; /**< reference intensity with FPM in. */
     updatable<float> flux_norm; /**< sum of intensity across detector. */
-    updatable<std::span<int>> pupil_pixels; /**< value for offset. */
 
+    //  ----------- updatable variables relating to control regions 
+    updatable<std::span<int>> pupil_pixels; /**< pixels inside the active pupil. */
+    updatable<std::span<int>> secondary_pixels; /**< pixels inside secondary obstruction   */
+    updatable<std::span<int>> outside_pixels; /**< pixels outside the active pupil obstruction (but not in secondary obstruction) */
 
     std::atomic<bool> commit_asked = false; /**< Flag indicating if a commit is requested. */
 
@@ -657,6 +671,14 @@ struct RTC {
         //BMCSetArray(&hdm, test_vec, map_lut); // NO! we cant 
     }
 
+    void set_dm_actuator(int act_number, double value){
+        // act_number between 0-140
+        // value between 0-1. 
+        rv = BMCSetSingle(&hdm, act_number, value);
+    }
+
+    //void set_dm_shape( span dm_array )://dm_array input or 
+
     //void applyDMshape(double *array1){ 
     //    rv = BMCSetArray(hdm, array1, map_lut);
     //}
@@ -795,7 +817,10 @@ struct RTC {
 
         // MVM to turn our error vector to a DM command via the reconstructor 
         std::vector<float> cmd;
-        matrix_vector_multiply(im, reconstructor, cmd);
+        matrix_vector_multiply(im, reconstructor, cmd); // make this return an array 
+
+        // update dm_cmd_buffer 
+
         //cout << hdm << endl;
         // send the cmd to the DM 
         // >>>>>> THIS compiles 
@@ -854,7 +879,7 @@ struct RTC {
      * @param new_offsets The new slope offsets to set.
      */
 
-    //legacy - can delete 
+    //can delete 
     void set_slope_offsets(std::span<const float> new_offsets) {
         slope_offsets.update(new_offsets);
     }
@@ -863,9 +888,18 @@ struct RTC {
     void set_ctrl_matrix(std::span<float> mat) {
         reconstructor.update(mat);
     }
-    // PHASE CONTROL REGION IN PUPIL
+    // defined region in pupil (where we do phase control)
     void set_pupil_pixels(std::span<int> array) {
         pupil_pixels.update(array);
+    }
+    // defined region in secondary obstruction 
+    void set_secondary_pixels(std::span<int> array) {
+        secondary_pixels.update(array);
+    }
+
+    // defined region in  outside pupil (not including secondary obstruction)
+    void set_outside_pixels(std::span<int> array) {
+        outside_pixels.update(array);
     }
 
     // SIGNAL VARIABLES 
@@ -1108,14 +1142,22 @@ NB_MODULE(_rtc, m) {
         .def(nb::init<>())
         .def("compute", &RTC::compute)
         //.def_rw("value", &RTC::value)
-        .def("set_slope_offsets", &RTC::set_slope_offsets)
+
+        //reconstuctor
+        .def("set_slope_offsets", &RTC::set_slope_offsets) //delete
         .def("set_ctrl_matrix", &RTC::set_ctrl_matrix)
         .def("set_I0", &RTC::set_I0)
         .def("set_bias", &RTC::set_bias)
         .def("set_fluxNorm", &RTC::set_fluxNorm)
-        .def("set_pupil_pixels", &RTC::set_pupil_pixels)
         .def("set_Ki_gain", &RTC::set_Ki_gain)
-        .def("set_offset", &RTC::set_offset)
+        .def("set_offset", &RTC::set_offset) //delete
+        .def("get_last_frame", &RTC::get_last_frame)
+
+        // pupil control regions 
+        .def("set_pupil_pixels", &RTC::set_pupil_pixels)
+        .def("set_secondary_pixels", &RTC::set_secondary_pixels)
+        .def("set_outside_pixels", &RTC::set_outside_pixels)
+
         // detector 
         .def("set_det_fps", &RTC::set_det_fps)
         .def("set_det_dit", &RTC::set_det_dit)
@@ -1127,9 +1169,12 @@ NB_MODULE(_rtc, m) {
 
         .def("update_camera_settings", &RTC::update_camera_settings)
         
+        //updatable
         .def("commit", &RTC::commit)
         .def("request_commit", &RTC::request_commit)
-        .def("get_last_frame", &RTC::get_last_frame)
+
+        //
+        
         .def("get_reconstructor", &RTC::get_reconstructor)
         .def("get_flat_shape", &RTC::get_flat_shape) // test just returns first element of flat dm cmd
         //.def("normalizedImage", &RTC::normalizedImage)
