@@ -5,6 +5,8 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/chrono.h>
 #include <nanobind/stl/vector.h>
+// can we pass this to BMC DM ? 
+#include <nanobind/ndarray.h>
 
 #include <BMCApi.h>
 #include "FliSdk.h"
@@ -32,17 +34,7 @@
 /* TO DO ::
 
 
-In test() up to sending cmd back to DM but for some reason variables I thought were global 
-dont work inside test funtion
 
- function norm std::span<float> (I-B)/sum(I) I, B both raw images type std::span<uint16_t>
-- consider using updatable<float> flux_norm so don't have to do sum every time 
- function S= I-I0 where I and I0 are normalized and of type std::span<float>
- deal with cropped regions in input (maybe we can just recrop here.. using this as input)
- - do this for any image taken (get frame) -> crop it here
- function to filter signal from pixels 
- matrix mult R . S , S and R are both std::span<float>
- put in compute
 */
 namespace nb = nanobind;
 
@@ -173,7 +165,8 @@ struct updatable {
  *
  * Option to hold dm cmds in circular buffer
  *
- */
+ 
+
 class CircularBuffer {
 public:
     CircularBuffer(size_t array_size)
@@ -204,10 +197,10 @@ private:
     size_t count_;
 };
 
+*/
 
 
-
-void matrix_vector_multiply(std::span<const uint16_t> v, updatable<std::span<float>>& r, std::vector<float>& result) {
+void matrix_vector_multiply(std::span<const uint16_t> v, updatable<std::span<float>>& r, std::vector<double>& result) {
     size_t N = v.size();
     size_t M = r.current().size() / N;
 
@@ -227,6 +220,17 @@ void matrix_vector_multiply(std::span<const uint16_t> v, updatable<std::span<flo
         }
     }
 }
+
+// for checking DM 
+bool check_dm_vector(const std::vector<double>& cmd) {
+    for (double value : cmd) {
+        if (value < 0.0f || value > 1.0f) {
+            return true;
+        }
+    }
+    return false;
+}
+
 
 // gets value at indicies 
 template<typename T>
@@ -318,8 +322,9 @@ struct RTC {
     const size_t dm_size = 140 ;
     const char * dm_serial_number = "17DW019#053";
     // init DM map look up table
-    uint32_t *map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*dm_size); //MAX_DM_SIZE = 140 (BMC multi-3.5 DM)
- 
+    
+    uint32_t *map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*MAX_DM_SIZE); //MAX_DM_SIZE = 140 (BMC multi-3.5 DM)
+
     // paths to DM shape csv files 
     const char * flat_dm_file = "/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
     const char * checkers_file = "/home/baldr/Documents/baldr/DMShapes/waffle.csv";
@@ -333,7 +338,7 @@ struct RTC {
     double* fourTorres_dm_array = readCSV(fourTorres_file); 
 
     // updatable DM command 
-    updatable<std::array<double, dm_size >> dm_cmd ; 
+    updatable<nb::ndarray<double>> dm_cmd ; 
     //or use ring buffer 
     //CircularBuffer dm_cmd_buffer(dm_size);
 
@@ -382,11 +387,18 @@ struct RTC {
 
         //uint32_t *map_lut; // <- we put this global in scope of struct
         uint32_t	k = 0;
-	    double	*test_array;
         //default lookup table of DM 
         //map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*MAX_DM_SIZE); // <- we put this global in scope of struct
         //load it 
-        rv = BMCLoadMap(&hdm, NULL, map_lut);
+
+        // init map lut to zeros (copying examples from BMC)
+        for(k=0; k<(int)hdm.ActCount; k++) { 
+            map_lut[k] = 0;
+	    }
+        // then we load the default map
+        rv = BMCLoadMap(&hdm, NULL, map_lut); 
+
+        cout << "MAX_DM_SIZE" << MAX_DM_SIZE << endl;
 
         if (rv != NO_ERR) {
             std::cerr << "Error " << rv << " opening the driver type " << hdm.Driver_Type << ": ";
@@ -405,7 +417,6 @@ struct RTC {
         test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
         
         for(k=0; k<(int)hdm.ActCount; k++) {
-            map_lut[k] = 0;
             test_array1[k] = 0.5;
             test_array2[k] = 0;
         }
@@ -657,31 +668,40 @@ struct RTC {
         
         //std::vector<double> test_vec(140, 0); // can we pass vectors to BMCSetArray?
         // ans is no..
-
-        for(k=0; k<(int)hdm.ActCount; k++) {
+        for(k=0; k<(int)hdm.ActCount; k++) { 
             map_lut[k] = 0;
-            test_array1[k] = 0.5;
-            test_array2[k] = 0;
-        }
+	    }
+
 
         //double** flat_dm_array = readCSV(flat_dm_file, rows, cols);
-        BMCSetArray(&hdm, fourTorres_dm_array, map_lut);
+        BMCSetArray(&hdm, flat_dm_array, map_lut);
 
         // test if we can pass vectors? 
         //BMCSetArray(&hdm, test_vec, map_lut); // NO! we cant 
     }
 
-    void set_dm_actuator(int act_number, double value){
+    void poke_dm_actuator(int act_number, double value){
         // act_number between 0-140
         // value between 0-1. 
-        rv = BMCSetSingle(&hdm, act_number, value);
+        BMCSetSingle(&hdm, act_number, value);
     }
 
-    //void set_dm_shape( span dm_array )://dm_array input or 
+    void apply_dm_shape( nb::ndarray<double> array){
 
-    //void applyDMshape(double *array1){ 
-    //    rv = BMCSetArray(hdm, array1, map_lut);
-    //}
+        /*
+        int k;
+        for(k=0; k<(int)hdm.ActCount; k++) { 
+            map_lut[k] = 0;
+	    }
+
+        BMCLoadMap(&hdm, NULL, map_lut);
+        */
+        //array_ptr = (double *)calloc(hdm.ActCount, sizeof(double));
+        double *array_ptr = array.data();
+        BMCSetArray(&hdm, array_ptr, map_lut);
+
+    }
+
     void normalizeImage(const std::span<uint16_t>& img, const std::span<uint16_t>& bias, float norm, std::span<float> normalizedImage) {
         if (img.size() != bias.size()) {
            throw std::invalid_argument("Image and bias must be the same size");
@@ -702,23 +722,6 @@ struct RTC {
 
 
 
-    std::span<uint16_t> get_last_frame() { 
-        
-        return {(uint16_t*)fli->getRawImage(), full_image_length}; // full dimension for C-RED3 = 512*640 
-     
-    }
-
-    double* get_flat_shape() { 
-        
-        return flat_dm_array; 
-     
-    }
-
-    std::span<float> get_reconstructor(){
-
-        std::span<float> reconstructor_span = reconstructor.current();
-        return reconstructor_span;
-    }
 
 
     std::span<float> test_normalization( ){
@@ -782,27 +785,29 @@ struct RTC {
     }
 
     //std::span<const uint16_t>
-    std::vector<float> test(){
+    //std::vector<double>
+    void test(){
 
-        size_t rows = 512; // Number of rows in the image
-        size_t cols = 640; // Number of columns in the image
+        //size_t rows = 512; // Number of rows in the image
+        //size_t cols = 640; // Number of columns in the image
 
         //size_t layers = 140; // Number of layers in the reconstructor matrix
 
         uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
-        std::span<const uint16_t> image_span(raw_image, rows * cols); // Create a span from the raw image data
-        
+        std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
+        //remember full_image_length is global in RTC struct and should be udpated every
+        // time camera settings gets updated - always check this ! 
 
-        //
+        
         //std::span<int> indices_span = pupil_pixels.current() ;
 
-
+        
         // Get values of at specified indices
         std::span<const uint16_t> im = getValuesAtIndices(image_span, pupil_pixels.current() ) ; // image
         std::vector<uint16_t> b = getValuesAtIndices(bias.current(),  pupil_pixels.current()); // bias
         std::vector<float> I_ref = getValuesAtIndices(I0.current(),  pupil_pixels.current() ); // set point intensity
-
+        
         //basic checks 
         assert(im.size() == b.size()); // Ensure sizes match between im and b
         assert(im.size() == I_ref.size()); // Ensure sizes match between im and I_ref
@@ -816,27 +821,28 @@ struct RTC {
         }
 
         // MVM to turn our error vector to a DM command via the reconstructor 
-        std::vector<float> cmd;
+        std::vector<double> cmd;
+        
         matrix_vector_multiply(im, reconstructor, cmd); // make this return an array 
 
+        if (check_dm_vector(cmd)){
+            throw std::invalid_argument( "Dangerous DM command less than ZERO or greater than ONE" );
+        }
+        
+        double *cmd_ptr = cmd.data();
+        BMCSetArray(&hdm, cmd_ptr, map_lut);
+
         // update dm_cmd_buffer 
-
-        //cout << hdm << endl;
-        // send the cmd to the DM 
-        // >>>>>> THIS compiles 
-        //cout << "hdm" << &hdm << endl;
-        //BMCSetSingle(&hdm, 65, 0.2);
-
-        // >>>>>> THIS DOES NOT compile.. WHY ? 
-        //rv = BMCSetArray(&hdm, cmd, map_lut);
-        //rv = BMCSetSingle(&hdm, 65, 0.2);
-        //map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*MAX_DM_SIZE);
-        //BMCSetArray(&hdm, cmd, map_lut);
-
-        return cmd;
+        cout << cmd[0]  << endl;
+        //return cmd;
     }
 
-
+    void latency_test(int i, int switch_on){
+        // just switch between actuator pokes based on modulus of j and switch on
+        static int j;
+        j = 0;
+        
+    }
 
 
     /**
@@ -846,27 +852,8 @@ struct RTC {
     void compute(std::ostream& os){
         os << "computing with " << (*this) << '\n';
 
-
-        size_t rows = 512; // Number of rows in the image
-        size_t cols = 640; // Number of columns in the image
-
-        //get the raw image 
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
-
-        std::span<uint16_t> image_span(raw_image, rows * cols);
-        //normalize signal 
-        //std::span<float> I = normalize_signal(image_span, bias.next());
-
-        //get pixels within the pupil control region 
-        //std::span<float> err = I - I0;
-
-        //compute error signal 
-
-
-        // reconstructor[i + j * dim_x];
-
         // Do some computation here...
-
+        test();
         // When computation is done, check if a commit is requested.
         if (commit_asked) {
             commit();
@@ -878,6 +865,28 @@ struct RTC {
      * @brief Sets the slope offsets.
      * @param new_offsets The new slope offsets to set.
      */
+
+
+    std::span<uint16_t> get_last_frame() { 
+        
+        return {(uint16_t*)fli->getRawImage(), full_image_length}; // full dimension for C-RED3 = 512*640 
+     
+    }
+
+
+    nb::ndarray<double> get_current_dm_cmd(){
+        return dm_cmd.current();
+    }
+
+    nb::ndarray<double> get_next_dm_cmd(){
+        return dm_cmd.next();
+    }
+    
+    std::span<float> get_reconstructor(){
+
+        std::span<float> reconstructor_span = reconstructor.current();
+        return reconstructor_span;
+    }
 
     //can delete 
     void set_slope_offsets(std::span<const float> new_offsets) {
@@ -913,6 +922,11 @@ struct RTC {
 
     void set_fluxNorm(float value) {
         flux_norm.update(value);
+    }
+
+    //set the next DM cmd 
+    void set_dm_cmd(nb::ndarray<double> array){
+        dm_cmd.update(array);
     }
 
     // CAMERA SETTINGS 
@@ -970,6 +984,29 @@ struct RTC {
      * Otherwise, call request_commit to ask for a commit to be performed after  the next iteration.
      *
      */
+
+    void commit_dm(){
+        dm_cmd.commit() ;// put next dm cmd as current
+    }
+
+    void commit_camera_settings(){
+        // DETECTOR 
+        det_dit.commit();
+        det_fps.commit();
+        det_gain.commit();
+        det_cropping_rows.commit();
+        det_cropping_cols.commit();
+        det_tag_enabled.commit();
+        det_crop_enabled.commit();
+
+        //det_crop_enabled.commit(); 
+        //det_crop_r1.commit();
+        //det_crop_r2.commit();
+        //det_crop_c1.commit();
+        //det_crop_c2.commit();
+    }
+
+
     void commit() {
         //for now just commit everything - but we probably want to commit subgroups later 
         
@@ -986,21 +1023,6 @@ struct RTC {
         bias.commit();
         I0.commit();
         flux_norm.commit();
-
-        // DETECTOR 
-        det_dit.commit();
-        det_fps.commit();
-        det_gain.commit();
-        det_cropping_rows.commit();
-        det_cropping_cols.commit();
-        det_tag_enabled.commit();
-        det_crop_enabled.commit();
-
-        //det_crop_enabled.commit(); 
-        //det_crop_r1.commit();
-        //det_crop_r2.commit();
-        //det_crop_c1.commit();
-        //det_crop_c2.commit();
 
         std::cout << "commit done\n";
     }
@@ -1169,14 +1191,23 @@ NB_MODULE(_rtc, m) {
 
         .def("update_camera_settings", &RTC::update_camera_settings)
         
+        //DM
+        .def("set_dm_cmd", &RTC::set_dm_cmd) // sets the next dm cmd in updatable dm_cmd 
+        .def("get_current_dm_cmd", &RTC::get_current_dm_cmd) // gets the current dm cmd in updatable dm_cmd 
+        .def("get_next_dm_cmd", &RTC::get_next_dm_cmd) // gets the next dm cmd in updatable dm_cmd 
+
+        .def("poke_dm_actuator", &RTC::poke_dm_actuator) // applies a input value to a single input actuator on the DM
+        .def("apply_dm_shape", &RTC::apply_dm_shape) // applies a cmd (140 array) to set the DM shape 
+
         //updatable
         .def("commit", &RTC::commit)
+        .def("commit_dm", &RTC::commit) 
+        .def("commit_camera_settings", &RTC::commit_camera_settings)
         .def("request_commit", &RTC::request_commit)
 
         //
         
         .def("get_reconstructor", &RTC::get_reconstructor)
-        .def("get_flat_shape", &RTC::get_flat_shape) // test just returns first element of flat dm cmd
         //.def("normalizedImage", &RTC::normalizedImage)
         .def("dm_test", &RTC::dm_test)
         .def("test", &RTC::test)
