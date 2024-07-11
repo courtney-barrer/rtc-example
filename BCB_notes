@@ -22,6 +22,19 @@ baldr@baldr-Precision-T1600:~/Documents/rtc-example$ ipython
 main python code in example.py, main cpp code in rtc.cpp
 
 
+sudo systemctl restart sshd.service
+then either
+sudo systemctl enable sshd.service
+or
+sudo systemctl enable sshd
+thrn
+ip addr show
+should see
+inet 150.203.89.93/22 brd 150.203.91.255 scope global dynamic noprefixroute eno1
+in visual studio code write
+smthing likr baldr@150.203.89.93, then password. 
+
+
 import rtc
 r = rtc.RTC()
 

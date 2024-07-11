@@ -4,11 +4,41 @@
 #include <iostream>
 #include <cstdint>
 
+#include <push_record.hpp>
+
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/bind_vector.h>
+
+namespace nb = nanobind;
+
+std::vector<telem_entry> global_telemetry;
+
+void append_telemetry(telem_entry telem) {
+    global_telemetry.push_back(std::move(telem));
+}
+
+std::vector<telem_entry>& get_telemetry() {
+    return global_telemetry;
+}
+
+void clear_telemetry() {
+    global_telemetry.clear();
+}
+
+void bind_telemetry(nb::module_& m) {
+    nb::bind_vector<std::vector<telem_entry>>(m, "VecEntry");
+
+    m.def("get_telemetry", &get_telemetry);
+    m.def("clear_telemetry", &clear_telemetry);
+}
+
+
+
 // Global table to store the data
 std::vector<std::vector<float>> global_table;
 
 // Function to append data from std::span<uint8_t> to the global table
-void appendToTable(const std::span<uint8_t>& data) {
+void appendToTable(std::span<const uint8_t> data) {
     std::vector<float> row;
     row.reserve(data.size());
 
@@ -16,7 +46,7 @@ void appendToTable(const std::span<uint8_t>& data) {
         row.push_back(static_cast<float>(value));
     }
 
-    global_table.push_back(row);
+    global_table.push_back(std::move(row));
 }
 
 // Function to save the global table to a CSV file

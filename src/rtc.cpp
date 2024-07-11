@@ -1,3 +1,5 @@
+#include <push_record.hpp>
+
 #include "span_cast.hpp"
 #include "span_format.hpp"
 
@@ -33,7 +35,9 @@
 
 /* TO DO ::
 
-
+julien 
+- best way to hold / cycle dm commands? updatable? ring buffer?
+- telemetry (image (<span>), signal (image error <span>), error_DM space (<array>), dm command (<array>) ) 
 
 */
 namespace nb = nanobind;
@@ -200,7 +204,7 @@ private:
 */
 
 
-void matrix_vector_multiply(std::span<const uint16_t> v, updatable<std::span<float>>& r, std::vector<double>& result) {
+void matrix_vector_multiply(std::span<const float> v, updatable<std::span<float>>& r, std::vector<double>& result) {
     size_t N = v.size();
     size_t M = r.current().size() / N;
 
@@ -233,31 +237,31 @@ bool check_dm_vector(const std::vector<double>& cmd) {
 
 
 // gets value at indicies 
-template<typename T>
-std::vector<T> getValuesAtIndices(const std::span<const T>& data_span, std::span<const int> indices_span) {
-    std::vector<T> values;
+template<typename DestType, typename T>
+std::vector<DestType> getValuesAtIndices(std::span<T> data_span, std::span<const int> indices_span) {
+    std::vector<DestType> values;
     values.reserve(indices_span.size());
 
     for (size_t index : indices_span) {
         assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
-        values.push_back(data_span[index]);
+        values.push_back(static_cast<DestType>(data_span[index]));
     }
 
     return values;
 }
 //two overloads or templates with const and non-const versions. 
-template<typename T>
-std::vector<T> getValuesAtIndices(const std::span<T>& data_span, std::span<const int> indices_span) {
-    std::vector<T> values;
-    values.reserve(indices_span.size());
+// template<typename T>
+// std::vector<T> getValuesAtIndices(std::span<T> data_span, std::span<const int> indices_span) {
+//     std::vector<T> values;
+//     values.reserve(indices_span.size());
 
-    for (size_t index : indices_span) {
-        assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
-        values.push_back(data_span[index]);
-    }
+//     for (size_t index : indices_span) {
+//         assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
+//         values.push_back(data_span[index]);
+//     }
 
-    return values;
-}
+//     return values;
+// }
 
 
 double* readCSV(const std::string& filePath) {
@@ -323,7 +327,7 @@ struct RTC {
     const char * dm_serial_number = "17DW019#053";
     // init DM map look up table
     
-    uint32_t *map_lut	= (uint32_t *)malloc(sizeof(uint32_t)*MAX_DM_SIZE); //MAX_DM_SIZE = 140 (BMC multi-3.5 DM)
+    std::vector<uint32_t> map_lut; // (BMC multi-3.5 DM)
 
     // paths to DM shape csv files 
     const char * flat_dm_file = "/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
@@ -372,6 +376,8 @@ struct RTC {
 
     std::atomic<bool> commit_asked = false; /**< Flag indicating if a commit is requested. */
 
+     size_t telemetry_cnt = 0;
+
     /**
      * @brief Default constructor for RTC.
      */
@@ -382,6 +388,7 @@ struct RTC {
         /* open BMC DM */  
         BMCRC	rv = NO_ERR;
  
+        map_lut.resize(MAX_DM_SIZE);
 
         rv = BMCOpen(&hdm, dm_serial_number);
 
@@ -396,7 +403,7 @@ struct RTC {
             map_lut[k] = 0;
 	    }
         // then we load the default map
-        rv = BMCLoadMap(&hdm, NULL, map_lut); 
+        rv = BMCLoadMap(&hdm, NULL, map_lut.data()); 
 
         cout << "MAX_DM_SIZE" << MAX_DM_SIZE << endl;
 
@@ -405,25 +412,24 @@ struct RTC {
             std::cerr << BMCErrorString(rv) << std::endl << std::endl;
         }
         cout << "&hdm  "   << &hdm << endl;
-        cout << " map_lut  " << map_lut << endl;
         // try poke a single actuator 
         //rv = BMCSetSingle(&hdm, 65, 0.2);
 
-        // try apply an array 
-        double *test_array1;
-	    double *test_array2;
+        // // try apply an array 
+        // double *test_array1;
+	    // double *test_array2;
 
-        test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
-        test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
+        // test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
+        // test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
         
-        for(k=0; k<(int)hdm.ActCount; k++) {
-            test_array1[k] = 0.5;
-            test_array2[k] = 0;
-        }
+        // for(k=0; k<(int)hdm.ActCount; k++) {
+        //     test_array1[k] = 0.5;
+        //     test_array2[k] = 0;
+        // }
         
         
         //BMCSetArray(&hdm, test_array1, map_lut);
-        BMCSetArray(&hdm, flat_dm_array, map_lut);
+        BMCSetArray(&hdm, flat_dm_array, map_lut.data());
         //cout << "flat_dm_array[140]" << flat_dm_array[0][140] << endl;
         
         // Print the array to verify
@@ -564,7 +570,7 @@ struct RTC {
 
         // ====== ME FUCKING AROUND 
         //get the raw image 
-        uint16_t* image16b = (uint16_t*)fli->getRawImage();
+        //uint16_t* image16b = (uint16_t*)fli->getRawImage();
 
         /*cout << "asdas" << (uintptr_t)image16b << endl;
         for (size_t i = 0; i < 100; ++i) {
@@ -659,12 +665,12 @@ struct RTC {
     }
 
     void dm_test(){
-        double *test_array1;
-	    double *test_array2;
+        // double *test_array1;
+	    // double *test_array2;
         int k;
 
-        test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
-        test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
+        // test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
+        // test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
         
         //std::vector<double> test_vec(140, 0); // can we pass vectors to BMCSetArray?
         // ans is no..
@@ -674,7 +680,7 @@ struct RTC {
 
 
         //double** flat_dm_array = readCSV(flat_dm_file, rows, cols);
-        BMCSetArray(&hdm, flat_dm_array, map_lut);
+        BMCSetArray(&hdm, flat_dm_array, map_lut.data());
 
         // test if we can pass vectors? 
         //BMCSetArray(&hdm, test_vec, map_lut); // NO! we cant 
@@ -698,11 +704,11 @@ struct RTC {
         */
         //array_ptr = (double *)calloc(hdm.ActCount, sizeof(double));
         double *array_ptr = array.data();
-        BMCSetArray(&hdm, array_ptr, map_lut);
+        BMCSetArray(&hdm, array_ptr, map_lut.data());
 
     }
 
-    void normalizeImage(const std::span<uint16_t>& img, const std::span<uint16_t>& bias, float norm, std::span<float> normalizedImage) {
+    void normalizeImage(std::span<const uint16_t> img, std::span<const uint16_t> bias, float norm, std::span<float> normalizedImage) {
         if (img.size() != bias.size()) {
            throw std::invalid_argument("Image and bias must be the same size");
         }
@@ -764,9 +770,9 @@ struct RTC {
         //get current bias
         std::span<uint16_t> bias_span = bias.current();
         // Get values at specified indices
-        std::vector<uint16_t> bias_output = getValuesAtIndices(bias_span, indices_span);
-        std::vector<float> I0_output = getValuesAtIndices(I0_span, indices_span);
-        std::vector<uint16_t> im_output = getValuesAtIndices(image_span, indices_span) ;
+        std::vector<uint16_t> bias_output = getValuesAtIndices<uint16_t>(bias_span, indices_span);
+        std::vector<float> I0_output = getValuesAtIndices<float>(I0_span, indices_span);
+        std::vector<uint16_t> im_output = getValuesAtIndices<uint16_t>(image_span, indices_span) ;
 
         std::span<uint16_t> bias_output_span(bias_output);
         std::span<float> I0_output_span(I0_output);
@@ -804,9 +810,9 @@ struct RTC {
 
         
         // Get values of at specified indices
-        std::span<const uint16_t> im = getValuesAtIndices(image_span, pupil_pixels.current() ) ; // image
-        std::vector<uint16_t> b = getValuesAtIndices(bias.current(),  pupil_pixels.current()); // bias
-        std::vector<float> I_ref = getValuesAtIndices(I0.current(),  pupil_pixels.current() ); // set point intensity
+        std::vector<float> im = getValuesAtIndices<float>(image_span, pupil_pixels.current() ) ; // image
+        std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
+        std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  pupil_pixels.current() ); // set point intensity
         
         //basic checks 
         assert(im.size() == b.size()); // Ensure sizes match between im and b
@@ -830,11 +836,23 @@ struct RTC {
         }
         
         double *cmd_ptr = cmd.data();
-        BMCSetArray(&hdm, cmd_ptr, map_lut);
+        BMCSetArray(&hdm, cmd_ptr, map_lut.data());
 
         // update dm_cmd_buffer 
         cout << cmd[0]  << endl;
         //return cmd;
+        if (telemetry_cnt > 0){
+            telem_entry entry;
+
+            entry.image_raw = std::move(image_span); // im);
+            entry.image_proc = std::move(signal);
+            entry.reco_dm_err = std::move(cmd); // reconstructed DM command
+            //entry.dm_command = std::move(); // final command sent
+
+            append_telemetry(std::move(entry));
+
+            --telemetry_cnt;
+        }
     }
 
     void latency_test(int i, int switch_on){
@@ -859,6 +877,10 @@ struct RTC {
             commit();
             commit_asked = false;
         }
+    }
+
+    void enable_telemetry(size_t iteration_nb) {
+        telemetry_cnt = iteration_nb;
     }
 
     /**
@@ -1155,7 +1177,7 @@ struct AsyncRunner {
 
 };
 
-
+void bind_telemetry(nb::module_& m);
 
 NB_MODULE(_rtc, m) {
     using namespace nb::literals;
@@ -1199,6 +1221,9 @@ NB_MODULE(_rtc, m) {
         .def("poke_dm_actuator", &RTC::poke_dm_actuator) // applies a input value to a single input actuator on the DM
         .def("apply_dm_shape", &RTC::apply_dm_shape) // applies a cmd (140 array) to set the DM shape 
 
+        //telemetry
+        .def("enable_telemetry", &RTC::enable_telemetry)
+
         //updatable
         .def("commit", &RTC::commit)
         .def("commit_dm", &RTC::commit) 
@@ -1227,5 +1252,14 @@ NB_MODULE(_rtc, m) {
         .def("resume", &AsyncRunner::resume)
         .def("state", &AsyncRunner::state)
         .def("flush", &AsyncRunner::flush);
+
+    nb::class_<telem_entry>(m, "TelemEntry")
+        .def_ro("image_raw", &telem_entry::image_raw)
+        .def_ro("image_proc", &telem_entry::image_proc) 
+        .def_ro("reco_dm_err", &telem_entry::reco_dm_err) 
+        .def_ro("dm_command", &telem_entry::dm_command); 
+
+    bind_telemetry(m);
+
 }
 

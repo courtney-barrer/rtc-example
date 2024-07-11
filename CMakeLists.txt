@@ -14,7 +14,12 @@ find_package(nanobind CONFIG REQUIRED)
 # Create the module #
 #####################
 # Note: python and nanobind are automatically added as dependencies with `nanobind_add_module`.
-nanobind_add_module(_rtc src/rtc.cpp)
+nanobind_add_module(_rtc
+  src/rtc.cpp
+  src/push_record.cpp
+)
+
+
 
 
 

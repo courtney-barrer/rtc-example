@@ -101,7 +101,7 @@ r.update_camera_settings()
 
 # -- update control matrix [FORCE TO ZERO FOR NOW!!! ]
 #=================== forced to zero  
-r.set_ctrl_matrix(  CM.reshape(-1) )  # check r.get_reconstructor()
+r.set_ctrl_matrix( 0* CM.reshape(-1) )  # check r.get_reconstructor()
 #========================================
 
 # set I0, bias, etc <- long term I should create a function to do this 
@@ -133,6 +133,27 @@ except:
 
 
 
+# to get some telemetry when we run compute
+no_tele = 10
+r.enable_telemetry(no_tele)
+
+# test 12 iteration of closed loop 
+for i in range(15):
+    r.test() 
+
+t = rtc.get_telemetry()
+
+#t[no_tele+1]
+#t[no_tele+2] # fails cause empty .. so iterates one more than the specified telemetry entry
+
+# get second iteration  
+tel_rawimg = np.array([tt.image_raw for tt in t] )
+tel_signal = np.array([tt.image_proc for tt in t])
+tel_reco =   np.array([tt.reco_dm_err for tt in t])
+#tel_dmcmd =  [tt.dm_command for tt in t]
+
+# reconstruct raw image, (cannot do processed since its filtered, but could do this using I0 etc)
+tel_rawimg[1].reshape(116,128)
 
 
 
