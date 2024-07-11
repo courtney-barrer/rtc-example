@@ -167,7 +167,7 @@ class phase_controller_1():
             _ = input('MANUALLY MOVE PHASE MASK OUT OF BEAM, PRESS ANY KEY TO BEGIN' )
             util.watch_camera(ZWFS, frames_to_watch = 50, time_between_frames=0.05)
 
-            ZWFS.states['fpm'] = 0
+            #ZWFS.states['fpm'] = 0
     
             N0_list = []
             for _ in range(imgs_to_median):
@@ -180,7 +180,7 @@ class phase_controller_1():
             _ = input('MANUALLY MOVE PHASE MASK BACK IN, PRESS ANY KEY TO BEGIN' )
             util.watch_camera(ZWFS, frames_to_watch = 50, time_between_frames=0.05)
 
-            ZWFS.states['fpm'] = self.config['fpm']
+            #ZWFS.states['fpm'] = self.config['fpm']
 
             I0_list = []
             for _ in range(imgs_to_median):
@@ -210,7 +210,7 @@ class phase_controller_1():
             time.sleep(0.05)
             img_list = []  # to take median of 
             for _ in range(imgs_to_median):
-                img_list.append( ZWFS.get_image(  ).reshape(-1)[np.array( ZWFS.pupil_pixels )] )
+                img_list.append( ZWFS.get_image( ).reshape(-1)[np.array( ZWFS.pupil_pixels )] )
                 time.sleep(0.01)
             I = np.median( img_list, axis = 0) 
 
@@ -224,7 +224,9 @@ class phase_controller_1():
                 errsig =  self.get_img_err( I ) #np.array( ( (I - self.I0) / np.median( self.N0 ) ) )
             else: 
                 raise TypeError(" reference intensity shapes do not match shape of current measured intensity. Check phase_controller.I0 and/or phase_controller.N0 attributes. Workaround would be to retake these. ")
-            IM.append( list( errsig.reshape(-1) ) )
+            
+            #D delta_c = delta_I => D *poke_amp * I = delta_I -> D = 1/poke_amp * delta_I
+            IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
 
         # FLAT DM WHEN DONE
         ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] ) )
@@ -234,7 +236,7 @@ class phase_controller_1():
 
         # filter number of modes in eigenmode space when using zonal control  
         if self.config['basis'] == 'Zonal': # then we filter number of modes in the eigenspace of IM 
-            S_filt = S > np.min(S) # we consider the highest eigenvalues/vectors up to the number_of_controlled_modes
+            S_filt = S > 0 #(i.e. we dont filter here) #S >= np.min(S) # we consider the highest eigenvalues/vectors up to the number_of_controlled_modes
             Sigma = np.zeros( np.array(IM).shape, float)
             np.fill_diagonal(Sigma, S[S_filt], wrap=False) #
         else: # else #modes decided by the construction of modal basis. We may change their gains later
@@ -254,6 +256,8 @@ class phase_controller_1():
             plt.suptitle( 'DM EIGENMODES' ) #f"rec. cutoff at i={np.min( np.where( abs(np.diff(S)) < 1e-2 )[0])}", fontsize=14)
             plt.show()
             """
+
+
         # control matrix
         CM =  np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
        
@@ -266,6 +270,14 @@ class phase_controller_1():
 
         ctrl_parameters['ref_pupil_FPM_in'] = I0
 
+        ctrl_parameters['pupil_pixels'] = ZWFS.pupil_pixels
+
+        ctrl_parameters['secondary_pupil_pixels'] = ZWFS.secondary_pixels
+
+        ctrl_parameters['outside_pupil_pixels'] = ZWFS.outside_pixels
+
+        ctrl_parameters['dm_center_ref_pixels'] = ZWFS.dm_center_ref_pixels
+
         ctrl_parameters['IM'] = IM
        
         ctrl_parameters['CM'] = CM
@@ -277,11 +289,11 @@ class phase_controller_1():
         self.ctrl_parameters[label] = ctrl_parameters
        
         if debug: # plot covariance of interaction matrix 
+            plt.figure() 
             plt.title( 'Covariance of Interaciton Matrix' )
             plt.imshow( np.cov( self.ctrl_parameters[label]['IM'] ) )
             plt.colorbar()
             plt.show()
-
 
     def update_b( self, ZWFS, I0_2D, N0_2D ):
         #I0 = reference image with FPM in (2D array - CANNOT be flatttened 1D array)
@@ -299,18 +311,18 @@ class phase_controller_1():
 
 
     def get_img_err( self , img_normalized ):
-        # input img has to be normalized by sum of entire raw image in cropped region 
+        # input img has to be normalized by *mean or sum* of entire raw image in cropped region 
         # flattened and filtered in pupil region 
         #(i.e. get raw img then apply img.reshape(-1)[ ZWFS.pupil_pixels])
 
-        # !NOTE! we take median of pupil reference intensity with FPM out (self.N0)
-        # we do this cause we're lazy and do not want to manually adjust FPM every iteration (we dont have motors here) 
-        # real system prob does not want to do this and normalize pixel wise. 
-        #errsig =  np.array( ( (img - self.I0) / np.median( self.N0 ) ) )
-        
-        # normalize image 
+        # THIS MAY BE BETTER IMPLEMENTED IN zwfs module. 
 
-        errsig =  np.array( ( (img_normalized - self.I0) / (2 * self.b * np.sin( self.theta ) ) ) )
+
+
+        # experiment iwth ML estimator 
+        # errsig =  np.array( ( (img_normalized - self.I0) / (2 * self.b * np.sin( self.theta ) ) ) )
+        
+        errsig =  np.array( img_normalized - self.I0 ) 
 
         return(  errsig )
 
@@ -396,6 +408,60 @@ class phase_controller_1():
        
         return( cmd )
 
+
+    def plot_SVD_modes(self, ctrl_label, save_path=None):
+
+        IM = self.ctrl_parameters[ctrl_label]['IM']
+        pupil_pixels = self.ctrl_parameters[ctrl_label]['pupil_pixels']
+        U,S,Vt = np.linalg.svd( IM , full_matrices=True)
+
+        #singular values
+        plt.figure() 
+        plt.semilogy(S/np.max(S))
+        plt.axvline( np.pi * (10/2)**2, color='k', ls=':', label='number of actuators in pupil')
+        plt.legend() 
+        plt.xlabel('mode index')
+        plt.ylabel('singular values')
+        if save_path!=None:
+            plt.savefig(save_path + f'singularvalues_{tstamp}.png', bbox_inches='tight', dpi=300)
+        plt.show()
+        
+        # THE IMAGE MODES 
+
+        fig,ax = plt.subplots(8,8,figsize=(30,30))
+        plt.subplots_adjust(hspace=0.1,wspace=0.1)
+        for i,axx in enumerate(ax.reshape(-1)):
+            # we filtered circle on grid, so need to put back in grid
+            tmp =  ZWFS.pupil_pixels.copy()
+            vtgrid = np.zeros(tmp.shape)
+            vtgrid[tmp] = Vt[i]
+            axx.imshow( vtgrid.reshape(I0.shape ) #cp_x2-cp_x1,cp_y2-cp_y1) )
+            #axx.set_title(f'\n\n\nmode {i}, S={round(S[i]/np.max(S),3)}',fontsize=5)
+            axx.text( 10,10,f'{i}',color='w',fontsize=4)
+            axx.text( 10,20,f'S={round(S[i]/np.max(S),3)}',color='w',fontsize=4)
+            axx.axis('off')
+            #plt.legend(ax=axx)
+        plt.tight_layout()
+        if save_path!=None:
+            plt.savefig(save_path + f'det_eignmodes_{tstamp}.png',bbox_inches='tight',dpi=300)
+        plt.show()
+        
+        # THE DM MODES 
+
+        # NOTE: if not zonal (modal) i might need M2C to get this to dm space 
+        fig,ax = plt.subplots(8,8,figsize=(30,30))
+        plt.subplots_adjust(hspace=0.1,wspace=0.1)
+        for i,axx in enumerate(ax.reshape(-1)):
+            axx.imshow( util.get_DM_command_in_2D( U.T[i] ) )
+            #axx.set_title(f'mode {i}, S={round(S[i]/np.max(S),3)}')
+            axx.text( 1,2,f'{i}',color='w',fontsize=6)
+            axx.text( 1,3,f'S={round(S[i]/np.max(S),3)}',color='w',fontsize=6)
+            axx.axis('off')
+            #plt.legend(ax=axx)
+        plt.tight_layout()
+        if save_path!=None:
+            plt.savefig(save_path + f'dm_eignmodes_{tstamp}.png',bbox_inches='tight',dpi=300)
+        plt.show()
 
 
 

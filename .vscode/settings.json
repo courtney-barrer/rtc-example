@@ -13,6 +13,7 @@
         "vector": "cpp",
         "filesystem": "cpp",
         "format": "cpp",
-        "text_encoding": "cpp"
+        "text_encoding": "cpp",
+        "ios": "cpp"
     }
 }

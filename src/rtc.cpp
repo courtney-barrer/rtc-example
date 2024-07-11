@@ -664,27 +664,27 @@ struct RTC {
 
     }
 
-    void dm_test(){
-        // double *test_array1;
-	    // double *test_array2;
-        int k;
+    // void dm_test(){
+    //     // double *test_array1;
+	//     // double *test_array2;
+    //     int k;
 
-        // test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
-        // test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
+    //     // test_array1	= (double *)calloc(hdm.ActCount, sizeof(double));
+    //     // test_array2 = (double *)calloc(hdm.ActCount, sizeof(double));
         
-        //std::vector<double> test_vec(140, 0); // can we pass vectors to BMCSetArray?
-        // ans is no..
-        for(k=0; k<(int)hdm.ActCount; k++) { 
-            map_lut[k] = 0;
-	    }
+    //     //std::vector<double> test_vec(140, 0); // can we pass vectors to BMCSetArray?
+    //     // ans is no..
+    //     for(k=0; k<(int)hdm.ActCount; k++) { 
+    //         map_lut[k] = 0;
+	//     }
 
 
-        //double** flat_dm_array = readCSV(flat_dm_file, rows, cols);
-        BMCSetArray(&hdm, flat_dm_array, map_lut.data());
+    //     //double** flat_dm_array = readCSV(flat_dm_file, rows, cols);
+    //     BMCSetArray(&hdm, flat_dm_array, map_lut.data());
 
-        // test if we can pass vectors? 
-        //BMCSetArray(&hdm, test_vec, map_lut); // NO! we cant 
-    }
+    //     // test if we can pass vectors? 
+    //     //BMCSetArray(&hdm, test_vec, map_lut); // NO! we cant 
+    // }
 
     void poke_dm_actuator(int act_number, double value){
         // act_number between 0-140
@@ -708,19 +708,21 @@ struct RTC {
 
     }
 
-    void normalizeImage(std::span<const uint16_t> img, std::span<const uint16_t> bias, float norm, std::span<float> normalizedImage) {
-        if (img.size() != bias.size()) {
-           throw std::invalid_argument("Image and bias must be the same size");
-        }
-    
-        if (normalizedImage.size() != img.size()) {
-            throw std::invalid_argument("Normalized image must be the same size as the input image");
-        }
 
-        for (size_t i = 0; i < img.size(); ++i) {
-          normalizedImage[i] = (static_cast<float>(img[i]) - static_cast<float>(bias[i])) / norm;
-        }
-    }
+    // void normalizeImage(std::span<const uint16_t> img, std::span<const uint16_t> bias, float norm, std::span<float> normalizedImage) {
+    //     if (img.size() != bias.size()) {
+    //        throw std::invalid_argument("Image and bias must be the same size");
+    //     }
+    
+    //     if (normalizedImage.size() != img.size()) {
+    //         throw std::invalid_argument("Normalized image must be the same size as the input image");
+    //     }
+
+    //     for (size_t i = 0; i < img.size(); ++i) {
+    //       normalizedImage[i] = (static_cast<float>(img[i]) - static_cast<float>(bias[i])) / norm;
+    //     }
+    // }
+
     //give a image and a bias to normalize a signal
 
 
@@ -730,65 +732,66 @@ struct RTC {
 
 
 
-    std::span<float> test_normalization( ){
+    // std::span<float> test_normalization( ){
 
-        size_t rows = 512; // Number of rows in the image
-        size_t cols = 640; // Number of columns in the image
+    //     size_t rows = 512; // Number of rows in the image
+    //     size_t cols = 640; // Number of columns in the image
 
-        //std::vector<uint16_t> img = {100, 150, 200};
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
-        std::span<uint16_t> img(raw_image, rows * cols); // Create a span from the raw image data
+    //     //std::vector<uint16_t> img = {100, 150, 200};
+    //     uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+    //     std::span<uint16_t> img(raw_image, rows * cols); // Create a span from the raw image data
 
-        std::span<uint16_t> biasSpan = bias.current(); //{50, 50, 50};
-        //float norm = 50.0f;
-        float norm = flux_norm.current();
-        std::vector<float> nI(img.size());
+    //     std::span<uint16_t> biasSpan = bias.current(); //{50, 50, 50};
+    //     //float norm = 50.0f;
+    //     float norm = flux_norm.current();
+    //     std::vector<float> nI(img.size());
 
-        std::span<uint16_t> imgSpan(img);
-        //std::span<uint16_t> biasSpan(bias);
-        std::span<float> normalizedImageSpan(nI);
+    //     std::span<uint16_t> imgSpan(img);
+    //     //std::span<uint16_t> biasSpan(bias);
+    //     std::span<float> normalizedImageSpan(nI);
 
-        normalizeImage(imgSpan, biasSpan, norm, normalizedImageSpan);
-        return(normalizedImageSpan);
-    }
+    //     normalizeImage(imgSpan, biasSpan, norm, normalizedImageSpan);
+    //     return(normalizedImageSpan);
+    // }
 
 
-    std::span<float> test_pixel_filter() {
+    // std::span<float> test_pixel_filter() {
 
-        size_t rows = 512; // Number of rows in the image
-        size_t cols = 640; // Number of columns in the image
+    //     size_t rows = 512; // Number of rows in the image
+    //     size_t cols = 640; // Number of columns in the image
 
-        // Assuming pupil_pixels.current() and I0.current() return std::span<int> and std::span<float> respectively
-        std::span<int> indices_span = pupil_pixels.current();
+    //     // Assuming pupil_pixels.current() and I0.current() return std::span<int> and std::span<float> respectively
+    //     std::span<int> indices_span = pupil_pixels.current();
 
-        // get image 
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
-        std::span<uint16_t> image_span(raw_image, rows * cols); // Create a span from the raw image data
+    //     // get image 
+    //     uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+    //     std::span<uint16_t> image_span(raw_image, rows * cols); // Create a span from the raw image data
 
-        //get current reference intensity
-        std::span<float> I0_span = I0.current();
-        //get current bias
-        std::span<uint16_t> bias_span = bias.current();
-        // Get values at specified indices
-        std::vector<uint16_t> bias_output = getValuesAtIndices<uint16_t>(bias_span, indices_span);
-        std::vector<float> I0_output = getValuesAtIndices<float>(I0_span, indices_span);
-        std::vector<uint16_t> im_output = getValuesAtIndices<uint16_t>(image_span, indices_span) ;
+    //     //get current reference intensity
+    //     std::span<float> I0_span = I0.current();
+    //     //get current bias
+    //     std::span<uint16_t> bias_span = bias.current();
+    //     // Get values at specified indices
+    //     std::vector<uint16_t> bias_output = getValuesAtIndices<uint16_t>(bias_span, indices_span);
+    //     std::vector<float> I0_output = getValuesAtIndices<float>(I0_span, indices_span);
+    //     std::vector<uint16_t> im_output = getValuesAtIndices<uint16_t>(image_span, indices_span) ;
 
-        std::span<uint16_t> bias_output_span(bias_output);
-        std::span<float> I0_output_span(I0_output);
-        std::span<uint16_t> im_output_span(im_output);
+    //     std::span<uint16_t> bias_output_span(bias_output);
+    //     std::span<float> I0_output_span(I0_output);
+    //     std::span<uint16_t> im_output_span(im_output);
 
-        //testing to do normalization 
-        float norm = flux_norm.current();
-        std::vector<float> nI(im_output_span.size()); //pre-allocate vector for output of normalizeImage
-        //std::span<uint16_t> imgSpan(img);
-        std::span<float> normalizedImageSpan(nI); // this is placeholder for output (since function returns span..)
+    //     //testing to do normalization 
+    //     float norm = flux_norm.current();
+    //     std::vector<float> nI(im_output_span.size()); //pre-allocate vector for output of normalizeImage
+    //     //std::span<uint16_t> imgSpan(img);
+    //     std::span<float> normalizedImageSpan(nI); // this is placeholder for output (since function returns span..)
 
-        normalizeImage(im_output_span, bias_output_span, norm, normalizedImageSpan);
+    //     normalizeImage(im_output_span, bias_output_span, norm, normalizedImageSpan);
 
-        // dont forget to change function return type if changing output
-        return normalizedImageSpan; //im_output_span ; //bias_output_span; //I0_output_span;
-    }
+    //     // dont forget to change function return type if changing output
+    //     return normalizedImageSpan; //im_output_span ; //bias_output_span; //I0_output_span;
+    // }
+
 
     //std::span<const uint16_t>
     //std::vector<double>
@@ -811,11 +814,11 @@ struct RTC {
         
         // Get values of at specified indices
         std::vector<float> im = getValuesAtIndices<float>(image_span, pupil_pixels.current() ) ; // image
-        std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
+        //std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
         std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  pupil_pixels.current() ); // set point intensity
         
         //basic checks 
-        assert(im.size() == b.size()); // Ensure sizes match between im and b
+        //assert(im.size() == b.size()); // Ensure sizes match between im and b
         assert(im.size() == I_ref.size()); // Ensure sizes match between im and I_ref
         
         // subtract bias, normalize and then subtract reference intensity 
@@ -823,7 +826,8 @@ struct RTC {
         size_t size = im.size();
         std::vector<float> signal(size);
         for (size_t i = 0; i < size; ++i) {
-          signal[i] = (static_cast<float>(im[i]) - static_cast<float>(b[i])) / flux_norm.current() - I_ref[i];
+          //signal[i] = (static_cast<float>(im[i]) - static_cast<float>(b[i])) / flux_norm.current() - I_ref[i];
+          signal[i] = static_cast<float>(im[i]) / flux_norm.current() - I_ref[i];
         }
 
         // MVM to turn our error vector to a DM command via the reconstructor 
@@ -908,6 +912,14 @@ struct RTC {
 
         std::span<float> reconstructor_span = reconstructor.current();
         return reconstructor_span;
+    }
+
+    uint16_t get_img_width(){
+        return image_width;
+    }
+
+    uint16_t get_img_height(){
+        return image_height;
     }
 
     //can delete 
@@ -1203,6 +1215,9 @@ NB_MODULE(_rtc, m) {
         .def("set_outside_pixels", &RTC::set_outside_pixels)
 
         // detector 
+        .def("get_img_width",&RTC::get_img_width)
+        .def("get_img_height",&RTC::get_img_height)
+        
         .def("set_det_fps", &RTC::set_det_fps)
         .def("set_det_dit", &RTC::set_det_dit)
         .def("set_det_gain", &RTC::set_det_gain)
