@@ -7,23 +7,29 @@ from astropy.io import fits
 import pickle
 import matplotlib.pyplot as plt
 import time
+import os
 import pandas as pd 
+import glob
+
+from pyBaldr import ZWFS
+from pyBaldr import phase_control
+from pyBaldr import pupil_control
+from pyBaldr import utilities as util
+
 def print_n_last_lines(s: str, n: int = 10):
     lines = s.split('\n')
     for l in lines[-n:]:
         print(l)
 
 
-"""
 
-
-
-"""
 fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
 data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
 
 pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
-reco_filename = 'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
+# get most recent 
+list_of_recon_files = glob.glob(data_path + 'RECONS*')
+reco_filename = max(list_of_recon_files, key=os.path.getctime) #'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
 
 """
 set up camera and DM settings based on reconstruction fits file
@@ -31,18 +37,22 @@ set up camera and DM settings based on reconstruction fits file
 
 
 # ============== READ IN PUPIL CLASSIFICATION DATA
-with open(data_path + pupil_classification_filename, 'rb') as handle:
-    pup_classification = pickle.load(handle)
+#with open(data_path + pupil_classification_filename, 'rb') as handle:
+#    pup_classification = pickle.load(handle)
 
 # ============== READ IN PUPIL PHASE RECONSTRUCTOR DATA
-reco_fits = fits.open(data_path + reco_filename  ) 
+reco_fits = fits.open( reco_filename  ) 
 
 # reconstructor data 
 R_TT = reco_fits['R_TT'].data #tip-tilt reconstructor
 R_HO = reco_fits['R_HO'].data #higher-oder reconstructor
+
+IM = reco_fits['IM'].data.astype(np.float32)
+M2C = reco_fits['M2C'].data.astype(np.float32) # mode to command matrix 
+I2M = reco_fits['I2M'].data.astype(np.float32) # intensity (signal) to mode matrix  
 CM = reco_fits['CM'].data.astype(np.float32)  # full control matrix 
-I0 = reco_fits['FPM_IN'].data # calibration source reference intensity (FPM IN)
-N0 = reco_fits['FPM_OUT'].data # calibration source reference intensity (FPM OUT)
+I0 = reco_fits['I0'].data # calibration source reference intensity (FPM IN)
+N0 = reco_fits['N0'].data # calibration source reference intensity (FPM OUT)
 
 # camera settings used to build reconstructor 
 det_fps = float(reco_fits['info'].header['camera_fps']) # frames per sec (Hz) 
@@ -61,13 +71,14 @@ det_cropping_cols = str( reco_fits['info'].header['cropping_columns'] ).split('c
 
 
 # JUST USE A DUMMY FOR NOW OF THE FULL FRAME SIZE 
-nmodes = 140
+#nmodes = 140
 #CM = np.zeros( [140 , 640*512], dtype=np.float32).reshape(-1) # just use zeros
 
 #pupil_pixels = np.ones(CM.shape[0], dtype=np.int32)# np.array( pup_classification['pupil_pixels'][:-2], dtype=np.int32)
-pupil_pixels = np.array( pup_classification['pupil_pixels'], dtype=np.int32)
+#pupil_pixels = np.array( pup_classification['pupil_pixels'], dtype=np.int32)
+pupil_pixels = np.array( reco_fits['pupil_pixels'].data, dtype=np.int32)
 
-if len( pupil_pixels ) != CM.shape[0]:
+if len( pupil_pixels ) != CM.shape[1]:
     raise TypeError("number of pupil pixels (for control) does not match\
     control matrix size!!! CHeck why, did you input correct files?")
 
@@ -99,17 +110,17 @@ r.commit_camera_settings()
 
 r.update_camera_settings()
 
-# -- update control matrix [FORCE TO ZERO FOR NOW!!! ]
-#=================== forced to zero  
-r.set_ctrl_matrix( 0* CM.reshape(-1) )  # check r.get_reconstructor()
-#========================================
+
+r.set_ctrl_matrix(  CM.reshape(-1) )  # check r.get_reconstructor()
 
 # set I0, bias, etc <- long term I should create a function to do this 
 # for now use reconstructor file 
 frame = r.get_last_frame() 
+
 r.set_bias( 0*r.get_last_frame()  )
-r.set_I0( (I0.reshape(-1) / np.sum(I0) ).astype(np.float32)  )
-r.set_fluxNorm(  np.sum(np.array(r.get_last_frame(),dtype=np.float32) ) )
+
+r.set_I0( (I0.reshape(-1) / np.mean(I0) ).astype(np.float32)  )
+r.set_fluxNorm(  np.mean(np.array(r.get_last_frame(),dtype=np.float32) ) )
 
 # init the rtc. Could have been done using constructor but requires to code it.
 #r.set_slope_offsets(slope_offsets[0])
@@ -118,17 +129,119 @@ r.set_fluxNorm(  np.sum(np.array(r.get_last_frame(),dtype=np.float32) ) )
 r.set_pupil_pixels(pupil_pixels)
 # none of the above commands are executed yet until we commit.
 # It's safe to do it because the rtc is not running yet.
+time.sleep(0.05)
 r.commit()
 
+# ----------- HELP
+# I dont know why this has to keep getting set / committed!!!!! 
+#r.set_I0( (I0.reshape(-1) / np.mean(I0) ).astype(np.float32)  )
+#r.commit() 
+
+"""
+IT seems to happen after I call, or do an operation on I0. e.g.
+r.set_I0( (I0.reshape(-1) / np.mean(I0) ).astype(np.float32)  )
+r.commit() 
+
+"""
 
 
 # basic dimensionality check of control matrix and pupil filtered image 
 try:
-    cmd_test = r.get_reconstructor().reshape(CM.shape).T @ r.get_last_frame()[pupil_pixels]
+    i0 = I0.reshape(-1)[pupil_pixels]/np.mean(I0 )
+    f = r.get_last_frame()
+    i = f[pupil_pixels]/np.mean(f)
+    cmd_test = r.get_reconstructor().reshape(CM.shape) @ (i-i0)
+
 
     print(f"DIMENSIONS CHECK OUT (ie, can multiply!!\nresulting cmd length = {len(cmd_test)}. should be 140 for BMC multi3.5 DM ")
 except:
     print("SOMETHING WRONG WITH INPUT DIMENSIONS!! ")
+
+
+#========== COMPARE RECONSTRUCTORS WITH/WITHOUT DISTURBANCE
+# flat DM 
+#r.apply_dm_shape( np.ones( 140 ) * 0.5 ) 
+r.flatten_dm()
+time.sleep(0.5)
+i0 = I0.reshape(-1)[pupil_pixels]/np.mean( I0 )
+f = r.get_last_frame()
+i = f[pupil_pixels]/np.mean(f)
+cmd_test_flat = r.get_reconstructor().reshape(CM.shape) @ (i-i0)
+
+# now put on a mode 
+mode_idx = 5
+amp = 0.2
+mode_cmd = 0.5*np.ones( 140 ) + amp*M2C[:,mode_idx]
+r.apply_dm_shape( mode_cmd ) 
+time.sleep(0.5)
+f = r.get_last_frame()
+i = f[pupil_pixels]/np.mean(f)
+cmd_test_mode = r.get_reconstructor().reshape(CM.shape) @ (i-i0)
+
+im_list = [util.get_DM_command_in_2D(mode_cmd ), util.get_DM_command_in_2D( cmd_test_flat ) ,util.get_DM_command_in_2D( cmd_test_mode  ) ]
+xlabel_list = [None, None, None]
+ylabel_list = [None, None, None]
+title_list = [f'dist with {amp} x mode {mode_idx}','reco with flat DM input', f'reco with {amp} x mode {mode_idx}']
+cbar_label_list = ['DM command', 'DM command' , 'DM command' ] 
+savefig = None # fig_path + f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+# does it even register the mode in I2M 
+reco_mode_amps = I2M.T @  (i-i0)
+plt.figure() 
+plt.plot( reco_mode_amps ) 
+plt.axvline( mode_idx , ls=':');plt.show()
+
+###################
+# ok its shit.. lets try re-filter to see if we can improve 
+
+U, S, Vt = np.linalg.svd( IM , full_matrices=True)
+S[0] = np.min(S)
+S[50:] = np.min(S)
+Sigma = np.zeros( IM.shape)
+np.fill_diagonal(Sigma, S, wrap=False)
+I2M_new =  np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
+print(  np.linalg.cond( I2M_new) )
+#control matrix (note in zonal method M2C is just identity matrix)
+CM_new = M2C @ I2M_new.T
+
+
+# flat DM 
+r.apply_dm_shape( np.ones( 140 ) * 0.5 ) 
+time.sleep(0.5)
+i0 = I0.reshape(-1)[pupil_pixels]/np.mean(I0 )
+f = r.get_last_frame()
+i = f[pupil_pixels]/np.mean(f)
+cmd_test_flat = CM_new @ (i-i0)
+
+# now put on a mode 
+mode_idx = 10
+amp = 0.08
+mode_cmd = np.ones( 140 ) * 0.5 + amp*M2C[:,mode_idx]
+r.apply_dm_shape( mode_cmd ) 
+time.sleep(0.5)
+f = r.get_last_frame()
+i = f[pupil_pixels]/np.mean(f)
+cmd_test_mode = CM_new @ (i-i0)
+
+im_list = [util.get_DM_command_in_2D(mode_cmd ), util.get_DM_command_in_2D( cmd_test_flat ) ,util.get_DM_command_in_2D( cmd_test_mode  ) ]
+xlabel_list = [None, None, None]
+ylabel_list = [None, None, None]
+title_list = [f'dist with {amp} x mode {mode_idx}','reco with flat DM input', f'reco with {amp} x mode {mode_idx}']
+cbar_label_list = ['DM command', 'DM command' , 'DM command' ] 
+savefig = None # fig_path + f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+# does it even register the mode in I2M 
+reco_mode_amps = I2M_new.T @  (i-i0)
+plt.figure() 
+plt.plot( reco_mode_amps ) 
+plt.axvline( mode_idx , ls=':');plt.show()
+
+
+
 
 
 
@@ -153,7 +266,7 @@ tel_reco =   np.array([tt.reco_dm_err for tt in t])
 #tel_dmcmd =  [tt.dm_command for tt in t]
 
 # reconstruct raw image, (cannot do processed since its filtered, but could do this using I0 etc)
-tel_rawimg[1].reshape(116,128)
+#tel_rawimg[1].reshape(116,128)
 
 
 
@@ -166,6 +279,8 @@ plt.imshow( r.get_last_frame().reshape(116,160)); plt.show() # reshape (height, 
 
 # ========verify image poke and setting DM shape 
 # poke sequential actuators and look at differential images 
+
+w,h = r.get_img_width(),r.get_img_height()
 fig,ax = plt.subplots(3,3)
 r.apply_dm_shape(0.5*np.ones(140)) # need to put check in apply shape, especially for length! 
 time.sleep(0.5)
@@ -177,7 +292,7 @@ for i,axx in enumerate(ax.reshape(-1)):
     time.sleep(0.5)
     im_b = r.get_last_frame().astype(float) 
     #im_list.append( r.get_last_frame().astype(float) ) 
-    axx.imshow( (im_a - im_b).reshape( 116,160 ) )
+    axx.imshow( (im_a - im_b).reshape( h,w ) )
     r.apply_dm_shape(0.5*np.ones(140))
     time.sleep(0.5)
 plt.show() 
@@ -196,7 +311,8 @@ im_a = r.get_last_frame().astype(float)
 r.apply_dm_shape( fourtorres.values.ravel()*0.1+0.5) #*0.2 + 0.5 )
 time.sleep(0.5)
 im_c = r.get_last_frame().astype(float)
-plt.imshow( (im_a - im_c).reshape( 116,160 ) ); plt.show()
+plt.imshow( (im_a - im_c).reshape( h, w ) ); 
+plt.show()
 
 #another test 
 play_shape1 = np.ones(140) * 0.5
@@ -207,7 +323,7 @@ im_a = r.get_last_frame().astype(float)
 r.apply_dm_shape( play_shape1 ) #*0.2 + 0.5 )
 time.sleep(0.5)
 im_c = r.get_last_frame().astype(float)
-plt.imshow( (im_a - im_c).reshape( 116,160 ) ); plt.show()
+plt.imshow( (im_a - im_c).reshape( h, w ) ); plt.show()
 
 # ========verify getting image, signal processing and reconstructor of DM CMD
 # using r.test() 

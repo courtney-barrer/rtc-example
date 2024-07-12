@@ -196,7 +196,9 @@ class phase_controller_1():
             self.N0_2D = N0 / np.mean( N0 ) # 2D array (not filtered by pupil pixel filter)
 
         #  also update b attribute in phase controller
-        self.update_b( ZWFS, self.I0_2D, self.N0_2D )
+        # !!!!!!!!!!!!!!!!!
+        # ---------------- GENERALLY WORKS, COMMENTED OUT FOR NOW TO SPEED THINGS UP!
+        #self.update_b( ZWFS, self.I0_2D, self.N0_2D )
         
 
         modal_basis = self.config['M2C'].copy().T # more readable
@@ -238,11 +240,11 @@ class phase_controller_1():
         if self.config['basis'] == 'Zonal': # then we filter number of modes in the eigenspace of IM 
             S_filt = S > 0 #(i.e. we dont filter here) #S >= np.min(S) # we consider the highest eigenvalues/vectors up to the number_of_controlled_modes
             Sigma = np.zeros( np.array(IM).shape, float)
-            np.fill_diagonal(Sigma, S[S_filt], wrap=False) #
+            np.fill_diagonal(Sigma, 1/S[S_filt], wrap=False) #
         else: # else #modes decided by the construction of modal basis. We may change their gains later
             S_filt = S > 0 # S > S[ np.min( np.where( abs(np.diff(S)) < 1e-2 )[0] ) ]
             Sigma = np.zeros( np.array(IM).shape, float)
-            np.fill_diagonal(Sigma, S[S_filt], wrap=False) #
+            np.fill_diagonal(Sigma, 1/S[S_filt], wrap=False) #
 
         if debug:
             #plotting DM eigenmodes to see which to filter 
@@ -258,9 +260,12 @@ class phase_controller_1():
             """
 
 
-        # control matrix
-        CM =  np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
-       
+        # intensity to mode matrix 
+        I2M =  np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
+        
+        #control matrix (note in zonal method M2C is just identity matrix)
+        CM = self.config['M2C'] @ I2M.T
+
         # class specific controller parameters
         ctrl_parameters = {}
        
@@ -278,9 +283,11 @@ class phase_controller_1():
 
         ctrl_parameters['dm_center_ref_pixels'] = ZWFS.dm_center_ref_pixels
 
-        ctrl_parameters['IM'] = IM
+        ctrl_parameters['IM'] = IM # interaction matrix
        
-        ctrl_parameters['CM'] = CM
+        ctrl_parameters['I2M'] = I2M # intensity to mode matrix 
+
+        ctrl_parameters['CM'] = CM # control matrix (intensity to DM cmd)
        
         ctrl_parameters['P2C'] = None # pixel to cmd registration (i.e. what region)
 
@@ -409,16 +416,17 @@ class phase_controller_1():
         return( cmd )
 
 
-    def plot_SVD_modes(self, ctrl_label, save_path=None):
+    def plot_SVD_modes(self, ZWFS, ctrl_label, save_path=None):
 
         IM = self.ctrl_parameters[ctrl_label]['IM']
+        M2C = self.config['M2C']
         pupil_pixels = self.ctrl_parameters[ctrl_label]['pupil_pixels']
         U,S,Vt = np.linalg.svd( IM , full_matrices=True)
 
         #singular values
         plt.figure() 
         plt.semilogy(S/np.max(S))
-        plt.axvline( np.pi * (10/2)**2, color='k', ls=':', label='number of actuators in pupil')
+        #plt.axvline( np.pi * (10/2)**2, color='k', ls=':', label='number of actuators in pupil')
         plt.legend() 
         plt.xlabel('mode index')
         plt.ylabel('singular values')
@@ -432,10 +440,10 @@ class phase_controller_1():
         plt.subplots_adjust(hspace=0.1,wspace=0.1)
         for i,axx in enumerate(ax.reshape(-1)):
             # we filtered circle on grid, so need to put back in grid
-            tmp =  ZWFS.pupil_pixels.copy()
+            tmp =  ZWFS.pupil_pixel_filter.copy()
             vtgrid = np.zeros(tmp.shape)
             vtgrid[tmp] = Vt[i]
-            axx.imshow( vtgrid.reshape(I0.shape ) #cp_x2-cp_x1,cp_y2-cp_y1) )
+            axx.imshow( vtgrid.reshape(ZWFS.I0.shape ) ) #cp_x2-cp_x1,cp_y2-cp_y1) )
             #axx.set_title(f'\n\n\nmode {i}, S={round(S[i]/np.max(S),3)}',fontsize=5)
             axx.text( 10,10,f'{i}',color='w',fontsize=4)
             axx.text( 10,20,f'S={round(S[i]/np.max(S),3)}',color='w',fontsize=4)
@@ -449,10 +457,11 @@ class phase_controller_1():
         # THE DM MODES 
 
         # NOTE: if not zonal (modal) i might need M2C to get this to dm space 
+        # if zonal M2C is just identity matrix. 
         fig,ax = plt.subplots(8,8,figsize=(30,30))
         plt.subplots_adjust(hspace=0.1,wspace=0.1)
         for i,axx in enumerate(ax.reshape(-1)):
-            axx.imshow( util.get_DM_command_in_2D( U.T[i] ) )
+            axx.imshow( util.get_DM_command_in_2D( M2C @ U.T[i] ) )
             #axx.set_title(f'mode {i}, S={round(S[i]/np.max(S),3)}')
             axx.text( 1,2,f'{i}',color='w',fontsize=6)
             axx.text( 1,3,f'S={round(S[i]/np.max(S),3)}',color='w',fontsize=6)

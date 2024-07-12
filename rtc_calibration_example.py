@@ -8,8 +8,10 @@ from pyBaldr import phase_control
 from pyBaldr import pupil_control
 from pyBaldr import utilities as util
 
+import os 
 import pickle
 import numpy as np
+import glob
 import matplotlib.pyplot as plt 
 import time 
 import datetime
@@ -32,8 +34,11 @@ DIT = 2e-3 #s integration time
 
 #sw = 8 # 8 for 12x12, 16 for 6x6 
 #pupil_crop_region = [157-sw, 269+sw, 98-sw, 210+sw ] #[165-sw, 261+sw, 106-sw, 202+sw ] #one pixel each side of pupil.  #tight->[165, 261, 106, 202 ]  #crop region around ZWFS pupil [row min, row max, col min, col max] 
-readout_mode = '12x12' # '6x6'
-pupil_crop_region = pd.read_csv('/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/' + f'T1_pupil_region_{readout_mode}.csv',index_col=[0])['0'].values
+#readout_mode = '12x12' # '6x6'
+#pupil_crop_region = pd.read_csv('/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/' + f'T1_pupil_region_{readout_mode}.csv',index_col=[0])['0'].values
+
+pupil_crop_region = [None, None, None, None]
+
 #init our ZWFS (object that interacts with camera and DM)
 zwfs = ZWFS.ZWFS(DM_serial_number='17DW019#053', cameraIndex=0, DMshapes_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/DMShapes/', pupil_crop_region=pupil_crop_region ) 
 
@@ -45,9 +50,12 @@ zwfs = ZWFS.ZWFS(DM_serial_number='17DW019#053', cameraIndex=0, DMshapes_path = 
 zwfs.set_camera_fps(fps) # set the FPS 
 zwfs.set_camera_dit(DIT) # set the DIT 
 
-#zwfs.set_camera_cropping(r1=152, r2=267, c1=96, c2=223)
-#zwfs.enable_frame_tag(tag = False) # first 1-3 pixels count frame number etc
+zwfs.set_camera_cropping(r1=152, r2=267, c1=96, c2=223)
+zwfs.enable_frame_tag(tag = False) # first 1-3 pixels count frame number etc
 
+# TO EXIT CAMERA AND DM SO THEY CAN BE RE-INITIALIZED 
+#zwfs.exit_camera()
+#zwfs.exit_dm()
 
 ##
 ##    START CAMERA 
@@ -58,16 +66,6 @@ util.watch_camera(zwfs)
 
 #init our phase controller (object that processes ZWFS images and outputs DM commands)
 phase_ctrl = phase_control.phase_controller_1(config_file = None) 
-
-# have a look at one of the modes on the DM. Modes are normalized in cmd space <m|m> = 1
-if 0:
-    mode_indx = 0
-    plt.figure() 
-    plt.imshow( util.get_DM_command_in_2D(phase_ctrl.config['M2C'].T[mode_indx],Nx_act=12))
-    plt.title(f'example: mode {mode_indx} on DM') 
-    plt.show()
-    print( f'number of controlled modes = {phase_ctrl.config["number_of_controlled_modes"]}')
-
 
 #init our pupil controller (object that processes ZWFS images and outputs VCM commands)
 pupil_ctrl = pupil_control.pupil_controller_1(config_file = None)
@@ -88,6 +86,12 @@ pupil_report = pupil_control.analyse_pupil_openloop( zwfs, debug = True, return_
 with open(data_path + f'pupil_classification_{tstamp}.pickle', 'wb') as handle:
     pickle.dump(pupil_report, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+# if I just want to read in most recent file:
+"""
+tmp_files = glob.glob(data_path + 'pupil_class*')#glob.glob(data_path + 'pupil_class*') # see what files we have 
+with open( max(tmp_files , key=os.path.getctime) , 'rb') as handle:
+    pupil_report = pickle.load(handle)
+"""
 if pupil_report['pupil_quality_flag'] == 1: 
     # I think this needs to become attribute of ZWFS as the ZWFS object is always passed to pupil and phase control as an argunment to take pixtures and ctrl DM. The object controlling the camera should provide the info on where a controller object should look to apply control algorithm. otherwise pupil and phase controller would always need to talk to eachother. Also we will have 4 controllers in total
 
@@ -100,6 +104,12 @@ if pupil_report['pupil_quality_flag'] == 1:
 
 else:
     print('implement proceedure X1') 
+
+# check where things are classified (see if they make sense)
+zwfs.plot_classified_pupil_region()
+
+
+
 
 """
 if debug:
@@ -196,6 +206,23 @@ plt.show()
 ctrl_method_label = 'ctrl_1'
 phase_ctrl.build_control_model( zwfs , poke_amp = -0.15, label=ctrl_method_label, debug = True)  
 
+# check the SVD, singular values, camera and mirror modes
+phase_ctrl.plot_SVD_modes(zwfs,ctrl_method_label)
+
+# write fits to input into RTC
+zwfs.write_reco_fits( phase_ctrl, 'ctrl_1',save_path=data_path)
+
+# some checks 
+# - interaction matrix rows holds intensity signal for given mode applied,
+#  so multiply given row (mode) by CM should reconstruct the mode. 
+plt.imshow( util.get_DM_command_in_2D( phase_ctrl.ctrl_parameters['ctrl_1']['CM'] @ phase_ctrl.ctrl_parameters['ctrl_1']['IM'][0] ) ); plt.show()
+
+# also ploting multiplication of I2M matrix with IM row should return 1 at the mode index
+# and zero otherwise 
+i =20
+plt.plot( phase_ctrl.ctrl_parameters['ctrl_1']['I2M'].T @ phase_ctrl.ctrl_parameters['ctrl_1']['IM'][i]  ); plt.show()
+
+
 #pupil_ctrl tells phase_ctrl where the pupil is
 
 # double check DM is flat 
@@ -214,6 +241,15 @@ plt.imshow( util.get_DM_command_in_2D( phase_ctrl.config['M2C'].T[2] ) );plt.sho
 
 
 
+
+# have a look at one of the modes on the DM. Modes are normalized in cmd space <m|m> = 1
+if 0:
+    mode_indx = 0
+    plt.figure() 
+    plt.imshow( util.get_DM_command_in_2D(phase_ctrl.config['M2C'].T[mode_indx],Nx_act=12))
+    plt.title(f'example: mode {mode_indx} on DM') 
+    plt.show()
+    print( f'number of controlled modes = {phase_ctrl.config["number_of_controlled_modes"]}')
 
 
 
@@ -234,6 +270,7 @@ if debug:
     for i in range( 10 ) :
         raw_img_list.append( zwfs.get_image() ) # @D, remember for control_phase method this needs to be flattened and filtered for pupil region
     raw_img = np.median( raw_img_list, axis = 0) 
+    # Have to remember to normalize it ! 
     err_img = phase_ctrl.get_img_err( 1/np.mean(raw_img) * raw_img.reshape(-1)[zwfs.pupil_pixels]  ) 
 
     #NEED TO IMPLEMENT THIS TO STANDARDIZE phase_ctrl.get_error_intensity( raw_img.reshape(-1)[zwfs.pupil_pixels] ) 

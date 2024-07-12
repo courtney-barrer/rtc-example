@@ -19,6 +19,8 @@ import glob
 import sys  
 import pandas as pd 
 import datetime 
+import matplotlib.pyplot as plt 
+from astropy.io import fits 
 
 sys.path.insert(1, '/opt/FirstLightImaging/FliSdk/Python/demo/')
 sys.path.insert(1,'/opt/Boston Micromachines/lib/Python3/site-packages/')
@@ -313,6 +315,13 @@ class ZWFS():
     def shutdown(self):
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "shutdown")
 
+    def exit_camera(self):
+        FliSdk_V2.Stop(self.camera)
+        FliSdk_V2.Exit(self.camera)
+
+    def exit_dm(self):
+        self.dm.close_dm()
+
     def enable_frame_tag(self, tag = True):
         if tag:
             FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set imagetags on")
@@ -353,22 +362,22 @@ class ZWFS():
 
 
     
-    def plot_classified_pupil_region(self)
+    def plot_classified_pupil_region(self):
         # to check pupil regions are defined ok. 
         # If you want to check
         fig,ax = plt.subplots(1,5,figsize=(20,4))
-
-        ax[0].imshow( self.pupil_pixel_filter.reshape(self.I0_2D.shape)) # cp_x2-cp_x1, cp_y2-cp_y1) )
-        ax[1].imshow( self.outside_pupil_pixel_filter.reshape(self.I0_2D.shape))#( cp_x2-cp_x1, cp_y2-cp_y1) )
-        ax[2].imshow( self.secondary_pupil_pixel_filter.reshape(self.I0_2D.shape))#( cp_x2-cp_x1, cp_y2-cp_y1) )
-        ax[3].imshow( I0_2D.shape )
-        ax[4].imshow( N0_2D.shape )
+        # note with ZWFS I0, N0 are not pixel filtered 
+        ax[0].imshow( self.pupil_pixel_filter.reshape(self.I0.shape)) # cp_x2-cp_x1, cp_y2-cp_y1) )
+        ax[1].imshow( self.outside_pixel_filter.reshape(self.I0.shape))#( cp_x2-cp_x1, cp_y2-cp_y1) )
+        ax[2].imshow( self.secondary_pixel_filter.reshape(self.I0.shape))#( cp_x2-cp_x1, cp_y2-cp_y1) )
+        ax[3].imshow( self.I0 )
+        ax[4].imshow( self.N0 )
         
         for axx,l in zip(ax, ['inside pupil','outside pupil','secondary','I0','N0']):
             axx.set_title(l)
         plt.show()
     
-    def write_reco_fits( self, phase_controller, ctrl_label , save_path):
+    def write_reco_fits( self, phase_controller, ctrl_label, save_path):
         """
         phase_controller object from phase_control module
         ctrl_label is a string indicating the label used 
@@ -391,23 +400,23 @@ class ZWFS():
         camera_info_dict = util.get_camera_info(self.camera)
         for k,v in camera_info_dict.items():
             info_fits.header.set(k,v)
-        info_fits.header.set('#images per DM command', number_images_recorded_per_cmd )
-        info_fits.header.set('take_median_of_images', take_median_of_images )
+        #info_fits.header.set('#images per DM command', number_images_recorded_per_cmd )
+        #info_fits.header.set('take_median_of_images', take_median_of_images )
         
         # NOTE!! cropping_corners define cropping post camera read-out
         # they are different to the camera cropping 
         # IMPORTANT: if not NONE, pixel filters (e.g. pupil_pixel) are defined 
         # relative to this crop region! 
-        info_fits.header.set('cropping_corners_r1', zwfs.pupil_crop_region[0] )
-        info_fits.header.set('cropping_corners_r2', zwfs.pupil_crop_region[1] )
-        info_fits.header.set('cropping_corners_c1', zwfs.pupil_crop_region[2] )
-        info_fits.header.set('cropping_corners_c2', zwfs.pupil_crop_region[3] )
+        info_fits.header.set('cropping_corners_r1', self.pupil_crop_region[0] )
+        info_fits.header.set('cropping_corners_r2', self.pupil_crop_region[1] )
+        info_fits.header.set('cropping_corners_c1', self.pupil_crop_region[2] )
+        info_fits.header.set('cropping_corners_c2', self.pupil_crop_region[3] )
 
         # INFO - control basis info
         info_fits.header.set('control_basis', phase_controller.config['basis'] )
         info_fits.header.set('number_of_controlled_modes', phase_controller.config['number_of_controlled_modes'] )
         info_fits.header.set('dm_control_diameter', phase_controller.config['dm_control_diameter'] )
-        info_fits.header.set('dm_control_center', phase_controller.config['dm_control_center'] )
+        #info_fits.header.set('dm_control_center', phase_controller.config['dm_control_center'] )
 
         info_fits.header.set('CM_build_method', 'FILL ME' ) # how did we build the CM 
         # push, pull, push-pull ? 
@@ -417,10 +426,16 @@ class ZWFS():
         IM_fits.header.set('what is?','unfiltered interaction matrix (IM)')
         IM_fits.header.set('EXTNAME','IM')      
 
-        # CONTROL MATRIX
+        # CONTROL MATRIX ( I should define CM = M2C @ I2M )
+        #CM = phase_controller.ctrl_parameters[ctrl_label]["CM"]
+        #M2C = phase_controller.config['M2C']
         CM_fits = fits.PrimaryHDU( phase_controller.ctrl_parameters[ctrl_label]["CM"]   )  # filtered control matrix 
         CM_fits.header.set('what is?','filtered control matrix (CM)')
         CM_fits.header.set('EXTNAME','CM')
+
+        I2M_fits = fits.PrimaryHDU( phase_controller.ctrl_parameters[ctrl_label]["I2M"]   )  # filtered control matrix 
+        I2M_fits.header.set('what is?','intensity to modes')
+        I2M_fits.header.set('EXTNAME','I2M')
         
         # REFERENCE INTENSITY WITH FPM OUT (N0)
         # normalized and filtered with defined pupil (1D)
@@ -428,8 +443,8 @@ class ZWFS():
         #N0_filt_fits.header.set('what is?','pupil filtered FPM OUT')
         #N0_filt_fits.header.set('EXTNAME','N0_filt') 
 
-        # normalized, unfiltered (2D)
-        N0_fits = fits.PrimaryHDU( self.N0  )
+        # un-normalized, unfiltered (2D)
+        N0_fits = fits.PrimaryHDU( phase_controller.ctrl_parameters[ctrl_label]["ref_pupil_FPM_out"]  )
         N0_fits.header.set('what is?','FPM OUT')
         N0_fits.header.set('EXTNAME','N0')        
         
@@ -439,8 +454,8 @@ class ZWFS():
         #I0_filt_fits.header.set('what is?','pupil filtered FPM IN')
         #I0_filt_fits.header.set('EXTNAME','I0_filt')       
 
-        # normalized, unfiltered (2D)
-        I0_fits = fits.PrimaryHDU( self.I0  )
+        # un-normalized, unfiltered (2D)
+        I0_fits = fits.PrimaryHDU( phase_controller.ctrl_parameters[ctrl_label]["ref_pupil_FPM_in"]  ) 
         I0_fits.header.set('what is?','FPM IN')
         I0_fits.header.set('EXTNAME','I0')        
 
@@ -474,17 +489,17 @@ class ZWFS():
         dm_pixel_center_fits .header.set('EXTNAME','dm_center_ref')
 
         # TO DO... Depends on modal basis used 
-        RTT_fits = fits.PrimaryHDU( np.zeros(CM.shape) )
+        RTT_fits = fits.PrimaryHDU( np.zeros( phase_controller.ctrl_parameters[ctrl_label]['CM'].shape) )
         RTT_fits.header.set('what is?','tip-tilt reconstructor')
         RTT_fits.header.set('EXTNAME','R_TT')
 
-        RHO_fits = fits.PrimaryHDU(  np.zeros(CM.shape) )
+        RHO_fits = fits.PrimaryHDU(  np.zeros(phase_controller.ctrl_parameters[ctrl_label]['CM'].shape) )
         RHO_fits.header.set('what is?','higher-oder reconstructor')
         RHO_fits.header.set('EXTNAME','R_HO')
 
-        fits_list = [info_fits, IM_fits, CM_fits, N0_fits, I0_fits, M2C_fits,\
+        fits_list = [info_fits, IM_fits, CM_fits, I2M_fits, M2C_fits, N0_fits, I0_fits,\
         pupil_fits, secondary_fits, outside_fits, dm_pixel_center_fits,\
-        RTT_fits,RH0_fits]
+        RTT_fits,RHO_fits]
 
 
         reconstructor_fits = fits.HDUList( [] )

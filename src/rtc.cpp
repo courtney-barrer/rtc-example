@@ -203,8 +203,8 @@ private:
 
 */
 
-
-void matrix_vector_multiply(std::span<const float> v, updatable<std::span<float>>& r, std::vector<double>& result) {
+//std::span<const float> v
+void matrix_vector_multiply(std::vector<float> v, updatable<std::span<float>>& r, std::vector<double>& result) {
     size_t N = v.size();
     size_t M = r.current().size() / N;
 
@@ -708,6 +708,11 @@ struct RTC {
 
     }
 
+    void flatten_dm(){
+        cout << flat_dm_array[5] << endl;
+        BMCSetArray(&hdm, flat_dm_array, map_lut.data());
+    }
+
 
     // void normalizeImage(std::span<const uint16_t> img, std::span<const uint16_t> bias, float norm, std::span<float> normalizedImage) {
     //     if (img.size() != bias.size()) {
@@ -795,12 +800,15 @@ struct RTC {
 
     //std::span<const uint16_t>
     //std::vector<double>
-    void test(){
+    std::vector<double> test(){
 
         //size_t rows = 512; // Number of rows in the image
         //size_t cols = 640; // Number of columns in the image
 
         //size_t layers = 140; // Number of layers in the reconstructor matrix
+        
+        std::vector<double> delta_cmd; // to hold DM command offset from flat reference 
+        std::vector<double> cmd; // to hold DM command 
 
         uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
@@ -817,6 +825,8 @@ struct RTC {
         //std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
         std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  pupil_pixels.current() ); // set point intensity
         
+        assert(im.size() == I_ref.size());
+
         //basic checks 
         //assert(im.size() == b.size()); // Ensure sizes match between im and b
         assert(im.size() == I_ref.size()); // Ensure sizes match between im and I_ref
@@ -825,25 +835,43 @@ struct RTC {
         // to generate error signal
         size_t size = im.size();
         std::vector<float> signal(size);
+
+        float flux_norm_value = flux_norm.current();
+        // debugging
+        //cout << "flux_norm = " << flux_norm_value << endl;
+
         for (size_t i = 0; i < size; ++i) {
           //signal[i] = (static_cast<float>(im[i]) - static_cast<float>(b[i])) / flux_norm.current() - I_ref[i];
-          signal[i] = static_cast<float>(im[i]) / flux_norm.current() - I_ref[i];
+          signal[i] = static_cast<float>(im[i]) / flux_norm_value - I_ref[i];
+          // debugging
+          //cout << "signal i = " << signal[i] << endl;
         }
 
         // MVM to turn our error vector to a DM command via the reconstructor 
-        std::vector<double> cmd;
-        
-        matrix_vector_multiply(im, reconstructor, cmd); // make this return an array 
+               
+        matrix_vector_multiply(signal, reconstructor, delta_cmd); // delta_cmd = R . I (offset from reference flat DM)
 
-        if (check_dm_vector(cmd)){
-            throw std::invalid_argument( "Dangerous DM command less than ZERO or greater than ONE" );
+        /* THIS DOESNT WORK? WHY?
+        cmd = delta_cmd;  // copying is STUPID - just trying to geto work!
+        //Perform element-wise addition
+        for (size_t i = 0; i < size; ++i) {
+            //cout << flat_dm_array[i] << endl ;
+            cmd[i] = 0.5 + delta_cmd[i]; // just roughly offset to center
         }
+        */
+
+
+        //if (check_dm_vector(cmd)){
+        //    throw std::invalid_argument( "Dangerous DM command less than ZERO or greater than ONE" );
+        //}
+        
         
         double *cmd_ptr = cmd.data();
-        BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+
+        //BMCSetArray(&hdm, cmd_ptr, map_lut.data());
 
         // update dm_cmd_buffer 
-        cout << cmd[0]  << endl;
+        //cout << cmd[0]  << endl;
         //return cmd;
         if (telemetry_cnt > 0){
             telem_entry entry;
@@ -857,6 +885,7 @@ struct RTC {
 
             --telemetry_cnt;
         }
+        return delta_cmd;
     }
 
     void latency_test(int i, int switch_on){
@@ -914,12 +943,23 @@ struct RTC {
         return reconstructor_span;
     }
 
+
     uint16_t get_img_width(){
         return image_width;
     }
 
     uint16_t get_img_height(){
         return image_height;
+    }
+
+    float get_current_flux_norm(){
+        float fn = flux_norm.current();
+        return( fn );
+    }
+
+    std::span<float> get_current_I0(){
+        
+        return( I0.current() );
     }
 
     //can delete 
@@ -1191,6 +1231,8 @@ struct AsyncRunner {
 
 void bind_telemetry(nb::module_& m);
 
+
+
 NB_MODULE(_rtc, m) {
     using namespace nb::literals;
 
@@ -1209,6 +1251,8 @@ NB_MODULE(_rtc, m) {
         .def("set_offset", &RTC::set_offset) //delete
         .def("get_last_frame", &RTC::get_last_frame)
 
+        .def("get_current_flux_norm", &RTC::get_current_flux_norm)
+        .def("get_current_I0", &RTC::get_current_I0)
         // pupil control regions 
         .def("set_pupil_pixels", &RTC::set_pupil_pixels)
         .def("set_secondary_pixels", &RTC::set_secondary_pixels)
@@ -1235,7 +1279,7 @@ NB_MODULE(_rtc, m) {
 
         .def("poke_dm_actuator", &RTC::poke_dm_actuator) // applies a input value to a single input actuator on the DM
         .def("apply_dm_shape", &RTC::apply_dm_shape) // applies a cmd (140 array) to set the DM shape 
-
+        .def("flatten_dm", &RTC::flatten_dm) //flattens DM 
         //telemetry
         .def("enable_telemetry", &RTC::enable_telemetry)
 
@@ -1249,10 +1293,10 @@ NB_MODULE(_rtc, m) {
         
         .def("get_reconstructor", &RTC::get_reconstructor)
         //.def("normalizedImage", &RTC::normalizedImage)
-        .def("dm_test", &RTC::dm_test)
+        //.def("dm_test", &RTC::dm_test)
         .def("test", &RTC::test)
-        .def("test_normalization",&RTC::test_normalization)
-        .def("test_pixel_filter",&RTC::test_pixel_filter)
+        //.def("test_normalization",&RTC::test_normalization)
+        //.def("test_pixel_filter",&RTC::test_pixel_filter)
         .def("__repr__", [](const RTC& rtc) {
             std::stringstream ss;
             ss << rtc;

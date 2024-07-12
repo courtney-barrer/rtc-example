@@ -1200,14 +1200,15 @@ def fit_b_pixel_space(I0, theta, image_filter , debug=True):
     # we can use N0 to remove bias/bkg by subtraction 
 
     x = np.linspace(-I0.shape[0]//2 , I0.shape[0]//2 ,I0.shape[0])
-    X, Y = np.meshgrid( x, x)
+    y = np.linspace(-I0.shape[1]//2 , I0.shape[1]//2 ,I0.shape[1])
+    X, Y = np.meshgrid( x, y)
     X_f=X.reshape(-1)[image_filter]
     Y_f=Y.reshape(-1)[image_filter]
 
     # we normalize by average of I0 over entire image 
     I0_mean = np.mean( I0 ) # we take the median FPM OUT signal inside the pupil (appart from center pixels) 
     data = (I0.reshape(-1)[image_filter]/I0_mean).reshape(-1) #((I0-N0)/N0).reshape(-1)[image_filter] #this is M^2/|A|^2
-    initial_guess = (np.nanmax(data),np.mean(x),np.mean(x),np.std(x),np.std(x), 0, 0) 
+    initial_guess = (np.nanmax(data),np.mean(x),np.mean(y),np.std(x),np.std(y), 0, 0) 
 
     # fit it 
     popt, pcov = curve_fit(twoD_Gaussian, (X_f, Y_f), data, p0=initial_guess)
