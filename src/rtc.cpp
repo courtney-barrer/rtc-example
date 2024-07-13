@@ -889,9 +889,34 @@ struct RTC {
     }
 
     void latency_test(int i, int switch_on){
+	//before starting should set DM array to zero or flat position. 
+	    
         // just switch between actuator pokes based on modulus of j and switch on
-        static int j;
-        j = 0;
+	static int k =0; // for counting if poke in or out.
+	static int j = 0; // Static count variable
+	uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+
+        std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
+
+	// do we record an image in telemetry? 
+    	if (s.size() > 0 && j < image_span[0]) {
+		//if there is a new frame append it to 
+		entry.image_raw = std::move(image_span); // im);
+        	std::cout << "ok" << std::endl;
+	}
+	// do we move the DM?
+	if (j % 20) {
+		// move every 20 frames
+		if (k % 2)==0{
+			BMCSetSingle(&hdm, 65, 0.2);
+			
+				}else{
+			BMCSetSingle(&hdm, 65, 0);
+			
+			}
+		k++
+	
+	}
         
     }
 
