@@ -709,7 +709,10 @@ struct RTC {
     }
 
     void flatten_dm(){
-        cout << flat_dm_array[5] << endl;
+        for (int i ; i < dm_size; ++i){
+            cout << flat_dm_array[i] << endl;
+        }
+        
         BMCSetArray(&hdm, flat_dm_array, map_lut.data());
     }
 
@@ -807,8 +810,8 @@ struct RTC {
 
         //size_t layers = 140; // Number of layers in the reconstructor matrix
         
-        std::vector<double> delta_cmd; // to hold DM command offset from flat reference 
-        std::vector<double> cmd; // to hold DM command 
+        static std::vector<double> delta_cmd( dm_size, 0); // to hold DM command offset from flat reference 
+        static std::vector<double> cmd( dm_size, 0); // to hold DM command 
 
         uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
@@ -833,16 +836,16 @@ struct RTC {
         
         // subtract bias, normalize and then subtract reference intensity 
         // to generate error signal
-        size_t size = im.size();
-        std::vector<float> signal(size);
+        size_t signal_size = im.size();
+        std::vector<float> signal(signal_size);
 
         float flux_norm_value = flux_norm.current();
         // debugging
         //cout << "flux_norm = " << flux_norm_value << endl;
 
-        for (size_t i = 0; i < size; ++i) {
+        for (size_t i = 0; i < signal_size; ++i) {
           //signal[i] = (static_cast<float>(im[i]) - static_cast<float>(b[i])) / flux_norm.current() - I_ref[i];
-          signal[i] = static_cast<float>(im[i]) / flux_norm_value - I_ref[i];
+          signal[i] = static_cast<float>(im[i]) / flux_norm.current() - I_ref[i];
           // debugging
           //cout << "signal i = " << signal[i] << endl;
         }
@@ -851,14 +854,15 @@ struct RTC {
                
         matrix_vector_multiply(signal, reconstructor, delta_cmd); // delta_cmd = R . I (offset from reference flat DM)
 
-        /* THIS DOESNT WORK? WHY?
-        cmd = delta_cmd;  // copying is STUPID - just trying to geto work!
+
+        
         //Perform element-wise addition
-        for (size_t i = 0; i < size; ++i) {
-            //cout << flat_dm_array[i] << endl ;
+        for (size_t i = 0; i < dm_size; ++i) {
+            //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
+
             cmd[i] = 0.5 + delta_cmd[i]; // just roughly offset to center
         }
-        */
+
 
 
         //if (check_dm_vector(cmd)){
@@ -885,9 +889,78 @@ struct RTC {
 
             --telemetry_cnt;
         }
-        return delta_cmd;
+        return cmd;
     }
 
+    void latency_test(){
+        //before starting should set DM array to zero or flat position. 
+        
+        // just switch between actuator pokes based on modulus of j and switch on
+        static int k =0; // for counting if poke in or out.
+
+        //if (k=0){
+        //    BMCSetArray(&hdm, zerod_dm, map_lut.data());
+        //    //init to flat DM 
+        //}
+
+        if (telemetry_cnt > 0){
+
+            uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+            std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
+
+            static int j = image_span[0]; // Static count variable, only intialize once
+            static std::vector<double> dm_flag(2,0); // hold DM state flag  
+
+
+            //uint16_t frame_ct = image_span[0];
+            // do we record an image in telemetry? 
+            // only record the frame if it is new ( dont repeat old frames )
+            if (j < image_span[0]) {
+                telem_entry entry;
+                dm_flag[0] = (double)(k % 2) ;
+                entry.image_raw = std::move(image_span); // the corresponding image 
+                // --- SOMETHING FAILS HERE
+                //entry.dm_command = std::move(dm_flag); // if DM is push or flat 
+                append_telemetry(std::move(entry));
+
+
+                --telemetry_cnt;
+                j = image_span[0];
+                cout << "telemetry_cnt=" << telemetry_cnt << endl;
+                //if there is a new frame append it to 
+                }
+            
+            //std::cout << "ok" << std::endl;
+            
+            
+            // do we move the every 10 frames?
+            if ((j % 10)==0) {
+                
+                // check to poke in or out
+                if ((k % 2)==0){
+                    
+                    cout << "in"<< endl;
+                    BMCSetSingle(&hdm, 65, 0.2);
+                    
+                        }else{
+                    BMCSetSingle(&hdm, 65, 0);
+                    cout << "out"<< endl;
+                    }
+                ++k;
+                
+            
+            }
+            //j++;
+            //cout << "j = " << j << endl;
+            
+            
+        }
+        
+    }
+	
+
+
+    /*
     void latency_test(int i, int switch_on){
 	//before starting should set DM array to zero or flat position. 
 	    
@@ -907,19 +980,16 @@ struct RTC {
 	// do we move the DM?
 	if (j % 20) {
 		// move every 20 frames
-		if (k % 2)==0{
+		if ((k % 2)==0){
 			BMCSetSingle(&hdm, 65, 0.2);
-			
 				}else{
 			BMCSetSingle(&hdm, 65, 0);
-			
 			}
-		k++
-	
+		k++;
 	}
         
     }
-
+    */
 
     /**
      * @brief Performs computation using the current RTC values.
@@ -929,7 +999,10 @@ struct RTC {
         os << "computing with " << (*this) << '\n';
 
         // Do some computation here...
-        test();
+        
+        //test();
+        latency_test() ;
+
         // When computation is done, check if a commit is requested.
         if (commit_asked) {
             commit();

@@ -96,6 +96,8 @@ if len( pupil_pixels ) != CM.shape[1]:
 # set up camera/DM with same settings as reconstructor file 
 r = rtc.RTC()
 
+# ============ 
+# i have to wait for this set up otherwise below code screws up
 
 # -- update camera settings 
 r.set_det_dit( det_dit )
@@ -109,6 +111,10 @@ r.set_det_cropping_cols( det_cropping_cols )
 r.commit_camera_settings()
 
 r.update_camera_settings()
+
+# ============ 
+# i have to wait for this set up otherwise below code screws up
+time.sleep(1)
 
 
 r.set_ctrl_matrix(  CM.reshape(-1) )  # check r.get_reconstructor()
@@ -144,6 +150,42 @@ r.commit()
 
 """
 
+#==================== LATENCY TEST 
+
+# -- update camera settings 
+#r.set_det_dit( det_dit )
+#r.set_det_fps( det_fps )
+#r.set_det_gain( det_gain )
+r.set_det_tag_enabled( True )
+#r.set_det_crop_enabled( True )
+#r.set_det_cropping_rows( det_cropping_rows ) 
+#r.set_det_cropping_cols( det_cropping_cols ) 
+
+r.commit_camera_settings()
+
+r.update_camera_settings()
+
+iteration_nb = 100
+r.enable_telemetry(iteration_nb)
+
+r.apply_dm_shape( np.zeros(140) )
+w,h = r.get_img_width(),r.get_img_height() #image width height 
+# to check
+#f = r.get_last_frame()
+#plt.imshow( f.reshape(h,w) ); plt.show()
+
+# start a runner that calls latency function 
+#runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+#runner.start()
+
+#runner.pause()
+
+t = rtc.get_telemetry()
+tel_rawimg = np.array([tt.image_raw for tt in t] )
+
+tel_rawimg
+#tel_signal = np.array([tt.image_proc for tt in t])
+#tel_reco =   np.array([tt.reco_dm_err for tt in t])
 
 # basic dimensionality check of control matrix and pupil filtered image 
 try:
