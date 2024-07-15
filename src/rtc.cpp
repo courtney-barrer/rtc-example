@@ -203,6 +203,22 @@ private:
 
 */
 
+void matrix_vector_multiply(const std::vector<float>& v, updatable<std::span<float>>& r, std::vector<double>& result) {
+    std::size_t M = result.size();
+    std::size_t N = v.size();
+    auto R = r.current(); // get current value of reconstructor
+    // Ensure the result vector has the correct size
+    result.resize(M);
+
+    for (std::size_t i = 0; i < M; ++i) {
+        result[i] = 0.0;
+        for (std::size_t j = 0; j < N; ++j) {
+            result[i] += R[i * N + j] * v[j];
+        }
+    }
+}
+
+/*
 //std::span<const float> v
 void matrix_vector_multiply(std::vector<float> v, updatable<std::span<float>>& r, std::vector<double>& result) {
     size_t N = v.size();
@@ -224,6 +240,7 @@ void matrix_vector_multiply(std::vector<float> v, updatable<std::span<float>>& r
         }
     }
 }
+*/
 
 // for checking DM 
 bool check_dm_vector(const std::vector<double>& cmd) {
@@ -314,6 +331,10 @@ struct RTC {
     DM hdm = {};
     FliSdk* fli = {};
 
+    bool simulation_mode = false;
+
+    std::vector<double> delta_cmd;
+    std::vector<float> signal; 
     // -----------  dimensions of image
     uint16_t image_width;// i.e. cols in image
     uint16_t image_height;// i.e. rows in image 
@@ -336,10 +357,15 @@ struct RTC {
     
     // BMC calibrated DM flat position  
     double* flat_dm_array = readCSV(flat_dm_file);
+    
+    // NOTE: IF I DO OTHER ONES IT OVERWRITES THE PREVIOUS ONES!! POINTERS POINT TO NEW DATA POINTS
     // applies a waffle pattern on DM at frequency corresponding to interactuator spacing 
-    double* checkers_dm_array = readCSV(checkers_file); 
+    //double* checkers_dm_array = readCSV(checkers_file); 
     // pokes near each corner of the DM 
-    double* fourTorres_dm_array = readCSV(fourTorres_file); 
+    //double* fourTorres_dm_array = readCSV(fourTorres_file); 
+
+    std::vector<float> simulated_signal; // to hold simulated (processed) image! 
+    std::vector<float> I0_test; // to hold reference intensity AS TEST - SHOULD USE UPDATABLE 
 
     // updatable DM command 
     updatable<nb::ndarray<double>> dm_cmd ; 
@@ -807,23 +833,92 @@ struct RTC {
 
     //std::span<const uint16_t>
     //std::vector<double>
-    void test(){
+
+    std::vector<float> get_phase_ctr_signal(std::span<const uint16_t> image_span ){
+        // should probably have the image as input!
+        //uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+
+        //std::span<const uint16_t> image_span(raw_image, full_image_length);
+
+        // pixels for our control region
+        std::span<int> indices_span = pupil_pixels.current() ;
+        // Get values of at specified indices
+        std::vector<float> im = getValuesAtIndices<float>(image_span, indices_span ) ; // image
+        //std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
+        std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  indices_span ); // set point intensity
+        assert(im.size() == I_ref.size());
+
+        size_t signal_size = im.size();
+        cout << "signal size = "<< signal_size << endl;
+
+        // have to define here to keep in scope of telemetry
+        std::vector<float> signal(signal_size); // beware of makng this static - causes issues in telemetry
+
+        if (!simulation_mode){
+            std::vector<float> signal(signal_size);
+            for (size_t i = 0; i < signal_size; ++i) {
+            // NOTE WE USE I0_test[i] AND NOT I_ref[i] - WHICH IS FILTERED FROM updatable I0! due to bug
+            // TO BE FIXED
+            signal[i] = static_cast<float>(im[i]) / flux_norm.current() - I0_test[i];// I_ref[i];
+
+            }
+            
+        } else if( simulated_signal.size() == signal_size){
+            // to trouble shoot we set the signal to a signal from IM matrix 
+            // this should give an easily verifiable result 
+
+            // for telemetry w
+            // MVM to turn our error vector to a DM command via the reconstructor 
+            std::vector<float> signal(signal_size);
+            signal = simulated_signal; // assign for telemetry
+            
+        } else{
+            
+            //signal = simulated_signal;
+            cout << "!!!!!!!!!!! simulatied_signal.size() != signal_size !!!!!!!!!!!!!!!" << endl;
+        }
+        return signal ;
+
+    }
+
+    std::vector<double> reconstruct_DM_err(std::vector<float> signal){
+
+        std::vector<double> delta_cmd( dm_size, 0); // to hold DM command offset from flat reference 
+        //std::vector<double> cmd( dm_size, 0); // to hold DM command 
+
+        matrix_vector_multiply(signal, reconstructor, delta_cmd); // delta_cmd = R . I (offset from reference flat DM)
+
+        return( delta_cmd );
+    }
+
+    std::vector<double> test(){
 
         //size_t rows = 512; // Number of rows in the image
         //size_t cols = 640; // Number of columns in the image
 
         //size_t layers = 140; // Number of layers in the reconstructor matrix
         
+
         std::vector<double> delta_cmd( dm_size, 0); // to hold DM command offset from flat reference 
         std::vector<double> cmd( dm_size, 0); // to hold DM command 
 
         uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
+        cout << "raw_image[0]" << raw_image[0] << endl;
+
         std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
         //remember full_image_length is global in RTC struct and should be udpated every
         // time camera settings gets updated - always check this ! 
 
+        static uint16_t frame_cnt = image_span[0]; // to check if we are on a new frame
+        // note this is only valid if frame tagging is on.
         
+        if (frame_cnt < image_span[0]){
+            frame_cnt = image_span[0]; 
+            // etc do the stuff
+            cout << frame_cnt << endl;
+
+        }
         std::span<int> indices_span = pupil_pixels.current() ;
 
         
@@ -832,7 +927,9 @@ struct RTC {
         //std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
         std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  indices_span ); // set point intensity
         
-        assert(im.size() == I_ref.size());
+        cout << "im[0]" << im[0] << endl;
+        cout << "I_ref[0]" << I_ref[0] << endl;
+
 
         //basic checks 
         //assert(im.size() == b.size()); // Ensure sizes match between im and b
@@ -841,30 +938,44 @@ struct RTC {
         // subtract bias, normalize and then subtract reference intensity 
         // to generate error signal
         size_t signal_size = im.size();
-        std::vector<float> signal(signal_size);
+        cout << "signal size = "<< signal_size << endl;
 
-        float flux_norm_value = flux_norm.current();
+        // have to define here to keep in scope of telemetry
+        std::vector<float> signal(signal_size);
+        
+        //float flux_norm_value = flux_norm.current();
         // debugging
         //cout << "flux_norm = " << flux_norm_value << endl;
+        if (!simulation_mode){
+            std::vector<float> signal(signal_size);
+            for (size_t i = 0; i < signal_size; ++i) {
+            // NOTE WE USE I0_test[i] AND NOT I_ref[i] - WHICH IS FILTERED FROM updatable I0! due to bug
+            // TO BE FIXED
+            signal[i] = static_cast<float>(im[i]) / flux_norm.current() - I0_test[i];// I_ref[i];
 
-        for (size_t i = 0; i < signal_size; ++i) {
-          //signal[i] = (static_cast<float>(im[i]) - static_cast<float>(b[i])) / flux_norm.current() - I_ref[i];
-          signal[i] = static_cast<float>(im[i]) / flux_norm.current() - I_ref[i];
-          // debugging
-          //cout << "signal i = " << signal[i] << endl;
+            }
+            matrix_vector_multiply(signal, reconstructor, delta_cmd);
+        } else if( simulated_signal.size() == signal_size){
+            // to trouble shoot we set the signal to a signal from IM matrix 
+            // this should give an easily verifiable result 
+
+            // for telemetry w
+            // MVM to turn our error vector to a DM command via the reconstructor 
+            std::vector<float> signal(signal_size);
+            signal = simulated_signal; // assign for telemetry
+            matrix_vector_multiply(simulated_signal, reconstructor, delta_cmd); // delta_cmd = R . I (offset from reference flat DM)
+        } else{
+            
+            //signal = simulated_signal;
+            cout << "!!!!!!!!!!! simulatied_signal.size() != signal_size !!!!!!!!!!!!!!!" << endl;
         }
-
-        // MVM to turn our error vector to a DM command via the reconstructor 
-               
-        matrix_vector_multiply(signal, reconstructor, delta_cmd); // delta_cmd = R . I (offset from reference flat DM)
-
 
         
         //Perform element-wise addition
         for (size_t i = 0; i < dm_size; ++i) {
             //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
 
-            cmd[i] = 0.5 + delta_cmd[i]; // just roughly offset to center
+            cmd[i] = flat_dm_array[i] + delta_cmd[i]; // just roughly offset to center
         }
         
         // trying to copy this to see if the move() screws things up
@@ -873,14 +984,17 @@ struct RTC {
 
 
 
-        //if (check_dm_vector(cmd)){
-        //    throw std::invalid_argument( "Dangerous DM command less than ZERO or greater than ONE" );
-        //}
+        if (check_dm_vector(cmd)){
+            // flat DM 
+            BMCSetArray(&hdm, flat_dm_array, map_lut.data());
+
+            throw std::invalid_argument( "Dangerous DM command less than ZERO or greater than ONE" );
+        }
         
         
         double *cmd_ptr = cmd.data();
 
-        //BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+        BMCSetArray(&hdm, cmd_ptr, map_lut.data());
 
         // update dm_cmd_buffer 
         //cout << cmd[0]  << endl;
@@ -889,6 +1003,12 @@ struct RTC {
             telem_entry entry;
 
             entry.image_raw = std::move(image_span); // im);
+            /*
+            if (simulation_mode){
+                entry.image_proc = std::move(simulated_signal);
+            }else{
+                entry.image_proc = std::move(signal);
+            }*/
             entry.image_proc = std::move(signal);
             entry.reco_dm_err = std::move(cmd); // reconstructed DM command
             entry.dm_command = std::move(cmd); // final command sent
@@ -897,7 +1017,7 @@ struct RTC {
 
             --telemetry_cnt;
         }
-        //return cmd_ddd;
+        return cmd;
     }
 
     void latency_test(){
@@ -931,12 +1051,10 @@ struct RTC {
                 //dm_span_flag[0] = (double)(k % 2) ;
                 dm_flag[0] = (double)(k % 2) ;
                 entry.image_raw = std::move(image_span); // the corresponding image 
-                // --- SOMETHING FAILS HERE
                 entry.reco_dm_err = std::move(dm_flag); // if DM is push or flat 
                 //cout << dm_flag[0] << endl;
 
                 append_telemetry(std::move(entry));
-
 
                 --telemetry_cnt;
                 
@@ -1015,8 +1133,24 @@ struct RTC {
 
         // Do some computation here...
         
+        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+
+        std::span<const uint16_t> image_span(raw_image, full_image_length); // turn to span
+
+        signal = get_phase_ctr_signal( image_span );
+
+        delta_cmd = reconstruct_DM_err(signal);
+
+        cout << delta_cmd[0] << endl;
+        // cam prob optimize these for where things get initially initialized
+
+        // get image
+        //prev_cmd = std::move(cmd_n)
+        //cmd_err = reconstruct_dm_err( image )
+        //cmd = gain.current() * prev_cmd  +  cmd_err
+        
         //test();
-        latency_test() ;
+        //latency_test() ;
 
         // When computation is done, check if a commit is requested.
         if (commit_asked) {
@@ -1049,6 +1183,10 @@ struct RTC {
     nb::ndarray<double> get_next_dm_cmd(){
         return dm_cmd.next();
     }
+
+    void set_simulation_mode(bool state){
+        simulation_mode = state;
+    }
     
     std::span<float> get_reconstructor(){
 
@@ -1078,6 +1216,25 @@ struct RTC {
         
         return( I0.current() );
     }
+
+    // can probably delete later - this was used to test why updatable I0 didnt work
+    void set_I0_vec(std::vector <float> vec){
+        I0_test = vec;
+    }
+
+    std::vector <float> get_I0_vec(){
+        return I0_test;
+    }
+
+    void set_simulation_signal(std::vector <float> sig){
+        simulated_signal = sig;
+    }
+
+    std::vector <float> get_simulation_signal(){
+        return simulated_signal;
+    }
+
+
 
     //can delete 
     void set_slope_offsets(std::span<const float> new_offsets) {
@@ -1159,7 +1316,7 @@ struct RTC {
      * @brief Sets the gain.
      * @param new_gain The new gain to set.
      */
-    void set_Ki_gain(float new_gain) {
+    void set_leak_gain(float new_gain) {
         gain.update(new_gain);
     }
 
@@ -1361,13 +1518,16 @@ NB_MODULE(_rtc, m) {
         .def("compute", &RTC::compute)
         //.def_rw("value", &RTC::value)
 
+
+        .def("set_simulation_mode", &RTC::set_simulation_mode) // if we get real images 
+
         //reconstuctor
         .def("set_slope_offsets", &RTC::set_slope_offsets) //delete
         .def("set_ctrl_matrix", &RTC::set_ctrl_matrix)
         .def("set_I0", &RTC::set_I0)
         .def("set_bias", &RTC::set_bias)
         .def("set_fluxNorm", &RTC::set_fluxNorm)
-        .def("set_Ki_gain", &RTC::set_Ki_gain)
+        .def("set_leak_gain", &RTC::set_leak_gain)
         .def("set_offset", &RTC::set_offset) //delete
         .def("get_last_frame", &RTC::get_last_frame)
 
@@ -1403,6 +1563,13 @@ NB_MODULE(_rtc, m) {
         .def("poke_dm_actuator", &RTC::poke_dm_actuator) // applies a input value to a single input actuator on the DM
         .def("apply_dm_shape", &RTC::apply_dm_shape) // applies a cmd (140 array) to set the DM shape 
         .def("flatten_dm", &RTC::flatten_dm) //flattens DM 
+
+        // THINGS TO DELETE
+        .def("get_I0_vec", &RTC::get_I0_vec)
+        .def("set_I0_vec", &RTC::set_I0_vec)
+        .def("get_simulation_signal", &RTC::get_simulation_signal)
+        .def("set_simulation_signal", &RTC::set_simulation_signal)
+
         //telemetry
         .def("enable_telemetry", &RTC::enable_telemetry)
         .def("latency_test", &RTC::latency_test)
