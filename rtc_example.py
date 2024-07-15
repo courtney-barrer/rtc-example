@@ -10,6 +10,7 @@ import time
 import os
 import pandas as pd 
 import glob
+import datetime
 
 from pyBaldr import ZWFS
 from pyBaldr import phase_control
@@ -25,6 +26,8 @@ def print_n_last_lines(s: str, n: int = 10):
 
 fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
 data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
+
+tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
 pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
 # get most recent 
@@ -152,10 +155,14 @@ r.commit()
 
 #==================== LATENCY TEST 
 
+det_dit = 0.0002 #DIT 
+det_fps = 3000 #Hz
+det_gain = 'high'
 # -- update camera settings 
-#r.set_det_dit( det_dit )
-#r.set_det_fps( det_fps )
-#r.set_det_gain( det_gain )
+
+r.set_det_dit( det_dit )
+r.set_det_fps( det_fps )
+r.set_det_gain( det_gain )
 r.set_det_tag_enabled( True )
 #r.set_det_crop_enabled( True )
 #r.set_det_cropping_rows( det_cropping_rows ) 
@@ -165,31 +172,77 @@ r.commit_camera_settings()
 
 r.update_camera_settings()
 
-iteration_nb = 100
+iteration_nb = 200
 r.enable_telemetry(iteration_nb)
 
 r.apply_dm_shape( np.zeros(140) )
 w,h = r.get_img_width(),r.get_img_height() #image width height 
 # to check
-#f = r.get_last_frame()
-#plt.imshow( f.reshape(h,w) ); plt.show()
+f = r.get_last_frame() # reference 
+plt.imshow( f.reshape(h,w) ); plt.show()
 
 # start a runner that calls latency function 
-#runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
-#runner.start()
+runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+runner.start()
 
-#runner.pause()
+runner.pause()
+runner.stop()
 
+"""for i in range(100):
+    time.sleep( 0.1)
+    r.latency_test()
+"""
 t = rtc.get_telemetry()
 tel_rawimg = np.array([tt.image_raw for tt in t] )
+tel_dm = np.array([tt.dm_command for tt in t])
+tel_reco = np.array([tt.reco_dm_err for tt in t])
 
-tel_rawimg
+print(tel_reco.shape, tel_rawimg.shape )
+
+i=0
+pixel_int = [np.max( abs(tel_rawimg[i][5:].astype(float) - f[5:].astype(float)) )/1050 for i in range(tel_rawimg.shape[0])]
+i0,i1 = 100,200
+plt.figure() 
+plt.plot( pixel_int[i0:i1] ,'.',label=f'DIT = {round(float(1e3*det_dit),3)}ms, FPS = {det_fps}Hz')
+plt.plot( tel_reco.ravel()[i0:i1] ,label='DM poke state')
+#plt.title(f'DIT = {round(float(1e3*det_dit),3)}ms, fps = {det_fps}Hz ')
+plt.xlabel('Frames',fontsize=15)
+plt.ylabel('Normalized intensity',fontsize=15)
+plt.gca().tick_params(labelsize=15)
+plt.legend()
+plt.show() 
+
+
+tele_img_fits = fits.PrimaryHDU( tel_rawimg )
+tele_dm_fits = fits.PrimaryHDU( tel_reco.ravel() )
+tele_ref_fits = fits.PrimaryHDU( f ) # reference intensity
+tele_ref_fits.header.set('EXTNAME','ref')
+tele_ref_fits.header.set('what is?','reference intensity')
+
+tele_img_fits.header.set('what is?','images')
+tele_img_fits.header.set('rows',h)
+tele_img_fits.header.set('columns',w)
+tele_img_fits.header.set('dit',det_dit)
+tele_img_fits.header.set('fps',det_fps)
+tele_img_fits.header.set('EXTNAME','images')
+
+tele_dm_fits.header.set('EXTNAME','DM_CMD')
+tele_dm_fits.header.set('what is?','DM command')
+
+latency_fits = fits.HDUList( [] )
+latency_fits.append( tele_img_fits )
+latency_fits.append( tele_dm_fits  )
+latency_fits.append( tele_ref_fits  )
+latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}.fits',overwrite=True )  
+
+rtc.clear_telemetry()
+
 #tel_signal = np.array([tt.image_proc for tt in t])
 #tel_reco =   np.array([tt.reco_dm_err for tt in t])
 
 # basic dimensionality check of control matrix and pupil filtered image 
 try:
-    i0 = I0.reshape(-1)[pupil_pixels]/np.mean(I0 )
+    i0 = I0.reshape(-1)[pupil_pixels]/np.mean(I0)
     f = r.get_last_frame()
     i = f[pupil_pixels]/np.mean(f)
     cmd_test = r.get_reconstructor().reshape(CM.shape) @ (i-i0)

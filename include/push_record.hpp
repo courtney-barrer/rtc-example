@@ -7,8 +7,7 @@
 #include <iostream>
 
 struct telem_entry {
-
-    std::span<const uint16_t> image_raw; // raw image
+    std::span<const uint16_t> image_raw;
     std::vector<float> image_proc; // processed signal 
     std::vector<double> reco_dm_err; // product CM * signal
     std::vector<double> dm_command; // final cmd sent to DM

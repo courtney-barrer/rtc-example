@@ -641,6 +641,10 @@ struct RTC {
         fli->serialCamera()->sendCommand("set cropping rows "+ det_cropping_rows.current());
         fli->serialCamera()->sendCommand("set cropping cols "+ det_cropping_cols.current());
 
+        fli->serialCamera()->sendCommand("set cropping cols "+ det_cropping_cols.current());
+
+        fli->serialCamera()->sendCommand("set sensitivity "+ det_gain.current());
+
         //set fps
         fli->serialCamera()->setFps(det_fps.current());
 
@@ -803,15 +807,15 @@ struct RTC {
 
     //std::span<const uint16_t>
     //std::vector<double>
-    std::vector<double> test(){
+    void test(){
 
         //size_t rows = 512; // Number of rows in the image
         //size_t cols = 640; // Number of columns in the image
 
         //size_t layers = 140; // Number of layers in the reconstructor matrix
         
-        static std::vector<double> delta_cmd( dm_size, 0); // to hold DM command offset from flat reference 
-        static std::vector<double> cmd( dm_size, 0); // to hold DM command 
+        std::vector<double> delta_cmd( dm_size, 0); // to hold DM command offset from flat reference 
+        std::vector<double> cmd( dm_size, 0); // to hold DM command 
 
         uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
@@ -820,13 +824,13 @@ struct RTC {
         // time camera settings gets updated - always check this ! 
 
         
-        //std::span<int> indices_span = pupil_pixels.current() ;
+        std::span<int> indices_span = pupil_pixels.current() ;
 
         
         // Get values of at specified indices
-        std::vector<float> im = getValuesAtIndices<float>(image_span, pupil_pixels.current() ) ; // image
+        std::vector<float> im = getValuesAtIndices<float>(image_span, indices_span ) ; // image
         //std::vector<float> b = getValuesAtIndices<float>(bias.current(),  pupil_pixels.current()); // bias
-        std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  pupil_pixels.current() ); // set point intensity
+        std::vector<float> I_ref = getValuesAtIndices<float>(I0.current(),  indices_span ); // set point intensity
         
         assert(im.size() == I_ref.size());
 
@@ -862,6 +866,10 @@ struct RTC {
 
             cmd[i] = 0.5 + delta_cmd[i]; // just roughly offset to center
         }
+        
+        // trying to copy this to see if the move() screws things up
+        //std::vector<double> cmd_ddd;
+        //cmd_ddd = cmd;
 
 
 
@@ -883,13 +891,13 @@ struct RTC {
             entry.image_raw = std::move(image_span); // im);
             entry.image_proc = std::move(signal);
             entry.reco_dm_err = std::move(cmd); // reconstructed DM command
-            //entry.dm_command = std::move(); // final command sent
+            entry.dm_command = std::move(cmd); // final command sent
 
             append_telemetry(std::move(entry));
 
             --telemetry_cnt;
         }
-        return cmd;
+        //return cmd_ddd;
     }
 
     void latency_test(){
@@ -909,23 +917,29 @@ struct RTC {
             std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
 
             static int j = image_span[0]; // Static count variable, only intialize once
-            static std::vector<double> dm_flag(2,0); // hold DM state flag  
-
+            //static std::vector<double> dm_flag(1,0); // hold DM state flag  
+            std::vector<double> dm_flag( 1, 0 );
+            //std::span<float> dm_span_flag( dm_flag ) ;
 
             //uint16_t frame_ct = image_span[0];
             // do we record an image in telemetry? 
             // only record the frame if it is new ( dont repeat old frames )
             if (j < image_span[0]) {
+
+                j = image_span[0];
                 telem_entry entry;
+                //dm_span_flag[0] = (double)(k % 2) ;
                 dm_flag[0] = (double)(k % 2) ;
                 entry.image_raw = std::move(image_span); // the corresponding image 
                 // --- SOMETHING FAILS HERE
-                //entry.dm_command = std::move(dm_flag); // if DM is push or flat 
+                entry.reco_dm_err = std::move(dm_flag); // if DM is push or flat 
+                //cout << dm_flag[0] << endl;
+
                 append_telemetry(std::move(entry));
 
 
                 --telemetry_cnt;
-                j = image_span[0];
+                
                 cout << "telemetry_cnt=" << telemetry_cnt << endl;
                 //if there is a new frame append it to 
                 }
@@ -934,8 +948,9 @@ struct RTC {
             
             
             // do we move the every 10 frames?
-            if ((j % 10)==0) {
-                
+            if ((telemetry_cnt % 20)==0) {
+                // we use telemetry_cnt here instead of j beacuase of tendancy to skip frames
+                // (so modules on j skips the mark sometimes)
                 // check to poke in or out
                 if ((k % 2)==0){
                     
@@ -1052,7 +1067,11 @@ struct RTC {
 
     float get_current_flux_norm(){
         float fn = flux_norm.current();
-        return( fn );
+        return fn ;
+    }
+
+    std::span<int> get_current_pupil_pixels() {
+        return pupil_pixels.current();
     }
 
     std::span<float> get_current_I0(){
@@ -1073,6 +1092,9 @@ struct RTC {
     void set_pupil_pixels(std::span<int> array) {
         pupil_pixels.update(array);
     }
+
+
+
     // defined region in secondary obstruction 
     void set_secondary_pixels(std::span<int> array) {
         secondary_pixels.update(array);
@@ -1351,10 +1373,13 @@ NB_MODULE(_rtc, m) {
 
         .def("get_current_flux_norm", &RTC::get_current_flux_norm)
         .def("get_current_I0", &RTC::get_current_I0)
+
         // pupil control regions 
         .def("set_pupil_pixels", &RTC::set_pupil_pixels)
         .def("set_secondary_pixels", &RTC::set_secondary_pixels)
         .def("set_outside_pixels", &RTC::set_outside_pixels)
+
+        .def("get_current_pupil_pixels", &RTC::get_current_pupil_pixels)
 
         // detector 
         .def("get_img_width",&RTC::get_img_width)
@@ -1380,6 +1405,7 @@ NB_MODULE(_rtc, m) {
         .def("flatten_dm", &RTC::flatten_dm) //flattens DM 
         //telemetry
         .def("enable_telemetry", &RTC::enable_telemetry)
+        .def("latency_test", &RTC::latency_test)
 
         //updatable
         .def("commit", &RTC::commit)
