@@ -43,10 +43,10 @@ class ZWFS():
         # print some info and exit if nothing detected
         if len(listOfGrabbers) == 0:
             print("No grabber detected, exit.")
-            exit()
+            FliSdk_V2.exit()
         if len(listOfCameras) == 0:
             print("No camera detected, exit.")
-            exit()
+            FliSdk_V2.exit()
         for i,s in enumerate(listOfCameras):
             print("- index:" + str(i) + " -> " + s)
        
@@ -55,14 +55,14 @@ class ZWFS():
         camera_err_flag = FliSdk_V2.SetCamera(camera, listOfCameras[cameraIndex])
         if not camera_err_flag:
             print("Error while setting camera.")
-            exit()
+            FliSdk_V2.exit()
         print("Setting mode full.")
         FliSdk_V2.SetMode(camera, FliSdk_V2.Mode.Full)
         print("Updating...")
         camera_err_flag = FliSdk_V2.Update(camera)
         if not camera_err_flag:
             print("Error while updating SDK.")
-            exit()
+            FliSdk_V2.exit()
            
         # connecting to DM
        
@@ -328,6 +328,12 @@ class ZWFS():
         else:
             FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set imagetags off")
 
+    def set_sensitivity(self, gain_string):
+        """
+        gain_string must be "low", "medium" or "high"
+        """
+        FliSdk_V2.FliSerialCamera.SendCommand(camera, f"set sensitivity {gain_string}")
+        
     def restore_default_settings(self): 
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "restorefactory")
 

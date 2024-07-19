@@ -66,6 +66,7 @@ util.watch_camera(zwfs)
 
 #init our phase controller (object that processes ZWFS images and outputs DM commands)
 phase_ctrl = phase_control.phase_controller_1(config_file = None) 
+phase_ctrl.change_control_basis_parameters( controller_label = ctrl_method_label, number_of_controlled_modes=phase_ctrl.config['number_of_controlled_modes'], basis_name='Zonal' , dm_control_diameter=None, dm_control_center=None)
 
 #init our pupil controller (object that processes ZWFS images and outputs VCM commands)
 pupil_ctrl = pupil_control.pupil_controller_1(config_file = None)
@@ -203,14 +204,29 @@ plt.show()
 
 # 1.3) builds our control model with the zwfs
 #control_model_report
+zwfs.dm.send_data( zwfs.dm_shapes['flat_dm'] )
 ctrl_method_label = 'ctrl_1'
 phase_ctrl.build_control_model( zwfs , poke_amp = -0.15, label=ctrl_method_label, debug = True)  
+
+# to check that matrices are ok, product interaction matrix onto modes and onto DM commands
+mode_idx = 3
+plt.figure()
+plt.plot( phase_ctrl.ctrl_parameters['ctrl_1']['I2M'].T @ phase_ctrl.ctrl_parameters['ctrl_1']['IM'][mode_idx] )
+
+plt.figure() 
+plt.imshow( util.get_DM_command_in_2D( phase_ctrl.ctrl_parameters['ctrl_1']['CM'] @ phase_ctrl.ctrl_parameters['ctrl_1']['IM'][mode_idx]))
+plt.colorbar()
+plt.show() 
+
 
 # check the SVD, singular values, camera and mirror modes
 phase_ctrl.plot_SVD_modes(zwfs,ctrl_method_label)
 
 # write fits to input into RTC
 zwfs.write_reco_fits( phase_ctrl, 'ctrl_1',save_path=data_path)
+
+#zwfs.exit_camera()
+#zwfs.exit_dm()
 
 # some checks 
 # - interaction matrix rows holds intensity signal for given mode applied,

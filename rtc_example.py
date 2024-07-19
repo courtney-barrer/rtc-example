@@ -10,6 +10,7 @@ import time
 import os
 import pandas as pd 
 import glob
+import datetime
 
 from pyBaldr import ZWFS
 from pyBaldr import phase_control
@@ -26,11 +27,15 @@ def print_n_last_lines(s: str, n: int = 10):
 fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
 data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
 
+tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+flat_dm_array = pd.read_csv('/home/baldr/Documents/baldr/DMShapes/flat_dm.csv', header=None)[0].values
+
 pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
 # get most recent 
 list_of_recon_files = glob.glob(data_path + 'RECONS*')
 reco_filename = max(list_of_recon_files, key=os.path.getctime) #'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
-
+reco_filename = "/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/RECONSTRUCTORS_Zernike70_DIT-0.002005_gain_medium_15-07-2024T14.47.50.fits"
 """
 set up camera and DM settings based on reconstruction fits file
 """
@@ -44,15 +49,21 @@ set up camera and DM settings based on reconstruction fits file
 reco_fits = fits.open( reco_filename  ) 
 
 # reconstructor data 
-R_TT = reco_fits['R_TT'].data #tip-tilt reconstructor
-R_HO = reco_fits['R_HO'].data #higher-oder reconstructor
+R_TT = reco_fits['R_TT'].data.astype(np.float32) #tip-tilt reconstructor
+R_HO = reco_fits['R_HO'].data.astype(np.float32) #higher-oder reconstructor
 
 IM = reco_fits['IM'].data.astype(np.float32)
 M2C = reco_fits['M2C'].data.astype(np.float32) # mode to command matrix 
-I2M = reco_fits['I2M'].data.astype(np.float32) # intensity (signal) to mode matrix  
+# transpose so we can multiply directly I2M @ signal
+I2M = np.transpose( reco_fits['I2M'].data).astype(np.float32) # intensity (signal) to mode matrix  
 CM = reco_fits['CM'].data.astype(np.float32)  # full control matrix 
-I0 = reco_fits['I0'].data # calibration source reference intensity (FPM IN)
-N0 = reco_fits['N0'].data # calibration source reference intensity (FPM OUT)
+I0 = reco_fits['I0'].data.astype(np.float32) # calibration source reference intensity (FPM IN)
+N0 = reco_fits['N0'].data.astype(np.float32) # calibration source reference intensity (FPM OUT)
+
+# to check we reconstruct the IM with the CM
+#plt.figure()
+#plt.imshow(util.get_DM_command_in_2D( CM @ IM[0] ) )
+#plt.show()
 
 # camera settings used to build reconstructor 
 det_fps = float(reco_fits['info'].header['camera_fps']) # frames per sec (Hz) 
@@ -103,7 +114,7 @@ r = rtc.RTC()
 r.set_det_dit( det_dit )
 r.set_det_fps( det_fps )
 r.set_det_gain( det_gain )
-r.set_det_tag_enabled( False )
+r.set_det_tag_enabled( True ) # we want this on to count frames 
 r.set_det_crop_enabled( True )
 r.set_det_cropping_rows( det_cropping_rows ) 
 r.set_det_cropping_cols( det_cropping_cols ) 
@@ -116,8 +127,11 @@ r.update_camera_settings()
 # i have to wait for this set up otherwise below code screws up
 time.sleep(1)
 
-
-r.set_ctrl_matrix(  CM.reshape(-1) )  # check r.get_reconstructor()
+r.set_ctrl_matrix(  CM.reshape(-1) )  # check r.get_ctrl_matrix()
+r.set_TT_reconstructor(  R_TT.reshape(-1) )  # check r.get_ctrl_matrix
+r.set_HO_reconstructor(  R_HO.reshape(-1) )  
+r.set_I2M(  I2M.reshape(-1) )  # 
+r.set_M2C(  M2C.reshape(-1) )  # 
 
 # set I0, bias, etc <- long term I should create a function to do this 
 # for now use reconstructor file 
@@ -126,7 +140,9 @@ frame = r.get_last_frame()
 r.set_bias( 0*r.get_last_frame()  )
 
 r.set_I0( (I0.reshape(-1) / np.mean(I0) ).astype(np.float32)  )
-r.set_fluxNorm(  np.mean(np.array(r.get_last_frame(),dtype=np.float32) ) )
+# try with this one since updatable is going crazy
+r.set_I0_vec( ((I0.reshape(-1) / np.mean(I0))[pupil_pixels]).astype(np.float32)  ) 
+r.set_fluxNorm(  np.mean(np.array(r.get_last_frame(), dtype=np.float32) ) )
 
 # init the rtc. Could have been done using constructor but requires to code it.
 #r.set_slope_offsets(slope_offsets[0])
@@ -143,6 +159,54 @@ r.commit()
 #r.set_I0( (I0.reshape(-1) / np.mean(I0) ).astype(np.float32)  )
 #r.commit() 
 
+# TRY IN SIMULATION MODE BY MAKING SIGNAL SAME AS ONE FROM IM 
+# then reconstruct the DM signal.. should be obvious
+test_mode_idx = 3
+r.set_simulation_signal( IM [test_mode_idx] )
+r.get_simulation_signal( )
+r.set_simulation_mode(True)
+sim_cmd = r.test() # r.get_reconstructed_cmd
+
+fig,ax = plt.subplots(1,2)
+ax[0].imshow(util.get_DM_command_in_2D( sim_cmd-flat_dm_array ) )
+ax[1].imshow(util.get_DM_command_in_2D( CM @ IM [test_mode_idx] ) )
+ax[0].set_title('What we get..')
+ax[1].set_title('What is should be..')
+plt.show()
+
+
+# ALSO TESTING PID, do the same in simulation but set Kp=1, ki, kd=0
+r.reset_pid() 
+r.set_pid_kp(1)
+r.set_pid_ki(0)
+r.set_pid_ki(0)
+
+sim_cmd = r.get_u_controller_output()
+
+fig,ax = plt.subplots(1,2)
+ax[0].imshow(util.get_DM_command_in_2D( sim_cmd ) )
+ax[1].imshow(util.get_DM_command_in_2D( CM @ IM [test_mode_idx] ) )
+ax[0].set_title('What we get..')
+ax[1].set_title('What is should be..')
+plt.show()
+
+
+r.set_simulation_mode(False)
+
+mode_idx = 2
+amp = 0.9
+mode_cmd = 0.5*np.ones( 140 ) + amp*M2C[:,mode_idx]
+r.apply_dm_shape( mode_cmd ) 
+
+reco_cmd = R.reshape(CM.shape) @ ((r.get_last_frame()[pupil_pixels]/np.mean(f)) - r.get_I0_vec())
+plt.figure()
+plt.imshow(util.get_DM_command_in_2D( reco_cmd ) )
+plt.colorbar()
+plt.show() 
+
+
+
+
 """
 IT seems to happen after I call, or do an operation on I0. e.g.
 r.set_I0( (I0.reshape(-1) / np.mean(I0) ).astype(np.float32)  )
@@ -150,46 +214,65 @@ r.commit()
 
 """
 
-#==================== LATENCY TEST 
+#------- See stability of PID output, can simulate each step here to check 
+"""
+some sanity checks - put in simulation mode and set signal to 0 (I/mean(I)-I0 = 0).
+then PID output should be zero 
 
-# -- update camera settings 
-#r.set_det_dit( det_dit )
-#r.set_det_fps( det_fps )
-#r.set_det_gain( det_gain )
-r.set_det_tag_enabled( True )
-#r.set_det_crop_enabled( True )
-#r.set_det_cropping_rows( det_cropping_rows ) 
-#r.set_det_cropping_cols( det_cropping_cols ) 
+- I should get signal, get
+"""
 
-r.commit_camera_settings()
+r.set_pid_kp(1.0)
+r.set_pid_ki(0.)
+r.set_pid_kd(0.0)
 
-r.update_camera_settings()
+"""r.set_pid_kp(0)
+r.set_pid_ki(0.0)
+r.set_pid_ki(0.0)
+"""
+r.reset_pid() 
 
-iteration_nb = 100
-r.enable_telemetry(iteration_nb)
+w,h = r.get_img_width(),r.get_img_height() #image width height
 
-r.apply_dm_shape( np.zeros(140) )
-w,h = r.get_img_width(),r.get_img_height() #image width height 
-# to check
-#f = r.get_last_frame()
-#plt.imshow( f.reshape(h,w) ); plt.show()
+pid_output_list=[]
+img_list = []
+rms_list=[]
+r.apply_dm_shape( flat_dm_array ) 
+time.sleep(0.1)
+#quick check things look ok
+#crop first few rows/columns to get rid of frame counting etc region
+plt.figure();plt.imshow( r.get_last_frame().reshape(h,w)[1:,1:] );plt.show() 
+img_list.append( r.get_last_frame())
 
-# start a runner that calls latency function 
-#runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
-#runner.start()
+for i in range(10):
+    pid_output_list.append( r.get_u_controller_output() )
+    r.apply_dm_shape( flat_dm_array + np.array(pid_output_list[-1]) )
+    time.sleep(0.1)
+    f = r.get_last_frame()
+    img_list.append( f )
+    rms_list.append( np.std( pid_output_list[-1]) )
 
-#runner.pause()
+#crop first few rows/columns to get rid of frame counting etc region
+#plt.figure();plt.imshow( img_list[-1].reshape(h,w)[1:,1:] );plt.show() 
 
-t = rtc.get_telemetry()
-tel_rawimg = np.array([tt.image_raw for tt in t] )
 
-tel_rawimg
+im_list = [img_list[0].reshape(h,w)[1:,1:], img_list[-1].reshape(h,w)[1:,1:] ,\
+util.get_DM_command_in_2D( pid_output_list[0] ),util.get_DM_command_in_2D( pid_output_list[-1] ) ]
+xlabel_list = [None, None, None, None]
+ylabel_list = [None, None, None, None]
+title_list = ['initial image', 'final image', 'initial dm cmd','final dm cmd']
+cbar_label_list = ['intensity','intensity', 'DM command' , 'DM command' ] 
+savefig = None # fig_path + f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+
 #tel_signal = np.array([tt.image_proc for tt in t])
 #tel_reco =   np.array([tt.reco_dm_err for tt in t])
 
 # basic dimensionality check of control matrix and pupil filtered image 
 try:
-    i0 = I0.reshape(-1)[pupil_pixels]/np.mean(I0 )
+    i0 = I0.reshape(-1)[pupil_pixels]/np.mean(I0)
     f = r.get_last_frame()
     i = f[pupil_pixels]/np.mean(f)
     cmd_test = r.get_reconstructor().reshape(CM.shape) @ (i-i0)
@@ -202,8 +285,8 @@ except:
 
 #========== COMPARE RECONSTRUCTORS WITH/WITHOUT DISTURBANCE
 # flat DM 
-#r.apply_dm_shape( np.ones( 140 ) * 0.5 ) 
-r.flatten_dm()
+r.apply_dm_shape( np.ones( 140 ) * 0.5 ) 
+#r.flatten_dm()
 time.sleep(0.5)
 i0 = I0.reshape(-1)[pupil_pixels]/np.mean( I0 )
 f = r.get_last_frame()
@@ -212,7 +295,7 @@ cmd_test_flat = r.get_reconstructor().reshape(CM.shape) @ (i-i0)
 
 # now put on a mode 
 mode_idx = 5
-amp = 0.2
+amp = -0.1
 mode_cmd = 0.5*np.ones( 140 ) + amp*M2C[:,mode_idx]
 r.apply_dm_shape( mode_cmd ) 
 time.sleep(0.5)
@@ -282,6 +365,91 @@ plt.figure()
 plt.plot( reco_mode_amps ) 
 plt.axvline( mode_idx , ls=':');plt.show()
 
+
+
+"""
+#==================== LATENCY TEST 
+# before running you need put latency_test() function in compute() in rtc.cpp
+
+det_dit = 0.0004 #DIT 
+det_fps = 2000 #Hz
+det_gain = 'high'
+# -- update camera settings 
+
+r.set_det_dit( det_dit )
+r.set_det_fps( det_fps )
+r.set_det_gain( det_gain )
+r.set_det_tag_enabled( True )
+#r.set_det_crop_enabled( True )
+#r.set_det_cropping_rows( det_cropping_rows ) 
+#r.set_det_cropping_cols( det_cropping_cols ) 
+
+r.commit_camera_settings()
+
+r.update_camera_settings()
+
+iteration_nb = 200
+r.enable_telemetry(iteration_nb)
+
+r.apply_dm_shape( np.zeros(140) )
+w,h = r.get_img_width(),r.get_img_height() #image width height 
+# to check
+f = r.get_last_frame() # reference 
+plt.imshow( f.reshape(h,w) ); plt.show()
+
+# start a runner that calls latency function 
+runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+runner.start()
+
+runner.pause()
+runner.stop()
+
+
+t = rtc.get_telemetry()
+tel_rawimg = np.array([tt.image_raw for tt in t] )
+tel_dm = np.array([tt.dm_command for tt in t])
+tel_reco = np.array([tt.reco_dm_err for tt in t])
+
+print(tel_reco.shape, tel_rawimg.shape )
+
+i=0
+pixel_int = [np.max( abs(tel_rawimg[i][5:].astype(float) - f[5:].astype(float)) )/1050 for i in range(tel_rawimg.shape[0])]
+i0,i1 = 100,200
+plt.figure() 
+plt.plot( pixel_int[i0:i1] ,'.',label=f'DIT = {round(float(1e3*det_dit),3)}ms, FPS = {det_fps}Hz')
+plt.plot( tel_reco.ravel()[i0:i1] ,label='DM poke state')
+#plt.title(f'DIT = {round(float(1e3*det_dit),3)}ms, fps = {det_fps}Hz ')
+plt.xlabel('Frames',fontsize=15)
+plt.ylabel('Normalized intensity',fontsize=15)
+plt.gca().tick_params(labelsize=15)
+plt.legend()
+plt.show() 
+
+
+tele_img_fits = fits.PrimaryHDU( tel_rawimg )
+tele_dm_fits = fits.PrimaryHDU( tel_reco.ravel() )
+tele_ref_fits = fits.PrimaryHDU( f ) # reference intensity
+tele_ref_fits.header.set('EXTNAME','ref')
+tele_ref_fits.header.set('what is?','reference intensity')
+
+tele_img_fits.header.set('what is?','images')
+tele_img_fits.header.set('rows',h)
+tele_img_fits.header.set('columns',w)
+tele_img_fits.header.set('dit',det_dit)
+tele_img_fits.header.set('fps',det_fps)
+tele_img_fits.header.set('EXTNAME','images')
+
+tele_dm_fits.header.set('EXTNAME','DM_CMD')
+tele_dm_fits.header.set('what is?','DM command')
+
+latency_fits = fits.HDUList( [] )
+latency_fits.append( tele_img_fits )
+latency_fits.append( tele_dm_fits  )
+latency_fits.append( tele_ref_fits  )
+latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}.fits',overwrite=True )  
+
+rtc.clear_telemetry()
+"""
 
 
 
