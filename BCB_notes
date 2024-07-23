@@ -1,3 +1,29 @@
+
+
+
+
+Setting up in sydney July 2024
+- installing FLI / BMC software SDK for ubuntu 20.04 - all fine 
+- FLI gui works
+- go to python to import SDK 
+import sys
+   ...: sys.path.insert(1, '/opt/FirstLightImaging/FliSdk/Python/demo/')
+   ...: sys.path.insert(1,'/opt/Boston Micromachines/lib/Python3/site-packages/'
+   ...: )
+import FliSdk_V2
+
+gave error 
+
+OSError: /lib/x86_64-linux-gnu/libgobject-2.0.so.0: undefined symbol: ffi_type_uint32, version LIBFFI_BASE_7.0
+
+fix: in terminal 
+export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libffi.so.7
+
+then could import without issue. Added to .bashrc file
+
+
+
+
 RTC notes - easier to see in visual studio code - main menu
 ===================
 

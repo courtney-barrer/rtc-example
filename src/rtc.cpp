@@ -382,16 +382,17 @@ struct RTC {
     // ----------- DM shapes & parameters 
     // serial number to open DM 
     const size_t dm_size = 140 ;
-    const char * dm_serial_number = "17DW019#053";
+    string dm_serial_number = "17DW019#122"; // USYD ="17DW019#122",  ANU = "17DW019#053";
     // init DM map look up table
     
     std::vector<uint32_t> map_lut; // (BMC multi-3.5 DM)
 
     // paths to DM shape csv files 
-    const char * flat_dm_file = "/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
-    const char * checkers_file = "/home/baldr/Documents/baldr/DMShapes/waffle.csv";
-    const char * fourTorres_file = "/home/baldr/Documents/baldr/DMShapes/four_torres.csv";
+    string flat_dm_file = "DMShapes/"+dm_serial_number+"_FLAT_MAP_COMMANDS.csv"; //"/home/baldr/Documents/baldr/DMShapes/flat_dm.csv";
+    const char * checkers_file = "DMShapes/waffle.csv"; //"/home/baldr/Documents/baldr/DMShapes/waffle.csv";
+    const char * fourTorres_file = "DMShapes/four_torres.csv"; //"/home/baldr/Documents/baldr/DMShapes/four_torres.csv";
     
+    //cout<< flat_dm_file << endl;
     // BMC calibrated DM flat position  
     double* flat_dm_array = readCSV(flat_dm_file);
     
@@ -479,7 +480,7 @@ struct RTC {
  
         map_lut.resize(MAX_DM_SIZE);
 
-        rv = BMCOpen(&hdm, dm_serial_number);
+        rv = BMCOpen(&hdm, dm_serial_number.c_str());
 
         //uint32_t *map_lut; // <- we put this global in scope of struct
         uint32_t	k = 0;
@@ -1209,6 +1210,7 @@ struct RTC {
         
         double *cmd_ptr = cmd.data();
 
+        // DONT SEND CMD TO DM FOR NOW 
         //BMCSetArray(&hdm, cmd_ptr, map_lut.data());
 
         // update dm_cmd_buffer 

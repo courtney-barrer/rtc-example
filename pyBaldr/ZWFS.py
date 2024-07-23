@@ -34,7 +34,7 @@ from . import utilities as util
 
 class ZWFS():
     # for now one camera, one DM per object - real system will have 1 camera, 4 DMs!
-    def __init__(self, DM_serial_number, cameraIndex=0, DMshapes_path='/home/baldr/Documents/baldr/DMShapes/', pupil_crop_region=[None, None, None, None] ):
+    def __init__(self, DM_serial_number, cameraIndex=0, DMshapes_path='DMShapes/', pupil_crop_region=[None, None, None, None] ):
        
         # connecting to camera
         camera = FliSdk_V2.Init() # init camera object
@@ -76,6 +76,7 @@ class ZWFS():
         self.camera = camera
         self.dm = dm
         self.dm_number_of_actuators = 140
+        self.dm.DM_serial_number = DM_serial_number
 
         # ========== DM shapes
         shapes_dict = {}
@@ -91,6 +92,10 @@ class ZWFS():
                         shape = pd.read_csv(file, header=None)[0].values
                         if len(shape)==self.dm_number_of_actuators:
                             shapes_dict[shape_name] = np.array( (shape) )
+                            # >>>>>>>>>>>>> DEFINE HERE THE FLAT DM MAP <<<<<<<<<<<
+                            if DM_serial_number in file:
+                                shapes_dict['flat_dm'] =  np.array( (shape) )
+                            # >>>>>>>>>>>>> <<<<<<<<<<<
                         else: 
                             print(f'file: {file}\n has {len(shape)} values which does not match the number of actuators on the DM ({self.dm_number_of_actuators})')
 

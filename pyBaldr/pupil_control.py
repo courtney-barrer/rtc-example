@@ -69,7 +69,8 @@ class pupil_controller_1():
 
         if debug:
             plt.figure()
-            plt.pcolormesh(y, x, delta_img ) 
+            #plt.pcolormesh(y, x, delta_img ) 
+            plt.imshow( delta_img , extent=[y[0],y[-1],x[0],x[-1]]) # extent is [horizontal min, horizontal max, vertical min, vertical max]
             plt.xlabel('x pixels',fontsize=15)
             plt.ylabel('y pixels',fontsize=15)
             plt.gca().tick_params(labelsize=15)

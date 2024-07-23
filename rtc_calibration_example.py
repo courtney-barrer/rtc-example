@@ -18,9 +18,9 @@ import datetime
 from astropy.io import fits
 import pandas as pd 
 
-fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
-data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
-
+fig_path = 'data/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+data_path = 'data/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
+DM_serial_number = '17DW019#122'# Syd = '17DW019#122', ANU = '17DW019#053'
 ###
 #    TAKE INSPIRATION FROM /BALDR/A_RECONSTRUCTOR_PIPELINE
 ###
@@ -39,8 +39,8 @@ DIT = 2e-3 #s integration time
 
 pupil_crop_region = [None, None, None, None]
 
-#init our ZWFS (object that interacts with camera and DM)
-zwfs = ZWFS.ZWFS(DM_serial_number='17DW019#053', cameraIndex=0, DMshapes_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/DMShapes/', pupil_crop_region=pupil_crop_region ) 
+#init our ZWFS (object that interacts with camera and DM) (old path = home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/)
+zwfs = ZWFS.ZWFS(DM_serial_number=DM_serial_number, cameraIndex=0, DMshapes_path = 'DMShapes/', pupil_crop_region=pupil_crop_region ) 
 
 # ,------------------ AVERAGE OVER 8X8 SUBWIDOWS SO 12X12 PIXELS IN PUPIL
 #zwfs.pixelation_factor = sw #8 # sum over 8x8 pixel subwindows in image
@@ -66,7 +66,7 @@ util.watch_camera(zwfs)
 
 #init our phase controller (object that processes ZWFS images and outputs DM commands)
 phase_ctrl = phase_control.phase_controller_1(config_file = None) 
-phase_ctrl.change_control_basis_parameters( controller_label = ctrl_method_label, number_of_controlled_modes=phase_ctrl.config['number_of_controlled_modes'], basis_name='Zonal' , dm_control_diameter=None, dm_control_center=None)
+#phase_ctrl.change_control_basis_parameters( controller_label = ctrl_method_label, number_of_controlled_modes=phase_ctrl.config['number_of_controlled_modes'], basis_name='Zonal' , dm_control_diameter=None, dm_control_center=None)
 
 #init our pupil controller (object that processes ZWFS images and outputs VCM commands)
 pupil_ctrl = pupil_control.pupil_controller_1(config_file = None)
