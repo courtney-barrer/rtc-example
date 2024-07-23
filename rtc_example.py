@@ -24,18 +24,20 @@ def print_n_last_lines(s: str, n: int = 10):
 
 
 
-fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
-data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
+fig_path = "data/" #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+data_path = "data/" #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
+dm_serial_number = "17DW019#122" # USYD ="17DW019#122",  ANU = "17DW019#053"
 
 tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
-flat_dm_array = pd.read_csv('/home/baldr/Documents/baldr/DMShapes/flat_dm.csv', header=None)[0].values
+flat_dm_array = pd.read_csv(f'DMShapes/{dm_serial_number}_FLAT_MAP_COMMANDS.csv', header=None)[0].values
 
 pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
 # get most recent 
 list_of_recon_files = glob.glob(data_path + 'RECONS*')
 reco_filename = max(list_of_recon_files, key=os.path.getctime) #'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
-reco_filename = "/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/RECONSTRUCTORS_Zernike70_DIT-0.002005_gain_medium_15-07-2024T14.47.50.fits"
+#/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data
+reco_filename = reco_filename #ata_path + "RECONSTRUCTORS_Zernike70_DIT-0.002005_gain_medium_15-07-2024T14.47.50.fits"
 """
 set up camera and DM settings based on reconstruction fits file
 """
@@ -165,7 +167,7 @@ test_mode_idx = 3
 r.set_simulation_signal( IM [test_mode_idx] )
 r.get_simulation_signal( )
 r.set_simulation_mode(True)
-sim_cmd = r.test() # r.get_reconstructed_cmd
+sim_cmd = r.test() # r.get_reconstructed_cmd -< check doesn actually apply anything to the DM 
 
 fig,ax = plt.subplots(1,2)
 ax[0].imshow(util.get_DM_command_in_2D( sim_cmd-flat_dm_array ) )
