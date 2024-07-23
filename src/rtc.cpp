@@ -403,7 +403,8 @@ struct RTC {
     //double* fourTorres_dm_array = readCSV(fourTorres_file); 
 
     //STATE VARIABLES 
-    bool simulation_mode = false;
+    bool signal_simulation_mode = false;
+    bool camera_simulation_mode = false;
     bool close_loop_mode = false;
 
     int number_of_modes; // number of modes considered in our modal space - determined by I2M and M2C dimensions
@@ -421,8 +422,8 @@ struct RTC {
     std::vector<double> dm_disturbance; // disturbance to put on DM 
 
 
-
-    std::vector<float> simulated_signal; // to hold simulated (processed) image! 
+    std::vector<uint16_t> simulated_image; // to hold simulated (raw) image! 
+    std::vector<float> simulated_signal; // to hold simulated (processed) image! - must be same size of the pupil_pixels (filter)
     std::vector<float> I0_test; // to hold reference intensity AS TEST - SHOULD USE UPDATABLE 
 
     // updatable DM command 
@@ -466,7 +467,7 @@ struct RTC {
 
     std::atomic<bool> commit_asked = false; /**< Flag indicating if a commit is requested. */
 
-     size_t telemetry_cnt = 0;
+    size_t telemetry_cnt = 0;
 
     /**
      * @brief Default constructor for RTC.
@@ -694,6 +695,8 @@ struct RTC {
 
     void update_camera_settings( ){
 
+        uint32_t _full_image_length_new; 
+
         //print to check stuff 
         double fps = 0;
 		fli->serialCamera()->getFps(fps);
@@ -750,9 +753,18 @@ struct RTC {
         fli->getCurrentImageDimension(image_width, image_height);
         cout << "image width  =  " << image_width << endl;
         cout << "image height  =  " << image_height << endl;
-        full_image_length = static_cast<uint32_t>(image_width) * static_cast<uint32_t>(image_height);
+        _full_image_length_new = static_cast<uint32_t>(image_width) * static_cast<uint32_t>(image_height);
 
-        cout << "image height  =  " << full_image_length << endl;
+        if (_full_image_length_new != full_image_length){
+            //forcefully reinitialize simulation image to be of the right size
+            cout << "forcefully reinitializing simulation image to be the correct size" << endl;
+            cout << "camera simulation mode is " << camera_simulation_mode << endl; 
+            std::vector<uint16_t>  simulated_image(_full_image_length_new, 0) ;
+            // update the full image length
+            full_image_length = _full_image_length_new;
+
+        }
+        //cout << "image height  =  " << full_image_length << endl;
 
         fli->start();
 
@@ -918,7 +930,7 @@ struct RTC {
         // have to define here to keep in scope of telemetry
         //std::vector<float> signal(signal_size); // beware of makng this static - causes issues in telemetry
 
-        if (!simulation_mode){
+        if (!signal_simulation_mode){
             //std::vector<float> signal(signal_size);
             for (size_t i = 0; i < signal_size; ++i) {
             // NOTE WE USE I0_test[i] AND NOT I_ref[i] - WHICH IS FILTERED FROM updatable I0! due to bug
@@ -993,11 +1005,11 @@ struct RTC {
         cout << "Ki=" << pid.ki.current() << endl;
         cout << "Kd=" << pid.kd.current() << endl;
         */
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+        uint16_t* raw_image = poll_last_image();//(uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
         std::span<const uint16_t> image_span(raw_image, full_image_length); // turn to span
 
-        if (!simulation_mode){
+        if (!signal_simulation_mode){
             signal = get_phase_ctr_signal( image_span, signal ); // signal is initialize here
         } else{
             signal = simulated_signal;
@@ -1118,7 +1130,7 @@ struct RTC {
         std::vector<double> delta_cmd( dm_size, 0); // to hold DM command offset from flat reference 
         std::vector<double> cmd( dm_size, 0); // to hold DM command 
 
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+        uint16_t* raw_image = poll_last_image();//(uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
         cout << "raw_image[0]" << raw_image[0] << endl;
 
@@ -1162,7 +1174,7 @@ struct RTC {
         //float flux_norm_value = flux_norm.current();
         // debugging
         //cout << "flux_norm = " << flux_norm_value << endl;
-        if (!simulation_mode){
+        if (!signal_simulation_mode){
             //std::vector<float> signal(signal_size);
             for (size_t i = 0; i < signal_size; ++i) {
             // NOTE WE USE I0_test[i] AND NOT I_ref[i] - WHICH IS FILTERED FROM updatable I0! due to bug
@@ -1256,11 +1268,11 @@ struct RTC {
         //cout << "Ki=" << pid.ki.current() << endl;
         //cout << "Kd=" << pid.kd.current() << endl;
 
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+        uint16_t* raw_image = poll_last_image() ;//(uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
         std::span<const uint16_t> image_span(raw_image, full_image_length); // turn to span
 
-        if (!simulation_mode){
+        if (!signal_simulation_mode){
             signal = get_phase_ctr_signal( image_span, signal ); // signal is initialize here
         } else{
             signal = simulated_signal;
@@ -1293,7 +1305,7 @@ struct RTC {
 
         if (telemetry_cnt > 0){
 
-            uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+            uint16_t* raw_image = poll_last_image(); //(uint16_t*)fli->getRawImage(); // Retrieve raw image data
             std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
 
             static int j = image_span[0]; // Static count variable, only intialize once
@@ -1393,7 +1405,7 @@ struct RTC {
 
         // Do some computation here...
         
-        uint16_t* raw_image = (uint16_t*)fli->getRawImage(); // Retrieve raw image data
+        uint16_t* raw_image = poll_last_image(); //(uint16_t*)fli->getRawImage(); // Retrieve raw image data
 
         std::span<const uint16_t> image_span(raw_image, full_image_length); // turn to span
 
@@ -1477,8 +1489,20 @@ struct RTC {
         close_loop_mode = state;
     }
 
-    void set_simulation_mode(bool state){
-        simulation_mode = state;
+    void set_signal_simulation_mode(bool state){
+        signal_simulation_mode = state;
+    }
+
+    void set_camera_simulation_mode(bool state){
+        camera_simulation_mode = state;
+    }
+
+    bool get_signal_simulation_mode(){
+        return signal_simulation_mode ;
+    }
+
+    bool get_camera_simulation_mode(){
+        return camera_simulation_mode ;
     }
 
     // GET THINGS A
@@ -1487,10 +1511,28 @@ struct RTC {
         return number_of_modes;
     }
 
+    /// @brief 
+    /// @return 
+    uint16_t* poll_last_image() {
+        uint16_t* rawImage; // Declare rawImage outside of the conditional blocks
+
+        if (camera_simulation_mode) {
+            rawImage = &simulated_image[0]; // Point to address of the first element in simulated image vector
+        } else {
+            rawImage = (uint16_t*)fli->getRawImage(); // Assuming fli is a valid pointer to an object with the getRawImage method
+        }
+
+        return rawImage;
+    }
+
+
     std::span<uint16_t> get_last_frame() { 
-        
-        return {(uint16_t*)fli->getRawImage(), full_image_length}; // full dimension for C-RED3 = 512*640 
-     
+        // this is more for getting things in python - we have done another iteration to include camera simulation mode  
+        // we should delete this and fully replace with poll_last_image which takes 
+        // into account simulation modes 
+
+        //return {(uint16_t*)fli->getRawImage(), full_image_length}; // full dimension for C-RED3 = 512*640 
+        return {(uint16_t*) poll_last_image(), full_image_length};
     }
 
     nb::ndarray<double> get_current_dm_cmd(){
@@ -1566,8 +1608,16 @@ struct RTC {
         simulated_signal = sig;
     }
 
+    void set_simulation_image(std::vector <uint16_t> im){
+        simulated_image = im;
+    }
+
     std::vector <float> get_simulation_signal(){
         return simulated_signal;
+    }
+
+    std::vector <uint16_t> get_simulation_image(){
+        return simulated_image;
     }
 
 
@@ -1938,9 +1988,17 @@ NB_MODULE(_rtc, m) {
 
 
         // simulation mode 
-        .def("set_simulation_mode", &RTC::set_simulation_mode) // if we get real images 
+        .def("set_signal_simulation_mode", &RTC::set_signal_simulation_mode) // if we get real images 
+        .def("set_camera_simulation_mode", &RTC::set_camera_simulation_mode)
+
+        .def("get_signal_simulation_mode", &RTC::get_signal_simulation_mode) // if we get real images 
+        .def("get_camera_simulation_mode", &RTC::get_camera_simulation_mode)
+
         .def("get_simulation_signal", &RTC::get_simulation_signal)
         .def("set_simulation_signal", &RTC::set_simulation_signal)
+
+        .def("get_simulation_image", &RTC::get_simulation_image)
+        .def("set_simulation_image", &RTC::set_simulation_image)
 
         //reconstuctor
         .def("set_slope_offsets", &RTC::set_slope_offsets) //delete
