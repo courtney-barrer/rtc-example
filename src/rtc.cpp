@@ -347,8 +347,13 @@ struct rtc_state_struct {
 
 /*@brief to hold simulated signals that can be injected in the RTC*/
 struct simulated_signals_struct{
-    //put simulated 
-    int val;
+    // signals used if things are in simulation mode 
+    std::vector<uint16_t> simulated_image;//(327680, 0); //used if rtc_state_struct.camera_simulation_mode = true. initialized to 0 over 640*512 pixels
+    std::vector<double> simulated_dm_cmd;//(140, 0); // used if rtc_state_struct.dm_simulation_mode = true. initialized to 0 over 140 actuators  
+    std::vector<float> simulated_signal; // used if rtc_state_struct.signal_simulation_mode = true. This is the processed signal.
+
+    // Default constructor
+    simulated_signals_struct() noexcept = default; // Using defaulted constructor
 };
 
 /*@brief to hold camera settings*/
@@ -367,6 +372,9 @@ struct camera_settings_struct {
     // Default constructor
     camera_settings_struct() noexcept = default; // Using defaulted constructor
 };
+
+
+
 
 /*@brief to hold things for ZWFS signal processing and projection onto modes/DM commands
 we have an array of reconstructor matricies here to allow flexibility in control implementation
@@ -407,7 +415,28 @@ struct pupil_regions_struct {
     updatable<std::vector<int>> pupil_pixels; /**< pixels inside the active pupil. */
     updatable<std::vector<int>> secondary_pixels; /**< pixels inside secondary obstruction   */
     updatable<std::vector<int>> outside_pixels; /**< pixels outside the active pupil obstruction (but not in secondary obstruction) */
+
+
+    // Templated method to update a member by name (for simplicity when nanobinding so dont have to spell out each function)
+    // template<typename T>
+    // bool update_member(const std::string& member_name, const T& new_value) {
+    //     static const std::unordered_map<std::string, std::function<void(const T&)>> update_map = {
+    //         {"pupil_pixels", [this](const T& value) { this->pupil_pixels.update(value); }},
+    //         {"secondary_pixels", [this](const T& value) { this->secondary_pixels.update(value); }},
+    //         {"outside_pixels", [this](const T& value) { this->outside_pixels.update(value); }}
+    //     };
+
+    //     auto it = update_map.find(member_name);
+    //     if (it != update_map.end()) {
+    //         it->second(new_value);
+    //         return true;
+    //     } else {
+    //         return false; // Member name not found
+    //     }
+    // }
 };
+
+
 
 
 
@@ -475,6 +504,11 @@ void apply_camera_settings( FliSdk* fli, camera_settings_struct cm){
 
 }
 
+
+
+
+
+
 /**
  * @brief A dummy Real-Time Controller.
  */
@@ -498,6 +532,9 @@ struct RTC {
     pupil_regions_struct regions;
     PIDController pid; // object to apply PID control to signals
 
+    // -------- SIMULATED SIGNALS (for if in simulation mode )
+    simulated_signals_struct rtc_simulation_signals;
+    
     //telemetry
     size_t telemetry_cnt = 0;
 
@@ -517,8 +554,9 @@ struct RTC {
         if (rv != NO_ERR) {
             std::cerr << "Error " << rv << " opening the driver type " << hdm.Driver_Type << ": ";
             std::cerr << BMCErrorString(rv) << std::endl << std::endl;
-
+            cout << "Putting DM in simulation mode.." <<endl;
             // PUT IN SIMULATION MODE 
+            rtc_state.dm_simulation_mode = true;
 
         }else{
             map_lut.resize(MAX_DM_SIZE);
@@ -545,14 +583,15 @@ struct RTC {
         vector<string> listOfCameras = fli->detectCameras();
         if(listOfGrabbers.size() == 0)
         {
-            cout << "No grabber detected, exit." << endl;
-            //return;
+            cout << "No grabber detected, exit. Putting camera in simulation mode.." << endl;
             // PUT IN SIMULATION MODE 
+            rtc_state.camera_simulation_mode = true;
 
         }else if (listOfCameras.size() == 0){
 
-            cout << "No camera detected, exit." << endl;
-            //put in simulation mode 
+            cout << "No camera detected, exit. Putting camera in simulation mode.." << endl;
+            // PUT IN SIMULATION MODE 
+            rtc_state.camera_simulation_mode = true;
 
         }else{
             int i = 0;
@@ -595,7 +634,96 @@ struct RTC {
         }
 
     }
+
+    /// @brief standard way to get the last frame from the camera within RTC scope - this gets if we are in simulation mode
+    /// @return a pointer to the uint16_t image
+    uint16_t* poll_last_image() {
+        uint16_t* rawImage; // Declare rawImage outside of the conditional blocks
+
+        if (rtc_state.camera_simulation_mode) {
+            rawImage = &rtc_simulation_signals.simulated_image[0]; // Point to address of the first element in simulated image vector
+        } else {
+            rawImage = (uint16_t*)fli->getRawImage(); // Assuming fli is a valid pointer to an object with the getRawImage method
+        }
+
+        return rawImage;
+    }
+
+    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it. 
+    /// this also checks if the DM is in simulation within the RTC struct.
+    /// @return a pointer to the uint16_t image
+    void send_dm_cmd(std::vector<double> cmd) {
+        if (~rtc_state.dm_simulation_mode) {
+                    // get cmd pointer 
+            double *cmd_ptr = cmd.data();
+            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+        } 
+    }
     
+    void process_image(std::vector<float> im, std::vector<float> I_ref, std::vector<float>& signal)
+    {
+        if (~rtc_state.signal_simulation_mode){
+            //std::vector<float> signal(signal_size);
+            for (size_t i = 0; i < im.size(); ++i) {
+
+                signal[i] = static_cast<float>(im[i]) / reco.flux_norm.current() - I_ref[i];// I_ref[i];
+
+            }
+            
+        } else if( rtc_simulation_signals.simulated_signal.size() == im.size()){
+
+            signal = rtc_simulation_signals.simulated_signal; // create a copy
+            
+        } else{
+            
+            cout << "!!!!!!!!!!! simulatied_signal.size() != signal_size !!!!!!!!!!!!!!!" << endl;
+            cout << "setting signal = vector of zeros size = im.size()" << endl;
+            std::vector<float> signal(im.size(), 0);
+        };
+
+    }
+
+    /**
+     * @brief Performs a single computation using the current RTC values.
+     * this can be used to test compute and is nanobinded to python
+     */
+    std::vector<float> single_compute( )
+    {
+
+        // size of filtered signal may change while RTC is running 
+        size_t signal_size = regions.pupil_pixels.current().size();
+
+        // have to define here to keep in scope of telemetry
+        static std::vector<float> signal(signal_size); // <- should this be static 
+
+        // get image 
+        uint16_t* raw_image = poll_last_image();
+
+        // convert to vector
+        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+
+        //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+
+        std::vector<float> image_in_pupil = getValuesAtIndices<float>(image_vector, regions.pupil_pixels.current()  ) ; // image 
+
+        std::vector<float> I_ref = getValuesAtIndices<float>( reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+
+        process_image( image_in_pupil, I_ref , signal);
+
+        return( signal );
+
+        
+        //Perform element-wise addition
+        // for (size_t i = 0; i < dm_size; ++i) {
+        //     //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
+
+        //     cmd[i] = flat_dm_array[i] + delta_cmd[i]; // just roughly offset to center
+        // }
+
+
+
+
+    } 
 
     /**
      * @brief Performs computation using the current RTC values.
@@ -613,6 +741,61 @@ struct RTC {
             commit_asked = false;
         }
     }
+
+
+    //RECONSTRUCTOR MATRIX 
+    void set_CM(std::vector<float> mat) {
+        reco.CM.update(mat); // control matrix (not filtered for tip/tilt or higher order modes)
+    }
+
+    void set_R_TT(std::vector<float> mat) {
+        reco.R_TT.update(mat);
+    }
+
+    void set_R_HO(std::vector<float> mat) {
+        reco.R_HO.update(mat);
+    }
+
+    void set_I2M(std::vector<float> array){
+        reco.I2M.update(array);
+    }
+
+    //void set_I2M_a(std::span<float> array){
+    //    //USE I2Ma BECAUSE OF BUG IN UPDATABLE I2M (IT RANDOMLY CHANGES/ ASIGNS VALUES IN NANOBIND)
+    //    I2M_a = array;
+    //}
+    
+    void set_M2C(std::vector<float> array){
+        reco.M2C.update(array);
+    }
+
+
+
+    void set_I0(std::vector<float> array) {
+        reco.I0.update(array);
+    }
+
+    void set_fluxNorm(float value) {
+        reco.flux_norm.update(value);
+    }
+
+    // defined region in pupil (where we do phase control)
+    void set_pupil_pixels(std::vector<int> array) {
+        regions.pupil_pixels.update(array);
+    }
+
+
+    // defined region in secondary obstruction 
+    void set_secondary_pixels(std::vector<int> array) {
+        regions.secondary_pixels.update(array);
+    }
+
+    // defined region in  outside pupil (not including secondary obstruction)
+    void set_outside_pixels(std::vector<int> array) {
+        regions.outside_pixels.update(array);
+    }
+
+
 
     /**
      * @brief Sets the slope offsets.
@@ -651,6 +834,15 @@ struct RTC {
         //slope_offsets.commit();
         //gain.commit();
         //offset.commit();
+
+        reco.IM.commit() ;
+        reco.CM.commit();
+        reco.R_TT.commit();
+        reco.R_HO.commit();
+        reco.I2M.commit();
+        reco.M2C.commit();
+        reco.I0.commit();
+        reco.flux_norm.commit();
 
         std::cout << "commit done\n";
     }
@@ -782,8 +974,13 @@ struct AsyncRunner {
 
 };
 
+
+
+
+
 NB_MODULE(_rtc, m) {
     using namespace nb::literals;
+
 
     nb::class_<RTC>(m, "RTC")
         .def(nb::init<>())
@@ -793,11 +990,47 @@ NB_MODULE(_rtc, m) {
         //.def("set_offset", &RTC::set_offset)
         .def("commit", &RTC::commit)
         .def("request_commit", &RTC::request_commit)
+
+        .def("single_compute", &RTC::single_compute)
+
+        // states
+        .def("get_dm_simulation_mode", [](const RTC& r) -> auto { return r.rtc_state.dm_simulation_mode; })
+        .def("set_dm_simulation_mode", [](RTC &self, bool value) { self.rtc_state.dm_simulation_mode = value; })
+        .def("get_camera_simulation_mode", [](const RTC& r) -> auto { return r.rtc_state.camera_simulation_mode; })
+        .def("set_camera_simulation_mode", [](RTC &self, bool value) { self.rtc_state.camera_simulation_mode = value; })
+
+        // // simulation signals 
+        // .def("get_simulated_dm_cmd", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_dm_cmd; })
+        // .def("set_simulated_dm_cmd", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_dm_cmd = value; })
+
+        // .def("get_simulated_image", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_image; })
+        // .def("set_simulated_image", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_image = value; })
+
+        // .def("get_simulated_signal", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_signal; })
+        // .def("set_simulated_signal", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_signal = value; })
+
+        // reconstructors 
+        .def("set_CM", &RTC::set_CM)
+        .def("set_R_TT", &RTC::set_R_TT)
+        .def("set_R_HO", &RTC::set_R_HO)
+        .def("set_I2M",&RTC::set_I2M)
+        .def("set_M2C",&RTC::set_M2C)
+
+        // .def("get_CM", &RTC::get_CM)
+        // .def("get_R_TT", &RTC::get_R_TT)
+        // .def("get_R_HO", &RTC::get_R_HO)
+        // .def("get_I2M",&RTC::get_I2M)
+        // .def("get_M2C",&RTC::get_M2C)
+        //.def("get_rtc_state", [](const RTC& self) { return self.rtc_state; })
+        //.def("set_rtc_state", [](RTC& self, const rtc_state_struct& state) { self.rtc_state = state; })
+
         .def("__repr__", [](const RTC& rtc) {
             std::stringstream ss;
             ss << rtc;
             return ss.str();
         });
+
+    // Specialize for rtc_state_struct
 
     nb::class_<AsyncRunner>(m, "AsyncRunner")
         .def(nb::init<RTC&, std::chrono::microseconds>(), nb::arg("rtc"), nb::arg("period") = std::chrono::microseconds(1000), "Constructs an AsyncRunner object.")
@@ -807,4 +1040,6 @@ NB_MODULE(_rtc, m) {
         .def("resume", &AsyncRunner::resume)
         .def("state", &AsyncRunner::state)
         .def("flush", &AsyncRunner::flush);
+
 }
+

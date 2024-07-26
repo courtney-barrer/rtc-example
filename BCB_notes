@@ -22,6 +22,8 @@ export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libffi.so.7
 then could import without issue. Added to .bashrc file
 
 
+INSTALLING ON Ubuntu 20.04 at ANU,
+ - main issue was there has been some merge with libblas and libclass, so need to use the later. This was done from /usr/lib do symbolic link >sudo ln -s libblas.so.3 libcblas.so.3 
 
 
 RTC notes - easier to see in visual studio code - main menu

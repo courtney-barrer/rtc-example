@@ -17,6 +17,8 @@ from pyBaldr import phase_control
 from pyBaldr import pupil_control
 from pyBaldr import utilities as util
 
+#pip install --no-build-isolation -e .
+
 def print_n_last_lines(s: str, n: int = 10):
     lines = s.split('\n')
     for l in lines[-n:]:
