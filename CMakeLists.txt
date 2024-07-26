@@ -17,6 +17,7 @@ find_package(nanobind CONFIG REQUIRED)
 nanobind_add_module(_rtc
   src/rtc.cpp
   src/push_record.cpp
+  src/updatable_binding.cpp
 )
 
 

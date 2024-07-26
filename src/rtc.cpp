@@ -1,6 +1,9 @@
 #include "span_cast.hpp"
 #include "span_format.hpp"
 
+#include <cstdint>
+#include <updatable.hpp>
+
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/chrono.h>
@@ -14,133 +17,13 @@
 #include <span>
 #include <string_view>
 #include <vector>
-#include  <fstream>
+#include <fstream>
 
 #include <BMCApi.h>
 #include "FliSdk.h"
 
 namespace nb = nanobind;
 using namespace std;
-
-
-
-/**
- * @brief A template struct representing an updatable value.
- *
- * This struct provides functionality to store and update a value of type T.
- * It maintains two copies of the value, referred to as "current" and "next".
- * The "current" value can be accessed and modified using various member functions and operators.
- * The "next" value can be updated using the `update` function.
- * The `commit` function can be used to make the "next" value the new "current" value.
- *
- * @tparam T The type of the value to be stored and updated.
- */
-template<typename T>
-struct updatable {
-    std::array<T, 2> values; /**< An array to store the two copies of the value. */
-    /**
-     * @brief An atomic pointer to the current value.
-     *
-     * This pointer is atomic to allow for thread-safe access and modification of the current value.
-     *
-     */
-    T* current_; /**< A pointer to the current value. */
-    T* next_; /**< A pointer to the next value. */
-    bool has_changed; /**< A flag indicating whether the value has changed. */
-
-    /**
-     * @brief Default constructor.
-     *
-     * Initializes the values array, sets the current and next pointers to the first element of the array,
-     * and sets the has_changed flag to false.
-     */
-    updatable()
-        : values{}
-        , current_(&values[0])
-        , next_(&values[1])
-        , has_changed(false)
-    {}
-
-    /**
-     * @brief Constructor with initial value.
-     *
-     * Initializes the values array with the given value, sets the current and next pointers to the first element of the array,
-     * and sets the has_changed flag to false.
-     *
-     * @param value The initial value.
-     */
-    updatable(T value)
-        : values{value, value}
-        , current_(&values[0])
-        , next_(&values[1])
-        , has_changed(false)
-    {}
-
-    /// Get a reference to the current value.
-    T& current() { return *current_; }
-
-    /// Get a const reference to the current value.
-    T const& current() const { return *current_; }
-
-    /// Get a reference to the next value.
-    T& next() { return *next_; }
-
-    /// Get a const reference to the next value.
-    T const& next() const { return *next_; }
-
-    /// Get a reference to the current value.
-    T& operator*() { return *current_; }
-
-    /// Get a const reference to the current value.
-    T const& operator*() const { return *current_; }
-
-    /// Get a pointer to the current value.
-    T* operator->() { return current_; }
-
-    /// Get a const pointer to the current value.
-    T const* operator->() const { return current_; }
-
-    /**
-     * @brief Update the next value.
-     *
-     * This function updates the next value with the given value and keep the information that a new value is available.
-     *
-     * @param value The new value.
-     */
-    void update(T value)
-    {
-        *next_ = value;
-        has_changed = true;
-    }
-
-    /**
-     * @brief Set the has_changed flag to true.
-     *
-     * This function is useful when the next value has been updated directly without using the `update` function.
-     */
-    void set_changed() { has_changed = true; }
-
-    /**
-     * @brief Commit the changes.
-     *
-     * This function makes the next value the new current value.
-     * If the has_changed flag is true, it also swaps the current and next pointers.
-     */
-    void commit()
-    {
-        if (has_changed) {
-            std::swap(current_, next_);
-            has_changed = false;
-        }
-    }
-
-    /// Overloaded stream operator.
-    friend std::ostream& operator<<(std::ostream& os, const updatable& u) {
-        return os << "updatable(current = " << u.current()
-           << " @ " << (u.current_ - u.values.data())
-           << ", has_new = " << u.has_changed << ")";
-    }
-};
 
 
 
@@ -168,7 +51,7 @@ public:
 
         std::vector<double> output(setpoint.size());
         for (size_t i = 0; i < setpoint.size(); ++i) {
-            // NOTE: this takes convention that error is opposite sign 
+            // NOTE: this takes convention that error is opposite sign
             // to the reconstruction
             double error = setpoint[i] - measured[i];
             integrals[i] += error;
@@ -225,22 +108,20 @@ public:
 
 // Gets value at indices for an input vector
 template<typename DestType, typename T>
-std::vector<DestType> getValuesAtIndices(const std::vector<T>& data, const std::vector<int>& indices) {
-    std::vector<DestType> values;
-    values.reserve(indices.size());
+void getValuesAtIndices(std::vector<DestType>& values, const T & data, std::span<const int> indices) {
+    values.resize(indices.size());
 
+    size_t i = 0;
     for (int index : indices) {
         assert(index >= 0 && index < static_cast<int>(data.size()) && "Index out of bounds!"); // Ensure index is within bounds
-        values.push_back(static_cast<DestType>(data[index]));
+        values[i++] = static_cast<DestType>(data[index]);
     }
-
-    return values;
 }
 
 
 /// @brief multiply vector v by matrix r
-/// @param v  - vector 
-/// @param r  - flattened matrix 
+/// @param v  - vector
+/// @param r  - flattened matrix
 /// @param result - result of multiplication
 // void matrix_vector_multiply(const std::vector<auto>& v, updatable<std::span<float>>& r, std::vector<double>& result) {
 //     // auto fine if input double or float vector - casting issues possible if int vector input
@@ -280,8 +161,8 @@ void matrix_vector_multiply(
 
 
 /// @brief read in a csv file and store as pointer to array
-/// @param filePath 
-/// @return array 
+/// @param filePath
+/// @return array
 double* readCSV(const std::string& filePath) {
     static const int ARRAY_SIZE = 140;
     double values[ARRAY_SIZE]; // non-static array to return pointer to
@@ -325,8 +206,8 @@ double* readCSV(const std::string& filePath) {
 
 
 /*
-state_structure - loop , camera simulation, dm_simulation,  
-camera mode - 
+state_structure - loop , camera simulation, dm_simulation,
+camera mode -
 
 then do get image function and update dm function that checks for simulated states
 
@@ -347,9 +228,9 @@ struct rtc_state_struct {
 
 /*@brief to hold simulated signals that can be injected in the RTC*/
 struct simulated_signals_struct{
-    // signals used if things are in simulation mode 
+    // signals used if things are in simulation mode
     std::vector<uint16_t> simulated_image;//(327680, 0); //used if rtc_state_struct.camera_simulation_mode = true. initialized to 0 over 640*512 pixels
-    std::vector<double> simulated_dm_cmd;//(140, 0); // used if rtc_state_struct.dm_simulation_mode = true. initialized to 0 over 140 actuators  
+    std::vector<double> simulated_dm_cmd;//(140, 0); // used if rtc_state_struct.dm_simulation_mode = true. initialized to 0 over 140 actuators
     std::vector<float> simulated_signal; // used if rtc_state_struct.signal_simulation_mode = true. This is the processed signal.
 
     // Default constructor
@@ -365,7 +246,7 @@ struct camera_settings_struct {
     bool det_tag_enabled = false; //true/false
     std::string det_cropping_rows="0-639"; //"r1-r2" where  r1 multiple of 4, r2 multiple 4-1
     std::string det_cropping_cols="0-511"; //"c1-c2" where c1 multiple of 32, c2 multiple 32-1
-    uint16_t image_height = 640; // i.e. rows in image 
+    uint16_t image_height = 640; // i.e. rows in image
     uint16_t image_width = 512;// i.e. cols in image
     uint32_t full_image_length = 327680; //640*512;
 
@@ -380,22 +261,22 @@ struct camera_settings_struct {
 we have an array of reconstructor matricies here to allow flexibility in control implementation
 CM, R_TT, R_HO can be used to go directly from processed intensities to DM commands
 I2M can be used to go from processed intensities to a modal basis
-M2C can be used to go from a pre-defined modal basis to DM commands 
+M2C can be used to go from a pre-defined modal basis to DM commands
 
-bias, I0, flux_norm are for signal processing 
+bias, I0, flux_norm are for signal processing
 
-with nano bind there were issues with these being span's - so changed them all to vectors! 
+with nano bind there were issues with these being span's - so changed them all to vectors!
 */
 struct phase_reconstuctor_struct {
     /*
     we have an array of reconstructor matricies here to allow flexibility in control implementation
     CM, R_TT, R_HO can be used to go directly from processed intensities to DM commands
     I2M can be used to go from processed intensities to a modal basis
-    M2C can be used to go from a pre-defined modal basis to DM commands 
+    M2C can be used to go from a pre-defined modal basis to DM commands
 
-    bias, I0, flux_norm are for signal processing 
+    bias, I0, flux_norm are for signal processing
 
-    with nano bind there were issues with these being span's - so changed them all to vectors! 
+    with nano bind there were issues with these being span's - so changed them all to vectors!
     */
     updatable<std::vector<float>> IM; /**<unfiltered interaction matrix  */
     updatable<std::vector<float>> CM; /**< control matrix (~ M2C @ I2M.T) signal intensities to dm commands  */
@@ -403,7 +284,7 @@ struct phase_reconstuctor_struct {
     updatable<std::vector<float>> R_HO; /**< higher-order reconstructor */
     updatable<std::vector<float>> I2M; /**< intensity (signal) to mode matrix */
     //std::span<float> I2M_a // again there is a bug with updatable I2M as with I0...
-    updatable<std::vector<float>> M2C; /**< mode to DM command matrix. */ 
+    updatable<std::vector<float>> M2C; /**< mode to DM command matrix. */
 
     updatable<std::vector<uint16_t>> bias; /**< bias. */
     updatable<std::vector<float>> I0; /**< reference intensity with FPM in. */
@@ -441,10 +322,10 @@ struct pupil_regions_struct {
 
 
 void apply_camera_settings( FliSdk* fli, camera_settings_struct cm){
-    // NEED TO TEST IN SYDNEY ON CAMERA 
-    // does not check if in simulation mode!  
-    
-    uint32_t _full_image_length_new; 
+    // NEED TO TEST IN SYDNEY ON CAMERA
+    // does not check if in simulation mode!
+
+    uint32_t _full_image_length_new;
     //double fps = 0;
 
     fli->stop();
@@ -459,14 +340,14 @@ void apply_camera_settings( FliSdk* fli, camera_settings_struct cm){
     }
 
     if (cm.det_tag_enabled) {
-        // makes first pixels correspond to frame number and other info 
-        // 
-        //TO DO: should make corresponding mask for this to be added to 
+        // makes first pixels correspond to frame number and other info
+        //
+        //TO DO: should make corresponding mask for this to be added to
         //pixel_filter if this is turned on to ensure frame count etc
-        //does not get interpretted as intensities. 
-        fli->serialCamera()->sendCommand("set imagetags on");  
+        //does not get interpretted as intensities.
+        fli->serialCamera()->sendCommand("set imagetags on");
     } else{
-        fli->serialCamera()->sendCommand("set imagetags off");  
+        fli->serialCamera()->sendCommand("set imagetags off");
     }
 
     fli->serialCamera()->sendCommand("set cropping rows "+ cm.det_cropping_rows);
@@ -495,7 +376,7 @@ void apply_camera_settings( FliSdk* fli, camera_settings_struct cm){
 
     // _full_image_length_new can be used to update simulated signals etc before appending
     if (_full_image_length_new != cm.full_image_length){
-        cout << "_full_image_length_new != cm.full_image_length " << endl; 
+        cout << "_full_image_length_new != cm.full_image_length " << endl;
         // update the full image length
         cm.full_image_length = _full_image_length_new;
     }
@@ -513,8 +394,8 @@ void apply_camera_settings( FliSdk* fli, camera_settings_struct cm){
  * @brief A dummy Real-Time Controller.
  */
 struct RTC {
-    // -------- HARDWARE 
-    // object to interact with DM 
+    // -------- HARDWARE
+    // object to interact with DM
     DM hdm = {};
     const size_t dm_size = 140 ; // # actuators on BMC multi-3.5 DM
     std::string dm_serial_number = "17DW019#053"; // USYD ="17DW019#122",  ANU = "17DW019#053";
@@ -527,14 +408,14 @@ struct RTC {
     rtc_state_struct rtc_state;
     camera_settings_struct camera_settings;
 
-    // -------- CONTROL SYSTEMS 
+    // -------- CONTROL SYSTEMS
     phase_reconstuctor_struct reco;
     pupil_regions_struct regions;
     PIDController pid; // object to apply PID control to signals
 
     // -------- SIMULATED SIGNALS (for if in simulation mode )
     simulated_signals_struct rtc_simulation_signals;
-    
+
     //telemetry
     size_t telemetry_cnt = 0;
 
@@ -546,7 +427,7 @@ struct RTC {
     RTC() //= default;
     {
 
-        /* open BMC DM */  
+        /* open BMC DM */
         //---------------------
         BMCRC	rv = NO_ERR;
         rv = BMCOpen(&hdm, dm_serial_number.c_str());
@@ -555,25 +436,25 @@ struct RTC {
             std::cerr << "Error " << rv << " opening the driver type " << hdm.Driver_Type << ": ";
             std::cerr << BMCErrorString(rv) << std::endl << std::endl;
             cout << "Putting DM in simulation mode.." <<endl;
-            // PUT IN SIMULATION MODE 
+            // PUT IN SIMULATION MODE
             rtc_state.dm_simulation_mode = true;
 
         }else{
             map_lut.resize(MAX_DM_SIZE);
             uint32_t k = 0;
             // init map lut to zeros (copying examples from BMC)
-            for(k=0; k<(int)hdm.ActCount; k++) { 
+            for(k=0; k<(int)hdm.ActCount; k++) {
                 map_lut[k] = 0;
             }
             // then we load the default map
-            rv = BMCLoadMap(&hdm, NULL, map_lut.data()); 
+            rv = BMCLoadMap(&hdm, NULL, map_lut.data());
 
         }
 
 
-        // /* open Camera */ 
+        // /* open Camera */
         //---------------------
-        // note: I tried using fakecamera from 
+        // note: I tried using fakecamera from
         // /opt/FirstLightImaging/FliSdk/Examples/API_C++/FliFakeCamera
         // but failed to get this to run properly
         FliSdk* fli = new FliSdk();
@@ -584,13 +465,13 @@ struct RTC {
         if(listOfGrabbers.size() == 0)
         {
             cout << "No grabber detected, exit. Putting camera in simulation mode.." << endl;
-            // PUT IN SIMULATION MODE 
+            // PUT IN SIMULATION MODE
             rtc_state.camera_simulation_mode = true;
 
         }else if (listOfCameras.size() == 0){
 
             cout << "No camera detected, exit. Putting camera in simulation mode.." << endl;
-            // PUT IN SIMULATION MODE 
+            // PUT IN SIMULATION MODE
             rtc_state.camera_simulation_mode = true;
 
         }else{
@@ -649,36 +530,36 @@ struct RTC {
         return rawImage;
     }
 
-    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it. 
+    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it.
     /// this also checks if the DM is in simulation within the RTC struct.
     /// @return a pointer to the uint16_t image
-    void send_dm_cmd(std::vector<double> cmd) {
-        if (~rtc_state.dm_simulation_mode) {
-                    // get cmd pointer 
+    void send_dm_cmd(std::span<double> cmd) {
+        if (not rtc_state.dm_simulation_mode) {
+                    // get cmd pointer
             double *cmd_ptr = cmd.data();
             BMCSetArray(&hdm, cmd_ptr, map_lut.data());
-        } 
+        }
     }
-    
-    void process_image(std::vector<float> im, std::vector<float> I_ref, std::vector<float>& signal)
+
+    void process_image(std::span<const float> im, std::span<const float> I_ref, std::vector<float>& signal)
     {
-        if (~rtc_state.signal_simulation_mode){
+        if (not rtc_state.signal_simulation_mode){
             //std::vector<float> signal(signal_size);
             for (size_t i = 0; i < im.size(); ++i) {
 
                 signal[i] = static_cast<float>(im[i]) / reco.flux_norm.current() - I_ref[i];// I_ref[i];
 
             }
-            
+
         } else if( rtc_simulation_signals.simulated_signal.size() == im.size()){
 
             signal = rtc_simulation_signals.simulated_signal; // create a copy
-            
+
         } else{
-            
+
             cout << "!!!!!!!!!!! simulatied_signal.size() != signal_size !!!!!!!!!!!!!!!" << endl;
             cout << "setting signal = vector of zeros size = im.size()" << endl;
-            std::vector<float> signal(im.size(), 0);
+            signal.resize(im.size(), 0);
         };
 
     }
@@ -690,13 +571,13 @@ struct RTC {
     std::vector<float> single_compute( )
     {
 
-        // size of filtered signal may change while RTC is running 
+        // size of filtered signal may change while RTC is running
         size_t signal_size = regions.pupil_pixels.current().size();
 
         // have to define here to keep in scope of telemetry
-        static std::vector<float> signal(signal_size); // <- should this be static 
+        static std::vector<float> signal(signal_size); // <- should this be static
 
-        // get image 
+        // get image
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
@@ -704,15 +585,17 @@ struct RTC {
 
         //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
-        std::vector<float> image_in_pupil = getValuesAtIndices<float>(image_vector, regions.pupil_pixels.current()  ) ; // image 
+        std::vector<float> image_in_pupil;
+        getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
 
-        std::vector<float> I_ref = getValuesAtIndices<float>( reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+        std::vector<float> I_ref;
+        getValuesAtIndices(I_ref, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
 
         process_image( image_in_pupil, I_ref , signal);
 
-        return( signal );
+        return signal;
 
-        
+
         //Perform element-wise addition
         // for (size_t i = 0; i < dm_size; ++i) {
         //     //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
@@ -723,7 +606,7 @@ struct RTC {
 
 
 
-    } 
+    }
 
     /**
      * @brief Performs computation using the current RTC values.
@@ -743,7 +626,7 @@ struct RTC {
     }
 
 
-    //RECONSTRUCTOR MATRIX 
+    //RECONSTRUCTOR MATRIX
     void set_CM(std::vector<float> mat) {
         reco.CM.update(mat); // control matrix (not filtered for tip/tilt or higher order modes)
     }
@@ -764,7 +647,7 @@ struct RTC {
     //    //USE I2Ma BECAUSE OF BUG IN UPDATABLE I2M (IT RANDOMLY CHANGES/ ASIGNS VALUES IN NANOBIND)
     //    I2M_a = array;
     //}
-    
+
     void set_M2C(std::vector<float> array){
         reco.M2C.update(array);
     }
@@ -785,7 +668,7 @@ struct RTC {
     }
 
 
-    // defined region in secondary obstruction 
+    // defined region in secondary obstruction
     void set_secondary_pixels(std::vector<int> array) {
         regions.secondary_pixels.update(array);
     }
@@ -800,7 +683,7 @@ struct RTC {
     /**
      * @brief Sets the slope offsets.
      * @param new_offsets The new slope offsets to set.
-    
+
     void set_slope_offsets(std::span<const float> new_offsets) {
         slope_offsets.update(new_offsets);
     }
@@ -808,7 +691,7 @@ struct RTC {
     /**
      * @brief Sets the gain.
      * @param new_gain The new gain to set.
-    
+
     void set_gain(float new_gain) {
         gain.update(new_gain);
     }
@@ -817,7 +700,7 @@ struct RTC {
     /**
      * @brief Sets the offset.
      * @param new_offset The new offset to set.
-    
+
     void set_offset(float new_offset) {
         offset.update(new_offset);
     }
@@ -981,9 +864,16 @@ struct AsyncRunner {
 NB_MODULE(_rtc, m) {
     using namespace nb::literals;
 
+    register_updatable(m);
 
     nb::class_<RTC>(m, "RTC")
         .def(nb::init<>())
+        .def_rw("rtc_state", &RTC::rtc_state)
+        .def_rw("camera_settings", &RTC::camera_settings)
+        .def_rw("reco", &RTC::reco)
+        .def_rw("regions", &RTC::regions)
+
+
         .def("compute", &RTC::compute)
         //.def("set_slope_offsets", &RTC::set_slope_offsets)
         //.def("set_gain", &RTC::set_gain)
@@ -994,27 +884,27 @@ NB_MODULE(_rtc, m) {
         .def("single_compute", &RTC::single_compute)
 
         // states
-        .def("get_dm_simulation_mode", [](const RTC& r) -> auto { return r.rtc_state.dm_simulation_mode; })
-        .def("set_dm_simulation_mode", [](RTC &self, bool value) { self.rtc_state.dm_simulation_mode = value; })
-        .def("get_camera_simulation_mode", [](const RTC& r) -> auto { return r.rtc_state.camera_simulation_mode; })
-        .def("set_camera_simulation_mode", [](RTC &self, bool value) { self.rtc_state.camera_simulation_mode = value; })
+        // .def("get_dm_simulation_mode", [](const RTC& r) -> auto { return r.rtc_state.dm_simulation_mode; })
+        // .def("set_dm_simulation_mode", [](RTC &self, bool value) { self.rtc_state.dm_simulation_mode = value; })
+        // .def("get_camera_simulation_mode", [](const RTC& r) -> auto { return r.rtc_state.camera_simulation_mode; })
+        // .def("set_camera_simulation_mode", [](RTC &self, bool value) { self.rtc_state.camera_simulation_mode = value; })
 
-        // // simulation signals 
-        // .def("get_simulated_dm_cmd", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_dm_cmd; })
-        // .def("set_simulated_dm_cmd", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_dm_cmd = value; })
+        // // // simulation signals
+        // // .def("get_simulated_dm_cmd", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_dm_cmd; })
+        // // .def("set_simulated_dm_cmd", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_dm_cmd = value; })
 
-        // .def("get_simulated_image", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_image; })
-        // .def("set_simulated_image", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_image = value; })
+        // // .def("get_simulated_image", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_image; })
+        // // .def("set_simulated_image", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_image = value; })
 
-        // .def("get_simulated_signal", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_signal; })
-        // .def("set_simulated_signal", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_signal = value; })
+        // // .def("get_simulated_signal", [](const RTC& r) -> auto { return r.rtc_simulation_signals.simulated_signal; })
+        // // .def("set_simulated_signal", [](RTC &self, bool value) { self.rtc_simulation_signals.simulated_signal = value; })
 
-        // reconstructors 
-        .def("set_CM", &RTC::set_CM)
-        .def("set_R_TT", &RTC::set_R_TT)
-        .def("set_R_HO", &RTC::set_R_HO)
-        .def("set_I2M",&RTC::set_I2M)
-        .def("set_M2C",&RTC::set_M2C)
+        // // reconstructors
+        // .def("set_CM", &RTC::set_CM)
+        // .def("set_R_TT", &RTC::set_R_TT)
+        // .def("set_R_HO", &RTC::set_R_HO)
+        // .def("set_I2M",&RTC::set_I2M)
+        // .def("set_M2C",&RTC::set_M2C)
 
         // .def("get_CM", &RTC::get_CM)
         // .def("get_R_TT", &RTC::get_R_TT)
@@ -1032,6 +922,50 @@ NB_MODULE(_rtc, m) {
 
     // Specialize for rtc_state_struct
 
+    nb::class_<rtc_state_struct>(m, "rtc_state_struct")
+        .def(nb::init<>())
+        .def_rw("close_loop_mode", &rtc_state_struct::close_loop_mode)
+        .def_rw("dm_simulation_mode", &rtc_state_struct::dm_simulation_mode)
+        .def_rw("camera_simulation_mode", &rtc_state_struct::camera_simulation_mode)
+        .def_rw("signal_simulation_mode", &rtc_state_struct::signal_simulation_mode);
+
+    nb::class_<simulated_signals_struct>(m, "simulated_signals_struct")
+        .def(nb::init<>())
+        .def_rw("simulated_image", &simulated_signals_struct::simulated_image)
+        .def_rw("simulated_dm_cmd", &simulated_signals_struct::simulated_dm_cmd)
+        .def_rw("simulated_signal", &simulated_signals_struct::simulated_signal);
+
+    nb::class_<camera_settings_struct>(m, "camera_settings_struct")
+        .def(nb::init<>())
+        .def_rw("det_dit", &camera_settings_struct::det_dit)
+        .def_rw("det_fps", &camera_settings_struct::det_fps)
+        .def_rw("det_gain", &camera_settings_struct::det_gain)
+        .def_rw("det_crop_enabled", &camera_settings_struct::det_crop_enabled)
+        .def_rw("det_tag_enabled", &camera_settings_struct::det_tag_enabled)
+        .def_rw("det_cropping_rows", &camera_settings_struct::det_cropping_rows)
+        .def_rw("det_cropping_cols", &camera_settings_struct::det_cropping_cols)
+        .def_rw("image_height", &camera_settings_struct::image_height)
+        .def_rw("image_width", &camera_settings_struct::image_width)
+        .def_rw("full_image_length", &camera_settings_struct::full_image_length);
+
+    nb::class_<phase_reconstuctor_struct>(m, "phase_reconstuctor_struct")
+        .def(nb::init<>())
+        .def_rw("IM", &phase_reconstuctor_struct::IM)
+        .def_rw("CM", &phase_reconstuctor_struct::CM)
+        .def_rw("R_TT", &phase_reconstuctor_struct::R_TT)
+        .def_rw("R_HO", &phase_reconstuctor_struct::R_HO)
+        .def_rw("I2M", &phase_reconstuctor_struct::I2M)
+        .def_rw("M2C", &phase_reconstuctor_struct::M2C)
+        .def_rw("bias", &phase_reconstuctor_struct::bias)
+        .def_rw("I0", &phase_reconstuctor_struct::I0)
+        .def_rw("flux_norm", &phase_reconstuctor_struct::flux_norm);
+
+    nb::class_<pupil_regions_struct>(m, "pupil_regions_struct")
+        .def(nb::init<>())
+        .def_rw("pupil_pixels", &pupil_regions_struct::pupil_pixels)
+        .def_rw("secondary_pixels", &pupil_regions_struct::secondary_pixels)
+        .def_rw("outside_pixels", &pupil_regions_struct::outside_pixels);
+
     nb::class_<AsyncRunner>(m, "AsyncRunner")
         .def(nb::init<RTC&, std::chrono::microseconds>(), nb::arg("rtc"), nb::arg("period") = std::chrono::microseconds(1000), "Constructs an AsyncRunner object.")
         .def("start", &AsyncRunner::start)
@@ -1042,4 +976,3 @@ NB_MODULE(_rtc, m) {
         .def("flush", &AsyncRunner::flush);
 
 }
-
