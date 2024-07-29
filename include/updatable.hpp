@@ -16,6 +16,7 @@ std::ostream& operator<<(std::ostream& s, const std::vector<T>& v)
 }
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
 namespace nb = nanobind;
 
 /**
