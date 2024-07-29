@@ -3,13 +3,23 @@
 #include <iostream>
 #include <array>
 #include <sstream>
+#include <vector>
 #include <utility>
+
+template<typename T>
+std::ostream& operator<<(std::ostream& s, const std::vector<T>& v)
+{
+    s.put('{');
+    for (char comma[]{'\0', ' ', '\0'}; const auto& e : v)
+        s << comma << e, comma[0] = ',';
+    return s << "}\n";
+}
 
 #include <nanobind/nanobind.h>
 namespace nb = nanobind;
 
 /**
- * @brief A template struct representing an updatable value.
+ * @brief A template struct representing an updatable value. 
  *
  * This struct provides functionality to store and update a value of type T.
  * It maintains two copies of the value, referred to as "current" and "next".
@@ -132,11 +142,13 @@ void register_updatable_for(nb::module_& m) {
 
     using namespace nb::detail;
 
-    nb::class_<updatable<T>>(m, const_name("updatable<") + const_name<T>() + const_name(">"))
-        .init<>()
-        .init<T>()
-        .def_prop_ro("current", &updatable<T>::current)
-        .def_prop_rw("next", &updatable<T>::next, &updatable<T>::update)
+    auto name = const_name("updatable<") + const_name<T>() + const_name(">");
+
+    nb::class_<updatable<T>>(m, name.text)
+        .def(nb::init<>())
+        .def(nb::init<T>())
+        .def_prop_ro("current", [](updatable<T>& value){ return value.current(); })
+        .def_prop_rw("next", [](updatable<T>& value){ return value.next(); }, &updatable<T>::update)
 
         .def("update", &updatable<T>::update)
         .def("set_changed", &updatable<T>::set_changed)
