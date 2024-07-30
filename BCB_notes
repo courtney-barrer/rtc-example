@@ -49,6 +49,10 @@ baldr@baldr-Precision-T1600:~/Documents/rtc-example$ ipython
 
 main python code in example.py, main cpp code in rtc.cpp
 
+# install ssh server
+sudo apt-get install openssh-server
+
+# enable it
 
 sudo systemctl restart sshd.service
 then either

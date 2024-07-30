@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <utility>
+#include <string>
 
 template<typename T>
 std::ostream& operator<<(std::ostream& s, const std::vector<T>& v)
@@ -143,9 +144,22 @@ void register_updatable_for(nb::module_& m) {
 
     using namespace nb::detail;
 
-    auto name = const_name("updatable<") + const_name<T>() + const_name(">");
+    auto type_name = typeid(updatable<T>).name();
 
-    nb::class_<updatable<T>>(m, name.text)
+    // auto name = const_name("updatable<") + type_name.c_str() + const_name(">");
+
+    // Convert the name to a readable string
+    // std::string readable_name = "updatable<" + std::string(name.text) + ">";
+    
+    // Print the name to the screen
+    std::cout << "Registering: " << type_name << std::endl;
+
+    //static std::string tmp_name("Hello worl");
+    //std::cout << "Registering: " << name.text << std::endl;  // Diagnostic message
+    //std::cout << "Registering: " << name << std::endl;  // Diagnostic message
+    //std::cout << "Registering: " << tmp_name << std::endl;  // Diagnostic message
+
+    nb::class_<updatable<T>>(m, type_name)
         .def(nb::init<>())
         .def(nb::init<T>())
         .def_prop_ro("current", [](updatable<T>& value){ return value.current(); })
@@ -159,6 +173,8 @@ void register_updatable_for(nb::module_& m) {
             ss << u;
             return ss.str();
         });
+
+    //tmp_name.push_back("d");
 }
 
 
