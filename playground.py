@@ -139,7 +139,7 @@ r.camera_settings = cam_settings_tmp
 #print('current CM for r:', r.reco.CM.current )
 #print('current pupil_pixels for r:', r.regions.pupil_pixels.current )
 
-r.apply_camera_settings()
+r.apply_camera_settings()  # <------ segmentation fault here 
 
 
 #%% 2) ------------------------------------------------------------------

@@ -471,7 +471,7 @@ struct RTC {
     // object to interact with DM
     DM hdm = {};
     const size_t dm_size = 140 ; // # actuators on BMC multi-3.5 DM
-    std::string dm_serial_number = "17DW019#053"; // USYD ="17DW019#122",  ANU = "17DW019#053";
+    std::string dm_serial_number = "17DW019#122"; // USYD ="17DW019#122",  ANU = "17DW019#053";
     std::vector<uint32_t> map_lut; // (BMC multi-3.5 DM)
 
     // object to interact with camera
@@ -537,7 +537,10 @@ struct RTC {
         // note: I tried using fakecamera from
         // /opt/FirstLightImaging/FliSdk/Examples/API_C++/FliFakeCamera
         // but failed to get this to run properly
-        FliSdk* fli = new FliSdk();
+
+        //FliSdk* fli = new FliSdk();
+        this->fli = new FliSdk();
+        
         std::cout << "Detection of grabbers..." << std::endl;
         vector<string> listOfGrabbers = fli->detectGrabbers();
         std::cout << "Detection of cameras..." << std::endl;
@@ -604,10 +607,16 @@ struct RTC {
         } else{
             
             uint32_t _full_image_length_new;
+            //fli->start();
+
+            
+            //double fps = 0;
+		    //fli->serialCamera()->getFps(fps);
+            //cout << fps << endl;
             //double fps = 0;
 
             fli->stop();
-
+            
             // crop first
             fli->serialCamera()->sendCommand("set cropping off"); //FliCamera_sendCommand("set cropping off");
             if (camera_settings.det_crop_enabled) {
@@ -660,6 +669,7 @@ struct RTC {
             }
 
             fli->start();
+            
         }
     }
 
