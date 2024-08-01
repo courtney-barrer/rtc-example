@@ -255,6 +255,9 @@ class ZWFS():
             raise TypeError('ZWFS.pixelation_factor has to be of type None or int')
         return(cropped_img)    
 
+    def get_processed_image(self):
+        FliSdk_V2.GetProcessedImage(self.camera, -1)
+
     def get_image_in_another_region(self, crop_region=[0,-1,0,-1]):
         
         # I do not check if the camera is running. Users should check this 
@@ -267,6 +270,17 @@ class ZWFS():
         #elif self.pixelation_factor != None:
         #    raise TypeError('ZWFS.pixelation_factor has to be of type None or int')
         return( cropped_img )    
+
+
+    def build_bias(self, number_frames=256):
+        #nb = 256 # number of frames for building bias 
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
+    
+    def bias_on(self):
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set bias on")
+
+    def bias_off(self):
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set bias off")
 
 
     def start_camera(self):
@@ -299,7 +313,7 @@ class ZWFS():
         if (DIT >= float(minDit)) & (DIT <= float(maxDit)):
             FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set tint " + str(float(DIT)))
         else:
-            print(f"requested DIT {1e3*DIT}ms outside DIT limits {(1e3*minDit,1e3*maxDit)}ms.\n Cannot change DIT to this value")
+            print(f"requested DIT {1e3*DIT}ms outside DIT limits {(1e3*float(minDit),1e3*float(maxDit))}ms.\n Cannot change DIT to this value")
     
     def set_camera_fps(self, fps):
         FliSdk_V2.FliSerialCamera.SetFps(self.camera, fps)
@@ -314,6 +328,8 @@ class ZWFS():
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set cropping rows {r1}-{r2}")
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set cropping on")
     
+
+
     def deactive_cropping(self):
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set cropping off")
 
@@ -337,7 +353,7 @@ class ZWFS():
         """
         gain_string must be "low", "medium" or "high"
         """
-        FliSdk_V2.FliSerialCamera.SendCommand(camera, f"set sensitivity {gain_string}")
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensitivity {gain_string}")
         
     def restore_default_settings(self): 
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "restorefactory")
