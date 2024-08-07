@@ -33,98 +33,83 @@ put PID and leaky integrator in reco struct.?
 include method - modal, zonal etc
 */
 
-/// @brief A PID controller with  Anti-windup
+/// @brief A PID controller with Anti-windup
 class PIDController {
 public:
     PIDController()
-        : kp(0.0), ki(0.0), kd(0.0), integral_limit(1.0) {} // Default constructor
+        : kp(0.0), ki(0.0), kd(0.0), lower_limit(0), upper_limit(1.0)  {}
 
-    // later iterations could make these vectors so different gains per mode.
-    // or alternatively just intialize various classes
-    PIDController(double kp, double ki, double kd, double integral_limit = 1.0)
-        : kp(kp), ki(ki), kd(kd), integral_limit(integral_limit) {}
+    PIDController(const std::vector<float>& kp, const std::vector<float>& ki, const std::vector<float>& kd, const std::vector<float>& upper_limit, const std::vector<float>& lower_limit)
+        : kp(kp), ki(ki), kd(kd), lower_limit(lower_limit), upper_limit(upper_limit) {}
 
-    std::vector<double> compute_pid(const std::vector<double>& setpoint, const std::vector<double>& measured) {
+    std::vector<float> process(const std::vector<float>& setpoint, const std::vector<float>& measured) {
         if (setpoint.size() != measured.size()) {
             throw std::invalid_argument("Input vectors must be of the same size.");
         }
 
-        // Resize integrals and prev_errors to match the size of the input vectors
         if (integrals.size() != setpoint.size()) {
-            integrals.resize(setpoint.size(), 0.0);
-            prev_errors.resize(setpoint.size(), 0.0);
+            integrals.resize(setpoint.size(), 0.0f);
+            prev_errors.resize(setpoint.size(), 0.0f);
         }
 
-        std::vector<double> output(setpoint.size());
+        std::vector<float> output(setpoint.size());
         for (size_t i = 0; i < setpoint.size(); ++i) {
-            // NOTE: this takes convention that error is opposite sign
-            // to the reconstruction
-            double error = setpoint[i] - measured[i];
+            float error = setpoint[i] - measured[i];
             integrals[i] += error;
 
-            // Anti-windup: clamp the integrative term
-            if (integrals[i] > integral_limit.current()) {
-                integrals[i] = integral_limit.current();
-            } else if (integrals[i] < -integral_limit.current()) {
-                integrals[i] = -integral_limit.current();
-            }
+            // Anti-windup: clamp the integrative term within upper and lower limits
+            integrals[i] = std::clamp(integrals[i], lower_limit[i], upper_limit[i]);
 
-            double derivative = error - prev_errors[i];
-            output[i] = kp.current() * error + ki.current() * integrals[i] + kd.current() * derivative;
+            float derivative = error - prev_errors[i];
+            output[i] = kp[i] * error + ki[i] * integrals[i] + kd[i] * derivative;
             prev_errors[i] = error;
         }
-
-        // Commit any updated PID gains
-        kp.commit();
-        ki.commit();
-        kd.commit();
-        integral_limit.commit();
 
         return output;
     }
 
     void reset() {
-        std::fill(integrals.begin(), integrals.end(), 0.0);
-        std::fill(prev_errors.begin(), prev_errors.end(), 0.0);
+        std::fill(integrals.begin(), integrals.end(), 0.0f);
+        std::fill(prev_errors.begin(), prev_errors.end(), 0.0f);
     }
 
-    updatable<double> kp;
-    updatable<double> ki;
-    updatable<double> kd;
-    updatable<double> integral_limit; // Updatable anti-windup limit
+    std::vector<float> kp;
+    std::vector<float> ki;
+    std::vector<float> kd;
+    std::vector<float> upper_limit;
+    std::vector<float> lower_limit;
 
-    std::vector<double> integrals;
-    std::vector<double> prev_errors;
+    std::vector<float> integrals;
+    std::vector<float> prev_errors;
 };
 
 
 class LeakyIntegrator {
 public:
     // Constructor to initialize the leaky integrator with a given rho vector and limits for anti-windup
-    LeakyIntegrator(const std::vector<double>& rho, const std::vector<double>& minOutput, const std::vector<double>& maxOutput)
-        : rho(rho), output(rho.size(), 0.0), minOutput(minOutput), maxOutput(maxOutput) {
+    LeakyIntegrator()
+        : rho(0.0), lower_limit(0.0), upper_limit(0.0) {}
+
+    LeakyIntegrator(const std::vector<double>& rho, const std::vector<double>& lower_limit, const std::vector<double>& upper_limit)
+        : rho(rho), output(rho.size(), 0.0), lower_limit(lower_limit), upper_limit(upper_limit) {
         if (rho.empty()) {
             throw std::invalid_argument("Rho vector cannot be empty.");
         }
-        if (minOutput.size() != rho.size() || maxOutput.size() != rho.size()) {
-            throw std::invalid_argument("minOutput and maxOutput vectors must match rho vector size.");
+        if (lower_limit.size() != rho.size() || upper_limit.size() != rho.size()) {
+            throw std::invalid_argument("Lower and upper limit vectors must match rho vector size.");
         }
     }
 
-    // Method to process a new input vector and update the output
+    // Method to process a new input and update the output
     std::vector<double> process(const std::vector<double>& input) {
         if (input.size() != rho.size()) {
             throw std::invalid_argument("Input vector size must match rho vector size.");
         }
 
-        for (size_t i = 0; i < input.size(); ++i) {
-            if (i == 0) {
-                output[i] = input[i]; // No previous output for the first element
-            } else {
-                output[i] = rho[i] * output[i - 1] + input[i];
-            }
+        for (size_t i = 0; i < rho.size(); ++i) {
+            output[i] = rho[i] * output[i] + input[i];
             // Apply anti-windup by clamping the output within the specified limits
-            output[i] = std::clamp(output[i], minOutput[i], maxOutput[i]);
+            output[i] = std::clamp(output[i], lower_limit[i], upper_limit[i]);
         }
         return output;
     }
@@ -134,27 +119,27 @@ public:
         std::fill(output.begin(), output.end(), 0.0);
     }
 
-    // Members are now public
+    // Members are public
     std::vector<double> rho;        // 1 - time constants for the leaky integrator per dimension
     std::vector<double> output;     // Current output of the integrator per dimension
-    std::vector<double> minOutput;  // Minimum output limits for anti-windup
-    std::vector<double> maxOutput;  // Maximum output limits for anti-windup
+    std::vector<double> lower_limit;  // Lower output limits for anti-windup
+    std::vector<double> upper_limit;  // Upper output limits for anti-windup
 };
 
 
-// // gets value at indicies for a input vector (span)
-// template<typename DestType, typename T>
-// std::vector<DestType> getValuesAtIndices(std::span<T> data_span, std::span<const int> indices_span) {
-//     std::vector<DestType> values;
-//     values.reserve(indices_span.size());
+// gets value at indicies for a input vector (span)
+template<typename DestType, typename T>
+std::vector<DestType> getValuesAtIndices(std::span<T> data_span, std::span<const int> indices_span) {
+    std::vector<DestType> values;
+    values.reserve(indices_span.size());
 
-//     for (size_t index : indices_span) {
-//         assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
-//         values.push_back(static_cast<DestType>(data_span[index]));
-//     }
+    for (size_t index : indices_span) {
+        assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
+        values.push_back(static_cast<DestType>(data_span[index]));
+    }
 
-//     return values;
-// }
+    return values;
+}
 
 // Gets value at indices for an input vector
 template<typename DestType, typename T>
@@ -190,12 +175,16 @@ void getValuesAtIndices(std::vector<DestType>& values, const T & data, std::span
 // }
 // USE VECTOR INSTEAD OF SPAN
 void matrix_vector_multiply(
-    const std::vector<double>& v,         // Input vector
+    const std::vector<float>& v,         // Input vector
     const std::vector<float>& R,          // Matrix as a vector (assuming row-major order)
     std::vector<double>& result           // Output result vector
 ) {
-    std::size_t M = result.size(); // Number of rows in the matrix
+    
     std::size_t N = v.size();      // Number of columns in the matrix
+    std::size_t M = R.size() / N; // Number of rows in the matrix
+    // ^^ must use R.size to calculate M since this is updatable
+
+    // SHOULD PUT CHECKS HERE THAT N/R.size() IS INTEGER > 0 
 
     // Ensure the result vector has the correct size
     result.resize(M, 0.0);
@@ -485,16 +474,24 @@ struct RTC {
     phase_reconstuctor_struct reco;
     pupil_regions_struct regions;
     PIDController pid; // object to apply PID control to signals
+    LeakyIntegrator leakyInt; // object to apply PID control to signals
 
     // -------- SIMULATED SIGNALS (for if in simulation mode )
     simulated_signals_struct rtc_simulation_signals;
 
     // variables 
+
+    uint16_t current_frame_number; // the current frame number
+    int32_t previous_frame_number; // the previous frame number 
+    //(signed 32 int since at uint16 overflow the previous frame number needs to go to -1)
+
     std::vector<float> image_in_pupil; // image intensities filtered within active pupil  
     std::vector<float> image_setpoint; // reference image filtered within active pupil  
     std::vector<float> image_err_signal; // processed image error signal (normalized)
-
-
+    std::vector<double> dm_cmd_err; // holds the DM command offset (error) from the reference flat DM surface
+    std::vector<double> TT_cmd_err; // holds the DM Tip-Tilt command offset (error) from the reference flat DM surface
+    std::vector<double> HO_cmd_err; // holds the DM Higher Order command offset (error) from the reference flat DM surface
+    std::vector<double> mode_err; // holds mode error from matrix multiplication of I2M with processed signal 
 
     //telemetry
     size_t telemetry_cnt = 0;
@@ -752,13 +749,34 @@ struct RTC {
         return image_in_pupil;
     }
 
-    /**
-     * @brief Performs a single computation using the current RTC values.
-     * this can be used to test compute and is nanobinded to python
-     */
-    std::vector<float> single_compute()
-    {
+    std::vector<float> im2filteredref_im_test(){
+        // to test things 
+        // size of filtered signal may change while RTC is running
+        size_t signal_size = regions.pupil_pixels.current().size();
 
+        // have to define here to keep in scope of telemetry
+        static std::vector<float> image_err_signal(signal_size); // <- should this be static
+
+        // get image
+        uint16_t* raw_image = poll_last_image();
+
+        // convert to vector
+        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+
+        //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+
+        //std::vector<float> image_in_pupil;//<- init at top struct
+        //getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
+
+        //std::vector<float> image_setpoint;//<- init at top struct
+        getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+
+        return image_setpoint;
+    }
+
+
+    std::vector<float> process_im_test(){
+        // to test things 
         // size of filtered signal may change while RTC is running
         size_t signal_size = regions.pupil_pixels.current().size();
 
@@ -781,8 +799,46 @@ struct RTC {
 
         process_image( image_in_pupil, image_setpoint , image_err_signal);
 
-        return  image_err_signal;
+        return image_err_signal;
+    }
 
+    /**
+     * @brief Performs a single computation using the current RTC values.
+     * this can be used to test compute and is nanobinded to python
+     */
+
+     // Define an enum class for the choices
+
+    //int return_case=4
+    std::vector<double> single_compute(int return_case=4)
+    {
+        // This should be a default argunment 
+        //const std::string to_return="full";
+
+        // size of filtered signal may change while RTC is running
+        size_t signal_size = regions.pupil_pixels.current().size();
+
+        // have to define here to keep in scope of telemetry
+        static std::vector<float> image_err_signal(signal_size); // <- should this be static
+
+        // get image
+        uint16_t* raw_image = poll_last_image();
+
+        // convert to vector
+        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+
+        //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+
+        //std::vector<float> image_in_pupil;//<- init at top struct
+        getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
+
+        //std::vector<float> image_setpoint;//<- init at top struct
+        getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+
+        process_image( image_in_pupil, image_setpoint, image_err_signal);
+
+        //return  image_err_signal;
+        //matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
 
         //Perform element-wise addition
         // for (size_t i = 0; i < dm_size; ++i) {
@@ -791,9 +847,56 @@ struct RTC {
         //     cmd[i] = flat_dm_array[i] + delta_cmd[i]; // just roughly offset to center
         // }
 
+        
+        //int return_case=4;
+
+        /*
+        how to do this case?
+
+            -PID / leaky int has to be turned to case that we  - should check 
+
+            returns final DM command for each case. Test could be with PID, Kp =1 ,others zero 
+
+         */
+
+        switch(return_case){
+            // ones - matrix multiplication to cmd or modal space
+            case 1: //TT cmd_err
+                cout << "TT cmd_err" << endl;
+                matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err ) ;
+
+                break;
+            case 2: //HO cmd_err
+                cout << "HO cmd_err" << endl;
+                matrix_vector_multiply( image_err_signal, reco.R_HO.current(), HO_cmd_err ) ;
+
+            case 3: //mode amplitudes err:
+                cout << "mode amplitudes err" << endl;
+                matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                break;
+            case 4: //"full" DM cmd error:
+
+                matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
+                break;
+
+            // tens - apply PID controller in respective spaces 
+            case 11: 
+                cout << 2 << 'do' << endl;
+                break;
 
 
 
+            // hundres - reconstruct full DM command 
+
+
+
+                break;
+            default:
+                cout << "no to_return cases met. Returning CM @ signal" << endl;
+                matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
+                break;
+        }
+        return dm_cmd_err ;
     }
 
     /**
@@ -804,8 +907,74 @@ struct RTC {
     {
         os << "computing with " << (*this) << '\n';
 
-        // Do some computation here...
 
+        // get image
+        uint16_t* raw_image = poll_last_image();
+        // get current frame number
+        // current_frame_number = ads[0] 
+        
+        if (current_frame_number > previous_frame_number){
+            // Do some computation here...
+
+            // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
+            // so need to catch case of overflow (current=0, previous = 65535)
+            // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
+            // must match raw_image type unsigned int16.
+            // update frame number
+            if (current_frame_number == 65535){
+                previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
+            }else{
+                previous_frame_number = current_frame_number;
+            }
+            
+            // convert to vector
+            std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+
+            // size of filtered signal may change while RTC is running
+            size_t signal_size = regions.pupil_pixels.current().size();
+
+            // have to define here to keep in scope of telemetry
+            static std::vector<float> image_err_signal(signal_size); // <- should this be static
+
+            //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+
+            //std::vector<float> image_in_pupil;//<- init at top struct
+            getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
+
+            //std::vector<float> image_setpoint;//<- init at top struct
+            getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+
+            process_image( image_in_pupil, image_setpoint, image_err_signal);
+
+            /* TO DO: 
+            define TT_cmd_err, HO_cmd_err at beginning of struct
+            test addition onto flat command
+            
+            */ 
+            //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err )
+            //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), HO_cmd_err )
+
+            // PID and leaky to TT_cmd_err and HO_cmd_err (in cmd space)
+            //u_TT = pid.process(  TT_cmd_err   ) // use PID for tip/tilt
+            //u_HO = LeakyInt.process( HO_cmd_err  ) //use leaky integrator for HO 
+
+            //cmd =  flat_cmd + TT_cmd_err + HO_cmd_err
+            //Perform element-wise addition
+            // for (size_t i = 0; i < dm_size; ++i) {
+            //     //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
+
+            //     cmd[i] = flat_dm_array[i] + u_HO[i] + u_TT[i]; // just roughly offset to center
+            // }
+
+            // send DM cmd 
+
+
+            
+            
+
+
+        }
+        
         // When computation is done, check if a commit is requested.
         if (commit_asked) {
             commit();
@@ -1052,8 +1221,6 @@ struct AsyncRunner {
 
 
 
-
-
 NB_MODULE(_rtc, m) {
     using namespace nb::literals;
 
@@ -1069,13 +1236,17 @@ NB_MODULE(_rtc, m) {
 
         .def("apply_camera_settings", &RTC::apply_camera_settings)
 
+        // controllers
+        //.def("PID", &RTC.pid)
+        .def_rw("pid", &RTC::pid, "PID Controller")
+        .def_rw("LeakyInt", &RTC::leakyInt, "Leaky Integrator")
+
         // for testing individually 
         .def("im2vec_test", &RTC::im2vec_test)
         .def("im2filtered_im_test", &RTC::im2filtered_im_test)
         .def("poll_last_image", &RTC::poll_last_image)
-        
-        .def("process_image", &RTC::process_image)
-
+        .def("im2filteredref_im_test", &RTC::im2filteredref_im_test)
+        .def("process_im_test", &RTC::process_im_test)
 
 
         .def("compute", &RTC::compute)
@@ -1173,6 +1344,38 @@ NB_MODULE(_rtc, m) {
         .def_rw("pupil_pixels", &pupil_regions_struct::pupil_pixels)
         .def_rw("secondary_pixels", &pupil_regions_struct::secondary_pixels)
         .def_rw("outside_pixels", &pupil_regions_struct::outside_pixels);
+
+    
+    nb::class_<PIDController>(m, "PIDController")
+        .def(nb::init<>(), "Default constructor")
+        .def(nb::init<const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&>(),
+        "Parameterized constructor",
+             nb::arg("kp"), nb::arg("ki"), nb::arg("kd"), nb::arg("upper_limit"),nb::arg("lower_limit"))
+        // .def(nb::init<const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&>(),
+        //      "Parameterized constructor",
+        //      nb::arg("kp"), nb::arg("ki"), nb::arg("kd"), nb::arg("integral_limit"))
+        .def("process", &PIDController::process,
+             "Compute PID",
+             nb::arg("setpoint"), nb::arg("measured"))
+        .def("reset", &PIDController::reset, "Reset the controlleßßr")
+        .def_rw("kp", &PIDController::kp, "Proportional gain")
+        .def_rw("ki", &PIDController::ki, "Integral gain")
+        .def_rw("kd", &PIDController::kd, "Derivative gain")
+        .def_rw("upper_limit", &PIDController::upper_limit, "upper_limit")
+        .def_rw("lower_limit", &PIDController::upper_limit, "lower_limit")
+        .def_rw("integrals", &PIDController::integrals, "Integral terms")
+        .def_rw("prev_errors", &PIDController::prev_errors, "Previous errors");
+
+
+    nb::class_<LeakyIntegrator>(m, "LeakyIntegrator")
+        .def(nb::init<const std::vector<double>&, const std::vector<double>&, const std::vector<double>&>())
+        .def("process", &LeakyIntegrator::process)
+        .def("reset", &LeakyIntegrator::reset)
+        .def_rw("rho", &LeakyIntegrator::rho)
+        .def_rw("output", &LeakyIntegrator::output)
+        .def_rw("lower_limit", &LeakyIntegrator::lower_limit)
+        .def_rw("upper_limit", &LeakyIntegrator::upper_limit);
+
 
     nb::class_<AsyncRunner>(m, "AsyncRunner")
         .def(nb::init<RTC&, std::chrono::microseconds>(), nb::arg("rtc"), nb::arg("period") = std::chrono::microseconds(1000), "Constructs an AsyncRunner object.")
