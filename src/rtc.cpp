@@ -534,7 +534,8 @@ struct RTC {
         // note: I tried using fakecamera from
         // /opt/FirstLightImaging/FliSdk/Examples/API_C++/FliFakeCamera
         // but failed to get this to run properly
-        FliSdk* fli = new FliSdk();
+        this->fli = new FliSdk(); //FliSdk* fli = new FliSdk(); // this->fli = new FliSdk();
+        
         std::cout << "Detection of grabbers..." << std::endl;
         vector<string> listOfGrabbers = fli->detectGrabbers();
         std::cout << "Detection of cameras..." << std::endl;
