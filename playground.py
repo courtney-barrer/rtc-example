@@ -161,8 +161,8 @@ ki = np.zeros(Nmodes)
 kd = np.zeros(Nmodes)
 lower_limit = -100 * np.ones(Nmodes)
 upper_limit = 100 * np.ones(Nmodes)
-
-pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit )
+pid_setpoint = np.zeros(Nmodes)
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit , pid_setpoint)
 leaky_tmp = rtc.LeakyIntegrator( ki, lower_limit, upper_limit ) 
 
 # set them up with our RTC object 
@@ -218,25 +218,6 @@ else:
     print( ' FAILED --- test4 .process_im_test()')
 
 
-# matrix multiplication test with all our phase reconstructors
-for i, (lens, lab) in enumerate(zip([R_TT.shape[0],R_HO.shape[0],I2M.shape[0],CM.shape[0]],['TT','HO','I2M','CM'])):
-    test5 = r.single_compute(i+1)
-    print(len(test5 ))
-    if(len(test5 ) == lens):
-        print( f' passed test5 .single_compute({i}) ({lab} reconstructor multiplication)')
-    else:
-        print( f' FAILED --- test5 .single_compute({i}) ({lab} reconstructor multiplication)')
-"""
-Wierd bug with r.reco.R_HO 
-
-R_TT and R_HO seem the same in the nanobinded versions :
-np.all(np.array(r.reco.R_HO.current).reshape(-1) == R_HO.reshape(-1) )
-np.all(np.array(r.reco.R_HO.current).reshape(-1) == R_TT.reshape(-1) )
-
-however the matrix multiplication give completely differently shaped arrays when done in Cpp?
-"""
-
-
 
 # test 6 - controllers 
 # we could use for example PID for tip/tilt reconstructor and leaky integrator for HO 
@@ -246,17 +227,26 @@ ki = np.zeros(Nmodes)
 kd = np.zeros(Nmodes)
 lower_limit = -100 * np.ones(Nmodes)
 upper_limit = 100 * np.ones(Nmodes)
+pid_setpoint =  np.zeros(Nmodes)
 
-pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit )
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit , pid_setpoint)
 leaky_tmp = rtc.LeakyIntegrator( ki, lower_limit, upper_limit ) 
 
 # set them up with our RTC object 
 r.pid = pid_tmp
 r.LeakyInt = leaky_tmp
 
+
 # example of getting controller output (note pid first arg is input, second is setpoint)
-out_pid = r.pid.process( np.ones(Nmodes), np.zeros(Nmodes) ) # 
-out_leaky = r.LeakyInt.process( np.ones(Nmodes) )
+out_pid = r.pid.process( np.ones(Nmodes) ) # 
+out_leaky = r.LeakyInt.process( np.ones(Nmodes) ) #
+print('passed test5.1.1 output memeber matches actual output for LeakyInt', out_leaky == r.LeakyInt.output)
+
+# check output memeber matches actual output 
+r.pid.kp = np.ones( Nmodes )
+out_pid2 = r.pid.process( np.ones(Nmodes) ) # 
+print('passed test5.1.2 output memeber matches actual output for PID', out_pid2 == r.pid.output)
+
 
 if(len( out_pid ) == Nmodes):
     print( f' passed test6 r.pid.process( np.ones(Nmodes), np.zeros(Nmodes) )')
@@ -267,6 +257,170 @@ if(len( out_leaky ) == Nmodes):
     print( f' passed test6 r.LeakyInt.process( np.ones(Nmodes) )')
 else:
     print( f' FAILED --- test6 r.LeakyInt.process( np.ones(Nmodes) )')
+
+
+
+# Now test cases in single compute - we have have int return_case variables which is used in switch statement 
+# to test different things. Generally we follow that if return_case is in the:
+# - ones - matrix multiplication to cmd or modal space
+# - hundreds - apply PID controller in respective spaces after matrix multiplcation 
+# - thousands - reconstruct final DM command
+
+
+# ONES: matrix multiplication test with all our phase reconstructors
+for i, (lens, lab) in enumerate(zip([R_TT.shape[0],R_HO.shape[0],I2M.shape[0],CM.shape[0]],['TT','HO','I2M','CM'])):
+    test5 = r.single_compute(i+1)
+    print(len(test5 ))
+    if(len(test5 ) == lens):
+        print( f' passed test5 .single_compute({i}) ({lab} reconstructor multiplication)')
+    else:
+        print( f' FAILED --- test5 .single_compute({i}) ({lab} reconstructor multiplication)')
+
+
+# Test if we input directly a signal from the interaction matrix that we reconstruct that mode perfectly 
+
+
+r.rtc_state.camera_simulation_mode = True 
+r.rtc_state.dm_simulation_mode = True
+r.rtc_state.signal_simulation_mode = True 
+
+mode_num = 5
+r.rtc_simulation_signals.simulated_image = I0.reshape(-1) # simulated image
+r.rtc_simulation_signals.simulated_signal = IM[mode_num] # simulated signal (processed image) - 
+r.rtc_simulation_signals.simulated_dm_cmd = M2C.T[0] # simulated DM command 
+
+mode_reco_test = np.array( r.single_compute(3) ) 
+signal_on_mode = abs( mode_reco_test[5] - 1) < 0.1
+nosignal_outside_mode = np.all( abs( mode_reco_test[np.arange(len(mode_reco_test))!=5]) < 0.01 )
+if signal_on_mode & nosignal_outside_mode :
+    print( f'--\npassed mode reconstruction test of interaction matrix signal injection for mode {mode_num}' )
+elif not signal_on_mode :
+    print( f'--\nfailed mode reconstruction test : signal on mode {mode_num} injection not close to 1' )
+elif not nosignal_outside_mode:
+    print( f'--\nfailed mode reconstruction test : signal on mode other modes !={mode_num} (mode injected) not close to 0' )
+"""plt.plot( mode_reco_test )
+plt.axvline( mode_num ); plt.show()"""
+
+# TENS: testing PID controller
+
+# always have to set up PID so things have right length 
+def init_pid_to_right_size_given_casenumber( base_case_number ):
+    """
+    see rtc.cpp RTC.single_compute switch cases.
+    casenumber here should be in the ones (i.e. 0< case_number < 10)
+    """
+    # tip/tilt 
+    tmp_cmd_err = r.single_compute(base_case_number)
+    # init PID correctly 
+    r.pid.kp = 1 * np.ones(len(tmp_cmd_err))
+    r.pid.ki = 0 * np.ones(len(tmp_cmd_err))
+    r.pid.kd = 0 * np.ones(len(tmp_cmd_err))
+    r.pid.lower_limit = -100 * np.ones(len(tmp_cmd_err))
+    r.pid.upper_limit = 100 * np.ones(len(tmp_cmd_err))
+    r.pid.setpoint = 0 * np.ones(len(tmp_cmd_err))
+
+def init_leakyInt_to_right_size_given_casenumber( base_case_number ):
+    """
+    see rtc.cpp RTC.single_compute switch cases.
+    casenumber here should be in the ones (i.e. 0< case_number < 10)
+    """
+    # tip/tilt 
+    tmp_cmd_err = r.single_compute(base_case_number)
+    # init PID correctly 
+    r.LeakyInt.rho = 1 * np.ones(len(tmp_cmd_err))
+    r.LeakyInt.lower_limit = -100 * np.ones(len(tmp_cmd_err))
+    r.LeakyInt.upper_limit = 100 * np.ones(len(tmp_cmd_err))
+
+
+
+
+# TESTING THE 10s (PID output lengths)
+for i, (lens, lab) in enumerate(zip([R_TT.shape[0],R_HO.shape[0],I2M.shape[0],CM.shape[0]],['TT','HO','I2M','CM'])):
+    init_pid_to_right_size_given_casenumber( base_case_number = i+1 )
+    test5 = r.single_compute((i+1)+10)
+    print(len(test5 ))
+    if(len(test5 ) == lens):
+        print( f' passed test5 .single_compute({i+1+10}) ({lab} reconstructor multiplication+PID output)')
+    else:
+        print( f' FAILED --- test5 .single_compute({i+1+10}) ({lab} reconstructor multiplication+PID output)')
+
+
+r.rtc_state.camera_simulation_mode = True 
+r.rtc_state.dm_simulation_mode = True
+r.rtc_state.signal_simulation_mode = True 
+
+mode_num = 5
+r.rtc_simulation_signals.simulated_image = I0.reshape(-1) # simulated image
+r.rtc_simulation_signals.simulated_signal = IM[mode_num] # simulated signal (processed image) - 
+r.rtc_simulation_signals.simulated_dm_cmd = M2C.T[0] # simulated DM command 
+
+init_pid_to_right_size_given_casenumber( base_case_number = 3 )
+r.pid.kp = np.ones( len( r.pid.ki ))
+r.pid.ki = np.zeros( len( r.pid.kp ))
+r.pid.kd = np.zeros( len( r.pid.kp ))
+mode_reco_test_pid_1 = np.array( r.single_compute(13) )
+# now double  kp and ensure output doubles 
+r.pid.kp = 2* np.ones( len( r.pid.ki ))
+mode_reco_test_pid_2 = np.array( r.single_compute(13) )
+
+double_pid_test = abs(mode_reco_test_pid_2[mode_num] / mode_reco_test_pid_1[mode_num] - 2) < 0.01 
+"""
+plt.figure()
+plt.plot( mode_reco_test_pid_1 ,'o')
+plt.plot( mode_reco_test_pid_2 , 'o')
+plt.axvline( mode_num ); plt.show()
+"""
+# Check errs integrate properly (ki=1, no change in measurement so model errs should grow with integral term)
+r.pid.reset()
+r.pid.kp = np.zeros( len( r.pid.kp ))
+r.pid.ki = np.ones( len( r.pid.ki ))
+r.pid.kd = np.zeros( len( r.pid.kp ))
+mode_err_test_list = []
+for _ in range(10):
+    mode_err_test_list.append( r.single_compute(13) )
+
+pid_ki_test = np.array([m[mode_num] for m in mode_err_test_list])
+
+if np.mean( np.diff(pid_ki_test)) > 0.5:
+    print( 'pass pid_ki_test. Check errs integrate properly (ki=1, no change in measurement so model errs should grow with integral term)')
+
+
+
+
+
+
+#signal_on_mode_pid = abs( mode_reco_test[5] - 1) < 0.1
+#nosignal_outside_mode_pid = np.all( abs( mode_reco_test[np.arange(len(mode_reco_test))!=5]) < 0.01 )
+
+
+"""if signal_on_mode & nosignal_outside_mode :
+    print( f'--\npassed mode reconstruction test of interaction matrix signal injection for mode {mode_num}' )
+elif not signal_on_mode :
+    print( f'--\nfailed mode reconstruction test : signal on mode {mode_num} injection not close to 1' )
+elif not nosignal_outside_mode:
+    print( f'--\nfailed mode reconstruction test : signal on mode other modes !={mode_num} (mode injected) not close to 0' )
+"""
+
+"""plt.plot( mode_reco_test )
+plt.axvline( mode_num ); plt.show()"""
+
+
+
+# TESTING THE 20s (Leaky integrator output lengths)
+for i, (lens, lab) in enumerate(zip([R_TT.shape[0],R_HO.shape[0],I2M.shape[0],CM.shape[0]],['TT','HO','I2M','CM'])):
+    init_leakyInt_to_right_size_given_casenumber( base_case_number = i+1 )
+    test5 = r.single_compute((i+1)+20)
+    print(len(test5 ))
+    if(len(test5 ) == lens):
+        print( f' passed test5 .single_compute({i+1+20}) ({lab} reconstructor multiplication+leaky integrator output)')
+    else:
+        print( f' FAILED --- test5 .single_compute({i+1+20}) ({lab} reconstructor multiplication+leaky integrator output)')
+
+
+
+
+
+
 
 
 

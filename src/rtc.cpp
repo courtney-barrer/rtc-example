@@ -33,34 +33,73 @@ put PID and leaky integrator in reco struct.?
 include method - modal, zonal etc
 */
 
-/// @brief A PID controller with Anti-windup
+
+
 class PIDController {
 public:
     PIDController()
-        : kp(0.0), ki(0.0), kd(0.0), lower_limit(0), upper_limit(1.0)  {}
+    //: kp(0.0), ki(0.0), kd(0.0), lower_limit(0.0), upper_limit(1.0), setpoint(0.0) {}
+    : kp(1, 0.0), ki(1, 0.0), kd(1, 0.0), lower_limit(1, 0.0), upper_limit(1, 1.0), setpoint(1, 0.0),
+      integrals(1, 0.0), prev_errors(1, 0.0) {}
 
-    PIDController(const std::vector<float>& kp, const std::vector<float>& ki, const std::vector<float>& kd, const std::vector<float>& upper_limit, const std::vector<float>& lower_limit)
-        : kp(kp), ki(ki), kd(kd), lower_limit(lower_limit), upper_limit(upper_limit) {}
+    PIDController(const std::vector<double>& kp, const std::vector<double>& ki, const std::vector<double>& kd, const std::vector<double>& upper_limit, const std::vector<double>& lower_limit,const std::vector<double>& setpoint)
+    : kp(kp), ki(ki), kd(kd), output(kp.size(), 0.0), lower_limit(lower_limit), upper_limit(upper_limit), setpoint(setpoint) {}
 
-    std::vector<float> process(const std::vector<float>& setpoint, const std::vector<float>& measured) {
-        if (setpoint.size() != measured.size()) {
-            throw std::invalid_argument("Input vectors must be of the same size.");
+    std::vector<double> process( const std::vector<double>& measured) {
+        // Ensure all vectors have the same size - this could lead to unpredictable behaviour!
+        // especially if in nanobinded python someone changes something! 
+        size_t size = setpoint.size();
+        std::string error_message;
+
+        // faster way. less verbose
+        // if (kp.size() != size || ki.size() != size || kd.size() != size ||
+        //     lower_limit.size() != size || upper_limit.size() != size || measured.size() != size) {
+        //     throw std::invalid_argument("All input vectors must be of the same size.");
+        //     }
+        // slower - more verbose
+
+        if (measured.size() != size) {
+            throw std::invalid_argument("Input vector size must match setpoint.size()");
+        }
+        if (kp.size() != size) {
+            error_message += "kp ";
+        }
+        if (ki.size() != size) {
+            error_message += "ki ";
+        }
+        if (kd.size() != size) {
+            error_message += "kd ";
+        }
+        if (lower_limit.size() != size) {
+            error_message += "lower_limit ";
+        }
+        if (upper_limit.size() != size) {
+            error_message += "upper_limit ";
+        }
+        if (measured.size() != size) {
+            error_message += "measured ";
         }
 
-        if (integrals.size() != setpoint.size()) {
-            integrals.resize(setpoint.size(), 0.0f);
-            prev_errors.resize(setpoint.size(), 0.0f);
+        if (!error_message.empty()) {
+            throw std::invalid_argument("Input vectors of incorrect size: " + error_message);
         }
 
-        std::vector<float> output(setpoint.size());
+        if (integrals.size() != size) {
+            cout << "integrals.size() != size.. reinitializing integrals, prev_errors and output to zero with correct size" << endl; 
+            integrals.resize(size, 0.0);
+            prev_errors.resize(size, 0.0);
+            output.resize(size, 0.0);
+        }
+
+        //std::vector<double> output(setpoint.size());
         for (size_t i = 0; i < setpoint.size(); ++i) {
-            float error = setpoint[i] - measured[i];
+            double error = measured[i] - setpoint[i]; // should this be other way round? Needs to be consistent with leaky integrator!
             integrals[i] += error;
 
             // Anti-windup: clamp the integrative term within upper and lower limits
             integrals[i] = std::clamp(integrals[i], lower_limit[i], upper_limit[i]);
 
-            float derivative = error - prev_errors[i];
+            double derivative = error - prev_errors[i];
             output[i] = kp[i] * error + ki[i] * integrals[i] + kd[i] * derivative;
             prev_errors[i] = error;
         }
@@ -68,19 +107,21 @@ public:
         return output;
     }
 
+
     void reset() {
         std::fill(integrals.begin(), integrals.end(), 0.0f);
         std::fill(prev_errors.begin(), prev_errors.end(), 0.0f);
     }
 
-    std::vector<float> kp;
-    std::vector<float> ki;
-    std::vector<float> kd;
-    std::vector<float> upper_limit;
-    std::vector<float> lower_limit;
-
-    std::vector<float> integrals;
-    std::vector<float> prev_errors;
+    std::vector<double> kp;
+    std::vector<double> ki;
+    std::vector<double> kd;
+    std::vector<double> upper_limit;
+    std::vector<double> lower_limit;
+    std::vector<double> setpoint;
+    std::vector<double> output;
+    std::vector<double> integrals;
+    std::vector<double> prev_errors;
 };
 
 
@@ -102,10 +143,38 @@ public:
 
     // Method to process a new input and update the output
     std::vector<double> process(const std::vector<double>& input) {
+
+        //error checks 
         if (input.size() != rho.size()) {
             throw std::invalid_argument("Input vector size must match rho vector size.");
         }
 
+        size_t size = rho.size();
+        std::string error_message;
+
+        cout << "size" << size << endl; 
+        
+        if (rho.size() != size) {
+            error_message += "rho ";
+        }
+        if (lower_limit.size() != size) {
+            error_message += "lower_limit ";
+        }
+        if (upper_limit.size() != size) {
+            error_message += "upper_limit ";
+        }
+
+        if (!error_message.empty()) {
+            throw std::invalid_argument("Input vectors of incorrect size: " + error_message);
+        }
+
+        if (output.size() != size) {
+            cout << "size" << size  << " outputsize" << output.size() << endl; 
+            cout << "output.size() != size.. reinitializing output to zero with correct size" << endl; 
+            output.resize(size, 0.0);
+        }
+
+        // process 
         for (size_t i = 0; i < rho.size(); ++i) {
             output[i] = rho[i] * output[i] + input[i];
             // Apply anti-windup by clamping the output within the specified limits
@@ -485,13 +554,20 @@ struct RTC {
     int32_t previous_frame_number; // the previous frame number 
     //(signed 32 int since at uint16 overflow the previous frame number needs to go to -1)
 
+    // main variables in image->dm command pipeline (all things that would be good in telemetry)
     std::vector<float> image_in_pupil; // image intensities filtered within active pupil  
     std::vector<float> image_setpoint; // reference image filtered within active pupil  
     std::vector<float> image_err_signal; // processed image error signal (normalized)
+
+    // matrix_vector_multiplication returns double.. so all these should be doubles and PID should accept
+    // doubles as input.
     std::vector<double> dm_cmd_err; // holds the DM command offset (error) from the reference flat DM surface
     std::vector<double> TT_cmd_err; // holds the DM Tip-Tilt command offset (error) from the reference flat DM surface
     std::vector<double> HO_cmd_err; // holds the DM Higher Order command offset (error) from the reference flat DM surface
     std::vector<double> mode_err; // holds mode error from matrix multiplication of I2M with processed signal 
+
+    //std::vector<double> pid_setpoint // set-point of PID controller
+
 
     //telemetry
     size_t telemetry_cnt = 0;
@@ -804,13 +880,9 @@ struct RTC {
     }
 
     /**
-     * @brief Performs a single computation using the current RTC values.
-     * this can be used to test compute and is nanobinded to python
-     */
-
-     // Define an enum class for the choices
-
-    //int return_case=4
+    * @brief Performs a single computation using the current RTC values.
+    * this can be used to test compute and is nanobinded to python (unlike compute) 
+    * */
     std::vector<double> single_compute(int return_case=4)
     {
         // This should be a default argunment 
@@ -865,39 +937,95 @@ struct RTC {
             case 1: //TT cmd_err
                 cout << "TT cmd_err" << endl;
                 matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err ) ;
-
+                return TT_cmd_err ;
                 break;
             case 2: //HO cmd_err
                 cout << "HO cmd_err" << endl;
                 matrix_vector_multiply( image_err_signal, reco.R_HO.current(), HO_cmd_err ) ;
+                return HO_cmd_err ;
+                break;
 
             case 3: //mode amplitudes err:
                 cout << "mode amplitudes err" << endl;
+                // this provides wrong
+                cout <<  "sizeof(reco.I2M.current())" << sizeof(reco.I2M.current()) << endl;
                 matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                return mode_err ;
                 break;
+
             case 4: //"full" DM cmd error:
-
+                cout << "full DM cmd error:" << endl;
                 matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
+                return dm_cmd_err ;
                 break;
 
-            // tens - apply PID controller in respective spaces 
+            // teens - apply PID controller in respective spaces 
             case 11: 
-                cout << 2 << 'do' << endl;
+                cout << "TT PID output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err ) ;
+                pid.process( TT_cmd_err ) ;
+                return pid.output ;
+                break;
+
+            case 12: //HO cmd_err
+                cout << "HO PID output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.R_HO.current(), HO_cmd_err ) ;
+                pid.process( HO_cmd_err ) ;
+                return pid.output ;
+                break;
+
+            case 13: //mode amplitudes err:
+                cout << "mode amplitudes PID output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                pid.process( mode_err ) ;
+                return pid.output ;
+                break;
+
+            case 14: //"full" DM cmd error:
+                cout << "full DM cmd PID output:" << endl;
+                matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
+                pid.process( dm_cmd_err ) ;
+                return pid.output ;
+                break;
+
+            // twenties - apply Leaky controller in respective spaces  
+            case 21: 
+                cout << "TT leaky integrator output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err ) ;
+                leakyInt.process( TT_cmd_err ) ;
+                return leakyInt.output ;
+                break;
+
+            case 22: //HO cmd_err
+                cout << "HO leaky integrator output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.R_HO.current(), HO_cmd_err ) ;
+                leakyInt.process( HO_cmd_err ) ;
+                return leakyInt.output ;
+                break;
+
+            case 23: //mode amplitudes err:
+                cout << "mode amplitudes leaky integrator output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                leakyInt.process( mode_err ) ;
+                return leakyInt.output ;
+                break;
+
+            case 24: //"full" DM cmd error:
+                cout << "full DM cmd leaky integrator output:" << endl;
+                matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
+                leakyInt.process( dm_cmd_err ) ;
+                return leakyInt.output ;
                 break;
 
 
 
-            // hundres - reconstruct full DM command 
-
-
-
-                break;
             default:
                 cout << "no to_return cases met. Returning CM @ signal" << endl;
                 matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
+                return dm_cmd_err;
                 break;
         }
-        return dm_cmd_err ;
+        //return dm_cmd_err ; <<- return in switch cases uniquely
     }
 
     /**
@@ -1237,6 +1365,16 @@ NB_MODULE(_rtc, m) {
 
         .def("apply_camera_settings", &RTC::apply_camera_settings)
 
+        // main variables in image->dm command pipeline (all things that would be good in telemetry)
+        .def_rw("image_in_pupil" ,    &RTC::image_in_pupil)
+        .def_rw("image_setpoint"  ,    &RTC::image_setpoint)
+        .def_rw("image_err_signal",  &RTC::image_err_signal)
+        .def_rw("dm_cmd_err" , &RTC::dm_cmd_err)
+        .def_rw("TT_cmd_err",  &RTC::TT_cmd_err)
+        .def_rw("HO_cmd_err" , &RTC::HO_cmd_err)
+        .def_rw("mode_err" , &RTC::mode_err)
+
+
         // controllers
         //.def("PID", &RTC.pid)
         .def_rw("pid", &RTC::pid, "PID Controller")
@@ -1349,23 +1487,31 @@ NB_MODULE(_rtc, m) {
     
     nb::class_<PIDController>(m, "PIDController")
         .def(nb::init<>(), "Default constructor")
-        .def(nb::init<const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&>(),
+        //.def(nb::init<const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&>(), // recentchange
+        .def(nb::init<const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&>(),
         "Parameterized constructor",
-             nb::arg("kp"), nb::arg("ki"), nb::arg("kd"), nb::arg("upper_limit"),nb::arg("lower_limit"))
+             nb::arg("kp"), nb::arg("ki"), nb::arg("kd"), nb::arg("lower_limit"), nb::arg("upper_limit"),nb::arg("setpoint"))
         // .def(nb::init<const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&>(),
         //      "Parameterized constructor",
         //      nb::arg("kp"), nb::arg("ki"), nb::arg("kd"), nb::arg("integral_limit"))
+
+        // .def("process", &PIDController::process,
+        //      "Compute PID",
+        //      nb::arg("setpoint"), nb::arg("measured"))
+
         .def("process", &PIDController::process,
              "Compute PID",
-             nb::arg("setpoint"), nb::arg("measured"))
+             nb::arg("measured"))// recentchange
         .def("reset", &PIDController::reset, "Reset the controlleßßr")
         .def_rw("kp", &PIDController::kp, "Proportional gain")
         .def_rw("ki", &PIDController::ki, "Integral gain")
         .def_rw("kd", &PIDController::kd, "Derivative gain")
         .def_rw("upper_limit", &PIDController::upper_limit, "upper_limit")
-        .def_rw("lower_limit", &PIDController::upper_limit, "lower_limit")
+        .def_rw("lower_limit", &PIDController::lower_limit, "lower_limit")
+        .def_rw("setpoint", &PIDController::setpoint, "setpoint") // recentchange
         .def_rw("integrals", &PIDController::integrals, "Integral terms")
-        .def_rw("prev_errors", &PIDController::prev_errors, "Previous errors");
+        .def_rw("prev_errors", &PIDController::prev_errors, "Previous errors")
+        .def_rw("output", &PIDController::output);
 
 
     nb::class_<LeakyIntegrator>(m, "LeakyIntegrator")
