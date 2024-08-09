@@ -20,6 +20,7 @@ configuration files are dictionaries that are typically saved as JSON files. The
 
 import numpy as np
 
+
 def init_telescope_config_dict(use_default_values = True) : 
     tel_config_dict = {}
     tel_config_dict['type'] = 'telescope'
@@ -54,7 +55,7 @@ def init_phasemask_config_dict(use_default_values = True) :
         phasemask_config_dict['on-axis_glass'] = 'sio2' #material type (e.g. 'sio2', 'su8')
         phasemask_config_dict['off-axis_glass'] = 'sio2' #material type
         phasemask_config_dict['on-axis phasemask depth'] = 1e-6 * 21 # m 
-        phasemask_config_dict['off-axis phasemask depth'] = 1e-6 * (21-1.6/4) # m  (default causes 90 deg phase shift at 1.6um)
+        phasemask_config_dict['off-axis phasemask depth'] = 1e-6 * (21-1.6/4) # m  (default causes roughly 1/4 waveshift in air at 1.6um)
         phasemask_config_dict['fratio'] = 21 # unitless
         phasemask_config_dict['phasemask_diameter'] = 1.06 * phasemask_config_dict['fratio'] * 1.6e-6 # meters , defults to 1.06resolution elements at 1.6um (remember diameter = number_of_resolution_elements * f_ratio * lambda )...diffraction limit microscope (m) d = lambda/(2*NA) = lambda * F where F=focal length/D 
         phasemask_config_dict['N_samples_across_phase_shift_region'] = 10 # number of pixels across phase shift region in focal plane
@@ -81,15 +82,18 @@ def init_DM_config_dict(use_default_values = True) :
     DM_config_dict['type'] = 'DM'
     
     if use_default_values:
-        DM_config_dict['N_act'] = 12 # number of actuators across DM diameter (default is DM is square)
-        DM_config_dict['m/V'] = 1 # meters of displacement per volt applied to DM (commands sent in DM update shape are in volts)
-        DM_config_dict['angle'] = 0 # angle between DM surface normal and input beam (rad)
-        DM_config_dict['surface_type'] = 'continuous' # options are 'continuous','segmented'
+        DM_config_dict['DM_model'] = 'square_12' # 'square_12' or 'BMC-multi3.5'
+        #DM_config_dict['Nx_act'] = 12 # number of actuators across DM diameter (default is DM is square)
+        #DM_config_dict['N_act'] = 12*12 # total number of actuators across 
+        #DM_config_dict['m/V'] = 1 # meters of displacement per volt applied to DM (commands sent in DM update shape are in volts)
+        #DM_config_dict['angle'] = 0 # angle between DM surface normal and input beam (rad)
+        #DM_config_dict['surface_type'] = 'continuous' # options are 'continuous','segmented'
     else:
-        DM_config_dict['N_act'] = np.nan # number of actuators across DM diameter (default is DM is square)
-        DM_config_dict['m/V'] = np.nan # meters of displacement per volt applied to DM (commands sent in DM update shape are in volts)
-        DM_config_dict['angle'] = np.nan # angle between DM surface normal and input beam (rad)
-        DM_config_dict['surface_type'] = np.nan # options are  'continuous','segmented'
+        DM_config_dict['DM_model'] = np.nan # 'square_12' or 'BMC-multi3.5'
+        #DM_config_dict['N_act'] = np.nan # number of actuators across DM diameter (default is DM is square)
+        #DM_config_dict['m/V'] = np.nan # meters of displacement per volt applied to DM (commands sent in DM update shape are in volts)
+        #DM_config_dict['angle'] = np.nan # angle between DM surface normal and input beam (rad)
+        #DM_config_dict['surface_type'] = np.nan # options are  'continuous','segmented'
         
     return( DM_config_dict )
 

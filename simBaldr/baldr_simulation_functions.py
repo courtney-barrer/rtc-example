@@ -5,43 +5,13 @@ Created on Thu Mar  2 15:44:21 2023
 
 @author: bcourtne
 
-baldr functions 2.0
 updates
 ======
-added initialization of phasemask in focal plane when creating ZWFS object 
-self.FPM.sample_phase_shift_region( nx_pix=self.mode['phasemask']['nx_size_focal_plane'], dx=self.mode['phasemask']['phasemask_diameter']/self.mode['phasemask']['N_samples_across_phase_shift_region'], wvl_2_count_res_elements = np.mean(self.wvls), verbose=True)
-
-
-added replace_nan_with in FPM.get_output_field() method. Default set to None which means non nan replacement takes place, if set to other value nan's are replaced with this '
-
-removed nx_size_focal_plane and dx_focal_plane as input to FPM.get_output_field() & get_b() method. 
-It now uses self.nx_size_focal_plane & self.dx_focal_plane internally. This means focal plane coordinates must be initialized first using FPM.sample_phaseshift_region() before using FPM.get_output_field() 
 
 
 To Do
 ======
-- re-test baldr closed loop with cold stop and pupil offsets
 
-
-Completed
-======
-- make apply DM enable offsets between field and DM, also detector have offset from fiel. Deal with nan values, especially with FPM.get_output_field() after field.applyDM() when there are offsets with DM 
-- use field.define_pupil_grid(self, dx, D_pix=None, center=(0,0)) to control offsets between output field of FPM and detector
-
-- include replace_nan_with in detection_chain and sub functions!!!
--make cold stop radius part of default initiation of init_phasemask_config_dict. 
--Luego initialisation of FPM object creates cold stop array (like mask aarray )
--FPM method get output field then uses self (either None or the object toinclude it)..
--delete cold_stop variables from all later functions (e.g. detection chain etc) 
-
-- Need to clean up using ZWFS.mode_dict and use self in functions since we could find descrepencies between setting an attribute that is not updated in mode dict.
-
-
-
-- tip/tilt vis 
-for i in np.linspace(0,2*np.pi,10):
-    plt.figure()
-    aaa= basis[1] * 2e2*np.sin(i) ;aaa[np.isnan(aaa)]=0;plt.imshow(np.abs(np.fft.fftshift( np.fft.fft2( np.exp(1j*aaa) ) ) )[len(aaa)//2-10:len(aaa)//2+10,len(aaa)//2-200:len(aaa)//2+200])
 """
 import numpy as np
 import pandas as pd
@@ -85,8 +55,11 @@ vega_zero_points = pd.DataFrame({'lambda_eff':[0.36,0.438,0.545,0.641,0.798, 1.2
                       'ph_lambda':[756.1, 1392.6, 995.5, 702.0, 452.0, 193.1, 93.3, 43.6]},\
                             index = ['U','B','V','R','I','J','H','K'] )
     
+# lookup table for number of actuators per model
+# actual geometry is handled in create_control_basis function and applyDM function when defining DM coordinates
+DM_model_dict = {'square_12':{'Nx_act':12,'N_act':144} ,\
+                 'BMC-multi3.5':{'Nx_act':12,'N_act':140}} 
 
-    
     
 class field:
   def __init__(self,fluxes, phases, wvls):
@@ -159,8 +132,8 @@ class field:
   def applyDM(self, DM):
       
       if (not hasattr(DM, 'x') ) or (not hasattr(DM, 'y') ): # add coordinate system
-          DM.x = np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.N_act[0])
-          DM.y =  np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.N_act[1])
+          DM.x = np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.Nx_act)
+          DM.y =  np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.Nx_act)
           DM.X, DM.Y = np.meshgrid(DM.x,DM.y)  
           DM.coordinates = np.vstack([DM.X.ravel(), DM.Y.ravel()]).T
 
@@ -170,7 +143,7 @@ class field:
           DM.nearest_interp_fn = scipy.interpolate.NearestNDInterpolator( DM.coordinates, DM.surface.reshape(1,-1)[0] , fill_value = np.nan )
       else:
           raise TypeError('\nDM object does not have valid surface_type\nmake sure DM.surface_type = "continuous" or "segmented" ')
-          
+                
       dm_at_field_pt = DM.nearest_interp_fn( self.coordinates ) # these x, y, points may need to be meshed...and flattened
 
       dm_at_field_pt = dm_at_field_pt.reshape( self.nx_size, self.nx_size )
@@ -231,21 +204,32 @@ class field:
 
 
 class DM:
-  def __init__(self, surface, gain=1, angle=0, surface_type='continuous' ):
+    def __init__(self, DM_model, surface_type='continuous' ):
+      self.DM_model = DM_model
+      self.N_act = DM_model_dict[DM_model]['N_act'] # total number of actuators 
+      self.Nx_act = DM_model_dict[DM_model]['Nx_act'] # number of actuators across diameter
+      self.surface = np.zeros( self.N_act ) # init surface to zero
+      self.gain = 1 #um/V 
+      self.angle = 0 # angle between DM surface normal & input beam (rad)
+      self.surface_type = surface_type # 'continuous' or 'segmented' (continuous uses linear interperlation when applying correction to a field, segmented uses nearest neighbour interpolation)
+      #self.pitch = pitch # seperation between actuators 
+      #self.coords = coords #meshgrid of x,y,z coordinates 
+      """  def __init__(self, surface, gain=1, angle=0, surface_type='continuous' ):
       self.surface = surface
-      self.N_act = self.surface.shape
+      self.N_act = [12,12] #self.surface.shape in ZWFS changed initialization of DM class so surface is 1D 
       self.gain = gain #um/V
       self.angle = angle # angle between DM surface normal & input beam (rad)
       self.surface_type = surface_type # 'continuous' or 'segmented' (continuous uses linear interperlation when applying correction to a field, segmented uses nearest neighbour interpolation)
       #self.pitch = pitch # seperation between actuators 
       #self.coords = coords #meshgrid of x,y,z coordinates 
-     
+      """
       
-  def update_shape(self, cmd):
-      self.surface = (self.gain  * cmd).reshape(self.N_act)
-
-      
-  def define_coordinates(self,x,y):
+    def update_shape(self, cmd):
+      #self.surface = (self.gain  * cmd).reshape(self.N_act)
+      #test 1 . make sure surface is always 1D array. Test with 144 actuators. Then update N_act in mode dict and build bases correctly
+      self.surface = (self.gain  * cmd).reshape(-1) 
+        
+    def define_coordinates(self,x,y):
       self.x = x
       self.y = y
       self.X, self.Y = np.meshgrid(self.x, self.y ) 
@@ -944,8 +928,9 @@ class ZWFS():
        	
         self.pup = pick_pupil(pupil_geometry=mode_dict['telescope']['pup_geometry'] , dim=mode_dict['telescope']['pupil_nx_pixels'], diameter = mode_dict['telescope']['telescope_diameter_pixels'])
        	
-       	self.dm = DM(surface=np.zeros([mode_dict['DM']['N_act'],mode_dict['DM']['N_act']]), gain=mode_dict['DM']['m/V'] ,\
-       		angle=mode_dict['DM']['angle'],surface_type = mode_dict['DM']['surface_type']) 
+        self.dm = DM(DM_model = mode_dict['DM']['DM_model'] ) 
+       	#self.dm = DM(surface=np.zeros([mode_dict['DM']['N_act'],mode_dict['DM']['N_act']]), gain=mode_dict['DM']['m/V'] ,\
+       	#	angle=mode_dict['DM']['angle'],surface_type = mode_dict['DM']['surface_type']) 
        	
        	self.FPM = zernike_phase_mask(A=mode_dict['phasemask']['off-axis_transparency'],B=mode_dict['phasemask']['on-axis_transparency'],\
        		phase_shift_diameter=mode_dict['phasemask']['phasemask_diameter'], f_ratio=mode_dict['phasemask']['fratio'],\
@@ -1230,7 +1215,7 @@ def baldr_closed_loop(input_screen_fits, zwfs, control_key, Hmag, throughput, Ku
     # then we should get matching lens between this and t_baldr!!
     
         
-    flat_cmd=np.zeros(zwfs.dm.N_act).reshape(-1)
+    flat_cmd=np.zeros(zwfs.dm.N_act) 
     zwfs.dm.update_shape( flat_cmd ) 
     
     sig_cal_on = zwfs.control_variables[control_key]['sig_on_ref'] #intensity measured on calibration source with phase mask in
@@ -1510,38 +1495,74 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
 
     """
     
-    # Zernike control basis (used to calculate KL modes if required)
-    zernike_control_basis  = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.N_act[0]) ]
-    
-    if basis_modes == 'actuators':
-        control_basis = np.eye(dm.N_act[0]**2)
+    if 'square' in dm.DM_model: # just any old NxN square DM geometry
+        # Zernike control basis (used to calculate KL modes if required)
+        #zernike_control_basis  = [np.nan_to_num(b).reshape(-1) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
         
-    elif basis_modes == 'zernike':
-        control_basis = zernike_control_basis
-        
-    elif basis_modes == 'zonal':
-        control_basis = np.eye(144)
-    
-    
-    elif basis_modes == 'KL':
-        # want to get change of basis matrix to go from Zernike to KL modes 
-        # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
-        b0 = np.array( [np.nan_to_num(b) for b in zernike_control_basis] )
-        cov0 = np.cov( b0.reshape(len(b0),-1) )  # have to be careful how nan to zero replacements are made since cov should be calculated only where Zernike basis is valid , ie not nan
-        KL_B , S,  iKL_B = np.linalg.svd( cov0 )
-        # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
-    
-        control_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
-        
-    elif basis_modes == 'fourier':
-        # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
-        control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.N_act[0], Nx = dm.N_act[0], Ny = dm.N_act[0])
-        control_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
-        
-    else:
-        raise TypeError('basis_modes needs to be a string with either "actuators", "fourier", "zernike" or "KL"')
-        
+        if basis_modes == 'zonal':
+            control_basis = np.eye(dm.N_act)
+            
+        elif basis_modes == 'zernike':
+            control_basis  = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
+            # flatten each basis cmd 
+            #control_basis = [cb.reshape(-1) for cb in zernike_control_basis]
+            
+        elif basis_modes == 'KL':
+            # want to get change of basis matrix to go from Zernike to KL modes 
+            # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
+            b0 = np.array( [np.nan_to_num(b) for b in zernike_control_basis] )
+            cov0 = np.cov( b0.reshape(len(b0),-1) )  # have to be careful how nan to zero replacements are made since cov should be calculated only where Zernike basis is valid , ie not nan
+            KL_B , S,  iKL_B = np.linalg.svd( cov0 )
+            # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
+            control_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
+            # flatten each basis cmd 
+            #control_basis = [cb.reshape(-1) for cb in control_basis]
+
+        elif basis_modes == 'fourier':
+            # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
+            control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
+            control_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
+            # flatten each basis cmd 
+            #control_basis = [cb.reshape(-1) for cb in control_basis]
+        else:
+            raise TypeError('basis_modes needs to be a string with either "actuators", "fourier", "zernike" or "KL"')
+            
+
+    elif dm.DM_model == 'BMC-multi3.5':
+        """
+        Not working/ tested yet! 
+        """
+        if basis_modes == 'zonal':
+            control_basis = np.eye(dm.N_act) # 140 x 140 
+            
+        elif basis_modes == 'zernike':
+            corner_indices = [0, dm.Nx_act-1, dm.Nx_act * (dm.Nx_act-1), -1]
+
+            raw_basis = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
+            bmcdm_basis_list = []
+            for i,B in enumerate(raw_basis):
+                # normalize <B|B>=1, <B>=0 (so it is an offset from flat DM shape)
+                Bnorm = np.sqrt( 1/np.nansum( B**2 ) ) * B
+                # pad with zeros to fit DM square shape and shift pixels as required to center
+                # we also shift the basis center with respect to DM if required
+                """
+                if np.mod( Nx_act_basis, 2) == 0:
+                    pad_width = (Nx_act_DM - B.shape[0] )//2
+                    padded_B = shift( np.pad( Bnorm , pad_width , constant_values=(np.nan,)) , c[0], c[1])
+                else:
+                    pad_width = (Nx_act_DM - B.shape[0] )//2 + 1
+                    padded_B = shift( np.pad( Bnorm , pad_width , constant_values=(np.nan,)) , c[0], c[1])[:-1,:-1]  # we take off end due to odd numebr
+                """
+                flat_B = Bnorm.reshape(-1) # flatten basis so we can put it in the accepted DM command format
+                #np.nan_to_num( flat_B, 0 ) # convert nan -> 0
+                flat_B[corner_indices] = np.nan # convert DM corners to nan (so lenght flat_B = 140 which corresponds to BMC-3.5 DM)
+
+                # now append our basis function removing corners (nan values)
+                bmcdm_basis_list.append( flat_B[np.isfinite(flat_B)] )
+                control_basis = bmcdm_basis_list
+
     return(control_basis)
+
 
 
 def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=50e-9,replace_nan_with=None):
