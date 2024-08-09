@@ -89,6 +89,8 @@ test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry
 square_basis = baldrSim.create_control_basis(zwfs.dm, N_controlled_modes=20, basis_modes='zernike')
 bmc_basis = baldrSim.create_control_basis(zwfs_bmc.dm, N_controlled_modes=20, basis_modes='zernike')
 
+
+# fixing bug for DM normalization
 sig_on_list = []
 sig_off_list = []
 for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
@@ -116,8 +118,8 @@ for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
     ax[2].set_title('field flux')
     
     #output =  zz.detection_chain( test_field )
-    sig_on = zz.detection_chain( test_field, zz.dm, zz.FPM, zz.det, replace_nan_with=1e19)
-    sig_off = zz.detection_chain( test_field, zz.dm, zz.FPM_off, zz.det, replace_nan_with=1e19) #replace_nan_with=None
+    sig_on = zz.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 ) #zz.detection_chain( test_field, zz.dm, zz.FPM, zz.det, replace_nan_with=0)
+    sig_off =  zz.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 ) #zz.detection_chain( test_field, zz.dm, zz.FPM_off, zz.det, replace_nan_with=0) #replace_nan_with=None
     sig_on_list.append( sig_on )
     sig_off_list.append( sig_off )
 
@@ -131,32 +133,110 @@ for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
     ax[1].set_title('ZWFS intensity')
 plt.show() 
 
+ 
+
+
+
+## ============================
+# Now fix bug of why zwfs.FPM_off and zwfs.FPM are same 
+
+fig,ax = plt.subplots( 2, 1 )
+ax[0].set_title('post FPM field phase')
+ax[0].imshow( sig_on.signal  )
+ax[1].imshow( sig_off.signal  )
+ax[0].set_ylabel('FPM on')
+ax[1].set_ylabel('FPM off')
+
+
+#line 1151 and 1470 have two definitions of detection_chain
+zwfs = baldrSim.ZWFS(mode_dict)
+zwfs.FPM.update_cold_stop_parameters(None)
+zwfs.FPM_off.update_cold_stop_parameters(None)
+
+test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+
+zwfs.dm.update_shape(  square_basis[5] * 450e-9   )
+
+post_dm_field = test_field.applyDM( zwfs.dm )
+
+print('FPM on : d_on = d_off? ', zwfs.FPM.d_on == zwfs.FPM.d_off )
+print('FPM off : d_on = d_off? ', zwfs.FPM_off.d_on == zwfs.FPM_off.d_off )
+
+square_basis = baldrSim.create_control_basis(zwfs.dm, N_controlled_modes=20, basis_modes='zernike')
+
+# fields after phase mask 
+
+
+
+
+test_out_on = zwfs.FPM.get_output_field( post_dm_field , keep_intermediate_products=False, replace_nan_with= 0 )
+test_out_off = zwfs.FPM_off.get_output_field( post_dm_field, keep_intermediate_products=False, replace_nan_with= 0  )
+
+fig,ax = plt.subplots( 2, 1 )
+ax[0].set_title('post FPM field phase')
+ax[0].imshow( test_out_on.phase[zwfs.wvls[0]] )
+ax[1].imshow( test_out_off.phase[zwfs.wvls[0]] )
+ax[0].set_ylabel('FPM on')
+ax[1].set_ylabel('FPM off')
+
+fig,ax = plt.subplots( 2, 1 )
+ax[0].set_title('post FPM field flux')
+ax[0].imshow( test_out_on.flux[zwfs.wvls[0]] )
+ax[1].imshow( test_out_off.flux[zwfs.wvls[0]] )
+ax[0].set_ylabel('FPM on')
+ax[1].set_ylabel('FPM off')
+
+# detect fields 
+test_out_on.define_pupil_grid(dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['telescope_diameter_pixels'], D_pix=zwfs.mode['telescope']['telescope_diameter_pixels']) 
+test_out_off.define_pupil_grid(dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['telescope_diameter_pixels'], D_pix=zwfs.mode['telescope']['telescope_diameter_pixels']) 
+
+test_inten_on = zwfs.det.detect_field(test_out_on, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True)
+test_inten_off = zwfs.det.detect_field(test_out_off, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True)
+
+fig,ax = plt.subplots( 3, 1 )
+ax[0].set_title('post FPM field flux')
+ax[0].imshow( test_inten_on.signal )
+ax[1].imshow( test_inten_off.signal )
+ax[2].imshow(test_inten_on.signal - test_inten_off.signal )
+ax[0].set_ylabel('FPM on')
+ax[1].set_ylabel('FPM off')
+ax[2].set_ylabel('difference')
 
 
 
 
 
-# go through the detection_chain...
-for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
-    b = bb[5] #zwfs.control_variables[lab ]['control_basis'][5]
-    b.reshape(1,-1)
-    zz.dm.update_shape(  b * 50e-9   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
+test_inten_on = zwfs.detection_chain( test_field, FPM_on=True ,  include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=0 )
 
-    # check DM shape 
-    plt.figure()
-    if zz.dm.DM_model=='square_12' :
-        plt.imshow( zz.dm.surface.reshape(12,12) )
-    elif zz.dm.DM_model=='BMC-multi3.5':
-        plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zz.dm.surface ) )
-    plt.title('DM surface')
+test_inten_off = zwfs.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=0)
 
-    # check output field
-    post_dm_field = test_field.applyDM( zz.dm )
-    fig,ax = plt.subplots(1,2)
-    ax[0].imshow(zz.pup * test_field.phase[zz.wvls[0]])
-    ax[1].imshow(zz.pup * post_dm_field.phase[zz.wvls[0]])
-    ax[0].set_title('field before DM')
-    ax[1].set_title('field after DM')
+
+fig,ax = plt.subplots( 3, 1 )
+ax[0].set_title('post FPM field flux')
+ax[0].imshow( test_inten_on.signal )
+ax[1].imshow( test_inten_off.signal )
+ax[2].imshow(test_inten_on.signal - test_inten_off.signal )
+ax[0].set_ylabel('FPM on')
+ax[1].set_ylabel('FPM off')
+ax[2].set_ylabel('difference')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

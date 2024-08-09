@@ -9,9 +9,12 @@ updates
 ======
 #remember: Cold stops have to be updated for both FPM and FPM_off!!!!!!!
 
+# had acciedently mixed zwfs method and function detection_chain
+# relabelled for standalone function _detection_chain, and  detection_chain for zwfs
+
 To Do
 ======
-
+# check where detection_chain(.., replace_nan_with) should be 0 or None  
 """
 import numpy as np
 import pandas as pd
@@ -1020,8 +1023,8 @@ class ZWFS():
         #!!!! WARNING !!! WE DO NOT REPLACE NAN VALUES WITH CALIBRATION SOURCE
         # make sure DM is flat! 
         self.dm.update_shape(np.zeros(self.dm.surface.shape)) # <-- updated here 
-        sig_on = detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
-        sig_off = detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
+        sig_on = self.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
+        sig_off = self.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
         
         Nph_cal = np.sum(sig_off.signal)
         
@@ -1127,8 +1130,8 @@ class ZWFS():
         
         
         #!!!! WARNING !!! WE DO NOT REPLACE NAN VALUES WITH CALIBRATION SOURCE
-        sig_on = detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
-        sig_off = detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
+        sig_on = self.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
+        sig_off = self.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
         
         Nph_cal = np.sum(sig_off.signal)
         
@@ -1182,9 +1185,9 @@ class ZWFS():
         #dx_focal_plane = self.FPM.dx_focal_plane # self.mode['phasemask']['phasemask_diameter'] / self.mode['phasemask']['N_samples_across_phase_shift_region']  #m/pixel
 
         if FPM_on:
-            sig = detection_chain(input_field, self.dm, self.FPM, self.det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=replace_nan_with)
+            sig = _detection_chain(input_field, self.dm, self.FPM, self.det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=replace_nan_with)
         else: # we use a non phase shifting mask
-            sig = detection_chain(input_field, self.dm, self.FPM_off, self.det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=replace_nan_with)
+            sig = _detection_chain(input_field, self.dm, self.FPM_off, self.det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=replace_nan_with)
         
         return( sig )
     
@@ -1467,7 +1470,7 @@ def init_a_field( Hmag, mode, wvls, pup_geometry, D_pix, dx, r0=0.1, L0=25, phas
 
 
     
-input_field, dm, FPM, det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None):
+def _detection_chain(input_field, dm, FPM, det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None):
     """
     This is the old one - we now do this as a method within ZWFS object
     # apply DM correction 
@@ -1672,12 +1675,12 @@ def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=50e-9,repla
     
     
     # get the reference signal from calibration field with phase mask in
-    sig_on_ref = detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with)
-    sig_on_ref.signal = np.mean( [detection_chain(calibration_field, dm, FPM, det,replace_nan_with).signal for _ in range(10)]  , axis=0) # average over a few 
+    sig_on_ref = _detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with)
+    sig_on_ref.signal = np.mean( [_detection_chain(calibration_field, dm, FPM, det,replace_nan_with).signal for _ in range(10)]  , axis=0) # average over a few 
     
     # estimate #photons of in calibration field by removing phase mask (zero phase shift)   
-    sig_off_ref = detection_chain(calibration_field, dm, FPM_cal, det,replace_nan_with=replace_nan_with)
-    sig_off_ref.signal = np.mean( [detection_chain(calibration_field, dm, FPM_cal, det,replace_nan_with=replace_nan_with).signal for _ in range(10)]  , axis=0) # average over a few 
+    sig_off_ref = _detection_chain(calibration_field, dm, FPM_cal, det,replace_nan_with=replace_nan_with)
+    sig_off_ref.signal = np.mean( [_detection_chain(calibration_field, dm, FPM_cal, det,replace_nan_with=replace_nan_with).signal for _ in range(10)]  , axis=0) # average over a few 
     Nph_cal = np.sum(sig_off_ref.signal) # Nph when phase mask is out 
     
     cmd = np.zeros( dm.surface.reshape(-1).shape ) 
@@ -1689,9 +1692,9 @@ def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=50e-9,repla
         
         dm.update_shape(cmd)
     
-        sig = detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with)
+        sig = _detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with)
         #average over a few 
-        sig.signal = np.mean( [detection_chain(calibration_field, dm, FPM, det).signal for _ in range(10)] ,axis=0)
+        sig.signal = np.mean( [_detection_chain(calibration_field, dm, FPM, det).signal for _ in range(10)] ,axis=0)
         modal_signal_list.append( sig ) 
     
     
