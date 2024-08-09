@@ -7,7 +7,7 @@ Created on Thu Mar  2 15:44:21 2023
 
 updates
 ======
-
+#remember: Cold stops have to be updated for both FPM and FPM_off!!!!!!!
 
 To Do
 ======
@@ -1467,7 +1467,7 @@ def init_a_field( Hmag, mode, wvls, pup_geometry, D_pix, dx, r0=0.1, L0=25, phas
 
 
     
-def detection_chain(input_field, dm, FPM, det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None):
+input_field, dm, FPM, det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None):
     """
     This is the old one - we now do this as a method within ZWFS object
     # apply DM correction 
@@ -1543,7 +1543,8 @@ def create_calibration_field_for_ZWFS(ZWFS, calibration_source_config_dict):
 def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
     """
     
-
+    All basis should be normalized <m|m> = 1
+    
     Parameters
     ----------
     dm : TYPE dm object from baldr module
@@ -1552,7 +1553,7 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
         DESCRIPTION. How many modes to consider in our control basis 
     basis_modes : TYPE, optional
         DESCRIPTION. The default is 'zernike'. The other option is 'KL', 'Fourier'
-
+        
     Raises
     ------
     TypeError
