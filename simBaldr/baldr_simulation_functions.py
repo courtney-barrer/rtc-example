@@ -138,6 +138,7 @@ class field:
           # with samples at each actuator across DM diameter (defined by Nx_act) 
           DM.x = np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.Nx_act)
           DM.y =  np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.Nx_act)
+          
           if 'square' in DM.DM_model:
             # simple square DM, DM values defined at each point on square grid
             DM.X, DM.Y = np.meshgrid(DM.x,DM.y)  
@@ -154,6 +155,8 @@ class field:
             
             DM.X = np.delete(x_flat, corner_indices_flat)
             DM.Y = np.delete(y_flat, corner_indices_flat)
+            
+
           else:
             raise TypeError('DM model unknown (check DM.DM_model) in applyDM method')
           
@@ -1566,30 +1569,30 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
         #zernike_control_basis  = [np.nan_to_num(b).reshape(-1) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
         
         if basis_modes == 'zonal':
-            control_basis = np.eye(dm.N_act)
+            control_basis = np.eye(dm.N_act) 
             
         elif basis_modes == 'zernike':
             control_basis  = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
-            # flatten each basis cmd 
-            control_basis = [cb.reshape(-1) for cb in control_basis]
+            # flatten& normalize  each basis cmd 
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]
             
         elif basis_modes == 'KL':
             # want to get change of basis matrix to go from Zernike to KL modes 
             # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
-            b0 = np.array( [np.nan_to_num(b) for b in zernike_control_basis] )
+            b0 = np.array( [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act)] )
             cov0 = np.cov( b0.reshape(len(b0),-1) )  # have to be careful how nan to zero replacements are made since cov should be calculated only where Zernike basis is valid , ie not nan
             KL_B , S,  iKL_B = np.linalg.svd( cov0 )
             # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
             control_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
-            # flatten each basis cmd 
-            control_basis = [cb.reshape(-1) for cb in control_basis]
+            # flatten& normalize  each basis cmd 
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]
 
         elif basis_modes == 'fourier':
             # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
             control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
             control_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
-            # flatten each basis cmd 
-            control_basis = [cb.reshape(-1) for cb in control_basis]
+            # flatten & normalize each basis cmd 
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]
         else:
             raise TypeError('basis_modes needs to be a string with either "actuators", "fourier", "zernike" or "KL"')
             

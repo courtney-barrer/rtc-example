@@ -3,14 +3,16 @@ import glob
 from astropy.io import fits
 import os 
 import matplotlib.pyplot as plt 
-import rtc
 import sys
+import rtc
 sys.path.append('simBaldr/' )
 sys.path.append('pyBaldr/' )
 from pyBaldr import utilities as util
 import baldr_simulation_functions as baldrSim
 import data_structure_functions as config
 
+# sys.path.append('/Users/bencb/Documents/rtc-example/simBaldr/' )
+# dont import pyBaldr since dont have locally FLI / BMC 
 
 #%%
 #===================== SIMULATION 
@@ -57,6 +59,8 @@ zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
 
 
 # -------- trialling this 
+
+# Cold stops have to be updated for both FPM and FPM_off!!!!!!!
 zwfs.FPM.update_cold_stop_parameters(None)
 zwfs.FPM_off.update_cold_stop_parameters(None)
 
@@ -90,7 +94,7 @@ sig_off_list = []
 for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
     b = bb[5] #zwfs.control_variables[lab ]['control_basis'][5]
     b.reshape(1,-1)
-    zz.dm.update_shape(  b * 50e-9   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
+    zz.dm.update_shape(  b * 450e-9   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
 
     plt.figure()
     if zz.dm.DM_model=='square_12' :
@@ -101,13 +105,16 @@ for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
     # now apply DM to field 
 
     post_dm_field = test_field.applyDM( zz.dm )
-    fig,ax = plt.subplots(1,2)
-    ax[0].imshow(zz.pup * test_field.phase[zz.wvls[0]])
-    ax[1].imshow(zz.pup * post_dm_field.phase[zz.wvls[0]])
-    ax[0].set_title('field before DM')
-    ax[1].set_title('field after DM')
-
-
+    fig,ax = plt.subplots(1,3)
+    im0 = ax[0].imshow(zz.pup * test_field.phase[zz.wvls[0]])
+    plt.colorbar(im0, ax=ax[0])
+    im1 = ax[1].imshow(zz.pup * post_dm_field.phase[zz.wvls[0]])
+    plt.colorbar(im1, ax=ax[1])
+    ax[2].imshow(zz.pup * post_dm_field.flux[zz.wvls[0]])
+    ax[0].set_title('field phase before DM')
+    ax[1].set_title('field phase after DM')
+    ax[2].set_title('field flux')
+    
     #output =  zz.detection_chain( test_field )
     sig_on = zz.detection_chain( test_field, zz.dm, zz.FPM, zz.det, replace_nan_with=1e19)
     sig_off = zz.detection_chain( test_field, zz.dm, zz.FPM_off, zz.det, replace_nan_with=1e19) #replace_nan_with=None
@@ -124,7 +131,130 @@ for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
     ax[1].set_title('ZWFS intensity')
 plt.show() 
 
-# changed I2M and M2C in simulation - check multiplication.
+
+
+
+
+
+# go through the detection_chain...
+for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
+    b = bb[5] #zwfs.control_variables[lab ]['control_basis'][5]
+    b.reshape(1,-1)
+    zz.dm.update_shape(  b * 50e-9   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
+
+    # check DM shape 
+    plt.figure()
+    if zz.dm.DM_model=='square_12' :
+        plt.imshow( zz.dm.surface.reshape(12,12) )
+    elif zz.dm.DM_model=='BMC-multi3.5':
+        plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zz.dm.surface ) )
+    plt.title('DM surface')
+
+    # check output field
+    post_dm_field = test_field.applyDM( zz.dm )
+    fig,ax = plt.subplots(1,2)
+    ax[0].imshow(zz.pup * test_field.phase[zz.wvls[0]])
+    ax[1].imshow(zz.pup * post_dm_field.phase[zz.wvls[0]])
+    ax[0].set_title('field before DM')
+    ax[1].set_title('field after DM')
+
+
+
+#testing multi3.5 DM interpolation 
+import scipy 
+
+def _get_corner_indices(N):
+    # util for BMC multi 3.5 DM which has missing corners 
+    return [
+        (0, 0),        # Top-left
+        (0, N-1),      # Top-right
+        (N-1, 0),      # Bottom-left
+        (N-1, N-1)     # Bottom-right
+    ]
+
+
+x = np.linspace(-1,1,12)
+y =  np.linspace(-1,1,12)
+X, Y = np.meshgrid(x,y)  
+coor = np.vstack([X.ravel(), Y.ravel()]).T
+z = np.sin( X+Y )
+nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( coor, z.reshape(-1) , fill_value = np.nan)
+# works fine.. Now remove corners
+x_flat = X.flatten()
+y_flat = Y.flatten()
+corner_indices = _get_corner_indices( len(x) )
+corner_indices_flat = [i * 12 + j for i, j in corner_indices]
+
+X2 = np.delete( x_flat, corner_indices_flat)
+Y2 = np.delete( y_flat, corner_indices_flat)
+coor2 = np.vstack([X2.ravel(), Y2.ravel()]).T
+z2 =  np.sin( X2+Y2 )
+nearest_interp_fn2 = scipy.interpolate.LinearNDInterpolator( coor, z.reshape(-1) , fill_value = np.nan)
+
+nearest_interp_fn2(X,Y)
+
+### 
+import copy 
+
+fig,ax = plt.subplots(2,1,sharex=True)
+for zz,axx  in zip( [zwfs, zwfs_bmc], ax.reshape(-1) ):
+    x = np.linspace(-test_field.dx * (test_field.nx_size //2) , test_field.dx * (test_field.nx_size //2) , zz.dm.Nx_act)
+    y =  np.linspace(-test_field.dx * (test_field.nx_size //2) , test_field.dx * (test_field.nx_size //2) , zz.dm.Nx_act)
+    
+    if 'square' in zz.dm.DM_model:
+      # simple square DM, DM values defined at each point on square grid
+      X, Y = np.meshgrid(x, y)  
+    
+    elif 'BMC-multi3.5' == zz.dm.DM_model:
+      #this DM is square with missing corners so need to handle corners 
+      # (since no DM value at corners we delete the associated coordinates here 
+      # before interpolation )
+      X,Y = np.meshgrid( x, y) 
+      x_flat = X.flatten()
+      y_flat = Y.flatten()
+      corner_indices = _get_corner_indices(zz.dm.Nx_act)
+      corner_indices_flat = [i * 12 + j for i, j in corner_indices]
+      
+      X = np.delete(x_flat, corner_indices_flat)
+      Y = np.delete(y_flat, corner_indices_flat)
+      
+    
+    else:
+      raise TypeError('DM model unknown (check DM.DM_model) in applyDM method')
+    
+    coordinates = np.vstack([X.ravel(), Y.ravel()]).T
+    
+    
+    # This runs everytime... We should only build these interpolators once..
+    if zz.dm.surface_type == 'continuous' :
+        # DM.surface is now 1D so reshape(1,-1)[0] not necessary! delkete and test
+        nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( coordinates, zz.dm.surface.reshape(-1) , fill_value = np.mean(zz.dm.surface)  )
+    elif zz.dm.surface_type == 'segmented':
+        nearest_interp_fn = scipy.interpolate.NearestNDInterpolator( coordinates, zz.dm.surface.reshape(-1) , fill_value = np.mean(zz.dm.surface) )
+    else:
+        raise TypeError('\nDM object does not have valid surface_type\nmake sure DM.surface_type = "continuous" or "segmented" ')
+    
+    
+    
+    dm_at_field_pt = nearest_interp_fn( test_field.coordinates ) # these x, y, points may need to be meshed...and flattened
+    
+    dm_at_field_pt = dm_at_field_pt.reshape( test_field.nx_size, test_field.nx_size )
+      
+      
+    phase_shifts = {w:2*np.pi/w * (2*np.cos(zz.dm.angle)) * dm_at_field_pt for w in test_field.wvl} # (2*np.cos(DM.angle)) because DM is double passed
+    
+    field_despues = copy.copy(test_field)
+    
+    field_despues.phase = {w: field_despues.phase[w] + phase_shifts[w] for w in field_despues.wvl}
+    
+    
+    #im = axx.imshow( field_despues.phase[zwfs.wvls[0]] )
+    #plt.colorbar(im, ax= axx)
+    axx.hist( zz.dm.surface , alpha =0.4 )
+    
+    #Xn, Yn = np.meshgrid(x, y) 
+    #coordinates_new = np.vstack([Xn.ravel(), Yn.ravel()]).T
+    # changed I2M and M2C in simulation - check multiplication.
 
 
 """
