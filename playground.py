@@ -35,6 +35,8 @@ phasemask_config = config.init_phasemask_config_dict(use_default_values = True)
 #---------------------
 
 DM_config = config.init_DM_config_dict(use_default_values = True) 
+DM_config['DM_model'] = 'square_12'
+# default is 'BMC-multi3.5'
 detector_config = config.init_detector_config_dict(use_default_values = True)
 
 
@@ -57,14 +59,14 @@ zwfs.FPM.update_cold_stop_parameters(None)
 
 
 #---------------------
-
-lab = 'control_20_zernike_modes'
-zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=20, modal_basis='zernike', pokeAmp = 50e-9 , label=lab)
+nbasismodes = 10
+lab = 'control_{nbasismodes}_zernike_modes'
+zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 50e-9 , label=lab)
 
 print( zwfs.control_variables[lab ].keys() )
 
 control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
-M2C = control_basis.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+M2C = control_basis #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
 I2M = np.array( zwfs.control_variables[lab ]['CM'] ).T  
 IM = np.array(zwfs.control_variables[lab ]['IM'] )
 I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
@@ -91,10 +93,13 @@ test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry
 # put a mode on the DM 
 b = zwfs.control_variables[lab ]['control_basis'][5]
 b.reshape(1,-1)
-zwfs.dm.update_shape( b * zwfs.control_variables[lab ]['pokeAmp']   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
+zwfs.dm.update_shape(  b * zwfs.control_variables[lab ]['pokeAmp']   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
 
 plt.figure()
-plt.imshow( zwfs.dm.surface.reshape(12,12) )
+if zwfs.dm.DM_model=='square_12' :
+    plt.imshow( zwfs.dm.surface.reshape(12,12) )
+elif zwfs.dm.DM_model=='BMC-multi3.5':
+    plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zwfs.dm.surface ) )
 plt.title('DM surface')
 # now apply DM to field 
 
@@ -107,15 +112,46 @@ ax[1].set_title('field after DM')
 
 
 #output =  zwfs.detection_chain( test_field )
-sig_off = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM_off, zwfs.det, replace_nan_with=None)
-sig_on = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM, zwfs.det, replace_nan_with=None)
+sig_on = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM, zwfs.det, replace_nan_with=0)
+sig_off = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM_off, zwfs.det, replace_nan_with=0) #replace_nan_with=None
+
 
 fig,ax = plt.subplots(1,2)
-ax[0].imshow(zwfs.dm.surface.reshape(12,12))
-ax[1].imshow(sig_on.signal)
+if zwfs.dm.DM_model=='square_12' :
+    ax[0].imshow(zwfs.dm.surface.reshape(12,12))
+elif zwfs.dm.DM_model=='BMC-multi3.5':
+    ax[0].imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zwfs.dm.surface ) )
+ax[1].imshow(sig_on.signal )
 ax[0].set_title('DM surface')
 ax[1].set_title('ZWFS intensity')
 plt.show() 
+
+"""
+2 Issues !! 
+1. using BMC-multi3.5 the output field after applying DM is attenuated compared to square_12! (when using replace_nan_with=0)
+    ... Issue with interpolation? lucky I didnt delete tests!
+2. sig_on seems to be the same as sig_off 
+quick check:
+    print( zwfs.FPM.d_on - zwfs.FPM.d_off )
+    print( zwfs.FPM_off.d_on - zwfs.FPM_off.d_off )
+ok
+
+In [37]: a = zwfs.FPM.get_output_field(post_dm_field)
+
+In [38]: b = zwfs.FPM_off.get_output_field(post_dm_field)
+
+In [39]: fig,ax = plt.subplots(1,3)
+
+In [40]: ax[0].imshow( a.phase[zwfs.wvls[0]] )
+Out[40]: <matplotlib.image.AxesImage at 0x7f330c6b0aa0>
+
+In [41]: ax[1].imshow( b.phase[zwfs.wvls[0]] )
+Out[41]: <matplotlib.image.AxesImage at 0x7f33181944a0>
+    
+
+"""
+
+
 
 ## TEST 2. upodate zwfs.mode['DM'] and data_structure_functions such that N_act is not row actuators but total! 
 # then redefine how we build our basis 
@@ -204,8 +240,6 @@ plt.figure()
 plt.imshow( input_field.phase[zwfs.wvls[0]] )
 plt.show()
 
-
-signal
 
 
 

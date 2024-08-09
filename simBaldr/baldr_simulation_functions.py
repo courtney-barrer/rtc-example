@@ -129,21 +129,67 @@ class field:
     self.coordinates = np.vstack([self.X.ravel(), self.Y.ravel()]).T
     
 
+
   def applyDM(self, DM):
       
       if (not hasattr(DM, 'x') ) or (not hasattr(DM, 'y') ): # add coordinate system
+          # Note: for BMC-multi3.5 DM x,y coordinates won't match X,Y coordinates since we remove corners
+          # independant on DM model define coordinates on square grid spanning field size (physcial units)
+          # with samples at each actuator across DM diameter (defined by Nx_act) 
           DM.x = np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.Nx_act)
           DM.y =  np.linspace(-self.dx * (self.nx_size //2) , self.dx * (self.nx_size //2) , DM.Nx_act)
-          DM.X, DM.Y = np.meshgrid(DM.x,DM.y)  
+          if 'square' in DM.DM_model:
+            # simple square DM, DM values defined at each point on square grid
+            DM.X, DM.Y = np.meshgrid(DM.x,DM.y)  
+
+          elif 'BMC-multi3.5' == DM.DM_model:
+            #this DM is square with missing corners so need to handle corners 
+            # (since no DM value at corners we delete the associated coordinates here 
+            # before interpolation )
+            X,Y = np.meshgrid(DM.x,DM.y) 
+            x_flat = X.flatten()
+            y_flat = Y.flatten()
+            corner_indices = _get_corner_indices(DM.Nx_act)
+            corner_indices_flat = [i * 12 + j for i, j in corner_indices]
+            
+            DM.X = np.delete(x_flat, corner_indices_flat)
+            DM.Y = np.delete(y_flat, corner_indices_flat)
+          else:
+            raise TypeError('DM model unknown (check DM.DM_model) in applyDM method')
+          
           DM.coordinates = np.vstack([DM.X.ravel(), DM.Y.ravel()]).T
 
+
+      # This runs everytime... We should only build these interpolators once..
       if DM.surface_type == 'continuous' :
-          DM.nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( DM.coordinates, DM.surface.reshape(1,-1)[0] , fill_value = np.nan)
+          # DM.surface is now 1D so reshape(1,-1)[0] not necessary! delkete and test
+          DM.nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( DM.coordinates, DM.surface.reshape(-1) , fill_value = np.nan )
       elif DM.surface_type == 'segmented':
-          DM.nearest_interp_fn = scipy.interpolate.NearestNDInterpolator( DM.coordinates, DM.surface.reshape(1,-1)[0] , fill_value = np.nan )
+          DM.nearest_interp_fn = scipy.interpolate.NearestNDInterpolator( DM.coordinates, DM.surface.reshape(-1) , fill_value = np.nan )
       else:
           raise TypeError('\nDM object does not have valid surface_type\nmake sure DM.surface_type = "continuous" or "segmented" ')
-                
+
+      """ DELETE THIS 
+        testing multi3.5 DM interpolation 
+        x = np.linspace(-1,1,12)
+        y =  np.linspace(-1,1,12)
+        X, Y = np.meshgrid(x,y)  
+        coor = np.vstack([X.ravel(), Y.ravel()]).T
+        z = np.sin( X+Y )
+        nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( coor, z.reshape(-1) , fill_value = np.nan)
+        # works fine.. Now remove corners
+        x_flat = X.flatten()
+        y_flat = Y.flatten()
+        corner_indices = _get_corner_indices( len(x) )
+        corner_indices_flat = [i * 12 + j for i, j in corner_indices]
+
+        X2 = np.delete( x_flat, corner_indices_flat)
+        Y2 = np.delete( y_flat, corner_indices_flat)
+        coor2 = np.vstack([X2.ravel(), Y2.ravel()]).T
+        z2 =  np.sin( X2+Y2 )
+        nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( coor, z.reshape(-1) , fill_value = np.nan)
+      """
+
       dm_at_field_pt = DM.nearest_interp_fn( self.coordinates ) # these x, y, points may need to be meshed...and flattened
 
       dm_at_field_pt = dm_at_field_pt.reshape( self.nx_size, self.nx_size )
@@ -1139,6 +1185,25 @@ class ZWFS():
         return( sig )
     
 
+def get_BMCmulti35_DM_command_in_2D(cmd, Nx_act=12):
+    # BMC multi3.5 DM is missing corners (cmd length = 140) so we want to see in 2D
+    # function so we can easily plot the DM shape (since DM grid is not perfectly square raw cmds can not be plotted in 2D immediately )
+    # puts nan values in cmd positions that don't correspond to actuator on a square grid until cmd length is square number (12x12 for BMC multi-2.5 DM) so can be reshaped to 2D array to see what the command looks like on the DM.
+    corner_indices = [0, Nx_act-1, Nx_act * (Nx_act-1), Nx_act*Nx_act]
+    cmd_in_2D = list(cmd.copy())
+    for i in corner_indices:
+        cmd_in_2D.insert(i,np.nan)
+    return( np.array(cmd_in_2D).reshape(Nx_act,Nx_act) )
+
+
+def _get_corner_indices(N):
+    # util for BMC multi 3.5 DM which has missing corners 
+    return [
+        (0, 0),        # Top-left
+        (0, N-1),      # Top-right
+        (N-1, 0),      # Bottom-left
+        (N-1, N-1)     # Bottom-right
+    ]
 
         
 def baldr_closed_loop(input_screen_fits, zwfs, control_key, Hmag, throughput, Ku, Nint,return_intermediate_products=False, replace_nan_with=None, close_after=0):
@@ -1505,7 +1570,7 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
         elif basis_modes == 'zernike':
             control_basis  = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
             # flatten each basis cmd 
-            #control_basis = [cb.reshape(-1) for cb in zernike_control_basis]
+            control_basis = [cb.reshape(-1) for cb in control_basis]
             
         elif basis_modes == 'KL':
             # want to get change of basis matrix to go from Zernike to KL modes 
@@ -1516,14 +1581,14 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
             # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
             control_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
             # flatten each basis cmd 
-            #control_basis = [cb.reshape(-1) for cb in control_basis]
+            control_basis = [cb.reshape(-1) for cb in control_basis]
 
         elif basis_modes == 'fourier':
             # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
             control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
             control_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
             # flatten each basis cmd 
-            #control_basis = [cb.reshape(-1) for cb in control_basis]
+            control_basis = [cb.reshape(-1) for cb in control_basis]
         else:
             raise TypeError('basis_modes needs to be a string with either "actuators", "fourier", "zernike" or "KL"')
             

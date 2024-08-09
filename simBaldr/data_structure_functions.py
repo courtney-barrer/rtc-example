@@ -82,7 +82,7 @@ def init_DM_config_dict(use_default_values = True) :
     DM_config_dict['type'] = 'DM'
     
     if use_default_values:
-        DM_config_dict['DM_model'] = 'square_12' # 'square_12' or 'BMC-multi3.5'
+        DM_config_dict['DM_model'] = 'BMC-multi3.5' # 'square_12' or 'BMC-multi3.5'
         #DM_config_dict['Nx_act'] = 12 # number of actuators across DM diameter (default is DM is square)
         #DM_config_dict['N_act'] = 12*12 # total number of actuators across 
         #DM_config_dict['m/V'] = 1 # meters of displacement per volt applied to DM (commands sent in DM update shape are in volts)
