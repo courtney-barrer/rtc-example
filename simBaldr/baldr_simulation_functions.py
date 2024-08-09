@@ -1026,8 +1026,9 @@ class ZWFS():
         
         self.control_variables[label]['calibration_field'] = calibration_field
         self.control_variables[label]['IM'] = interaction_matrix
-        self.control_variables[label]['CM'] = control_matrix
-        self.control_variables[label]['control_basis'] = control_basis
+        self.control_variables[label]['I2M'] = control_matrix #intensities to mode 
+        self.control_variables[label]['M2C'] = control_basis # mode to commands (control_basis )
+        self.control_variables[label]['control_basis'] = control_basis # assuming control basis is flattened (number of modes, cmds)
         self.control_variables[label]['pokeAmp'] = pokeAmp
         self.control_variables[label]['N_controlled_modes'] = N_controlled_modes
         self.control_variables[label]['Nph_cal'] = Nph_cal
@@ -1065,7 +1066,7 @@ class ZWFS():
         self.control[label]['calsource_config_dict'] = calibration_source_config_dict
         
         self.control_variables[label]['IM']= IM_modal
-        self.control_variables[label]['CM'] = pinv_IM_modal
+        self.control_variables[label]['I2M'] = pinv_IM_modal
         self.control_variables[label]['control_basis'] = control_basis
         self.control_variables[label]['pokeAmp'] = pokeAmp
         self.control_variables[label]['N_controlled_modes'] = N_controlled_modes
@@ -1133,7 +1134,7 @@ class ZWFS():
         
         self.control_variables[new_label]['calibration_field'] = calibration_field
         self.control_variables[new_label]['IM'] = interaction_matrix
-        self.control_variables[new_label]['CM'] = control_matrix
+        self.control_variables[new_label]['I2M'] = control_matrix
         self.control_variables[new_label]['control_basis'] = KL_basis
         self.control_variables[new_label]['pokeAmp'] = pokeAmp
         self.control_variables[new_label]['N_controlled_modes'] = len(KL_basis)
@@ -1288,7 +1289,7 @@ def baldr_closed_loop(input_screen_fits, zwfs, control_key, Hmag, throughput, Ku
     Nph_cal = zwfs.control_variables[control_key]['Nph_cal'] # sum of intensities (#photons) of calibration source with mask out 
     
     IM = zwfs.control_variables[control_key]['IM'] #interaction matrix from calibrationn source 
-    CM = zwfs.control_variables[control_key]['CM'] #control matrix from calibrationn source 
+    CM = zwfs.control_variables[control_key]['I2M'] #control matrix from calibrationn source 
     control_basis = zwfs.control_variables[control_key]['control_basis'] # DM vcontrol basis used to construct IM
     
     U,S,Vt = np.linalg.svd( IM )

@@ -46,34 +46,24 @@ tel_config['pup_geometry'] = 'disk'
 # define a hardware mode for the ZWFS 
 mode_dict = config.create_mode_config_dict( tel_config, phasemask_config, DM_config, detector_config)
 
-#create our zwfs object
+#create our zwfs object with square DM
 zwfs = baldrSim.ZWFS(mode_dict)
+# now create another one with the BMC DM 
+mode_dict_bmc = mode_dict.copy() 
+mode_dict_bmc['DM']['DM_model'] = 'BMC-multi3.5'
+zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
 
-# define an internal calibration source 
-calibration_source_config_dict = config.init_calibration_source_config_dict(use_default_values = True)
-calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stabilized Tungsten Fiber-Coupled IR Light Source )
-calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
+
+
 
 # -------- trialling this 
 zwfs.FPM.update_cold_stop_parameters(None)
+zwfs.FPM_off.update_cold_stop_parameters(None)
 
+zwfs_bmc.FPM.update_cold_stop_parameters(None)
+zwfs_bmc.FPM_off.update_cold_stop_parameters(None)
 
-#---------------------
-nbasismodes = 10
-lab = 'control_{nbasismodes}_zernike_modes'
-zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 50e-9 , label=lab)
-
-print( zwfs.control_variables[lab ].keys() )
-
-control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
-M2C = control_basis #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
-I2M = np.array( zwfs.control_variables[lab ]['CM'] ).T  
-IM = np.array(zwfs.control_variables[lab ]['IM'] )
-I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
-N0 = np.array(zwfs.control_variables[lab ]['sig_off_ref'].signal )
-
-
-# ---------------
+#------------------
 """
 testing updates: simulation is not compatiple with BMC muli3.5 DM (square without corners).
 To update this we first
@@ -88,46 +78,57 @@ To update this we first
 #zwfs.control_variables[lab ]['control_basis'] = np.array( zwfs.control_variables[lab ]['control_basis'] ).reshape(-1,12,12)
 
 ## TEST 1. verification after making dm.surface is always 1D (previously it was 2D)
+# USING zwfs here (assuming zwfs, and zwfs_BMC have same dimensions)
 test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
 
 # put a mode on the DM 
-b = zwfs.control_variables[lab ]['control_basis'][5]
-b.reshape(1,-1)
-zwfs.dm.update_shape(  b * zwfs.control_variables[lab ]['pokeAmp']   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
+square_basis = baldrSim.create_control_basis(zwfs.dm, N_controlled_modes=20, basis_modes='zernike')
+bmc_basis = baldrSim.create_control_basis(zwfs_bmc.dm, N_controlled_modes=20, basis_modes='zernike')
 
-plt.figure()
-if zwfs.dm.DM_model=='square_12' :
-    plt.imshow( zwfs.dm.surface.reshape(12,12) )
-elif zwfs.dm.DM_model=='BMC-multi3.5':
-    plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zwfs.dm.surface ) )
-plt.title('DM surface')
-# now apply DM to field 
+sig_on_list = []
+sig_off_list = []
+for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
+    b = bb[5] #zwfs.control_variables[lab ]['control_basis'][5]
+    b.reshape(1,-1)
+    zz.dm.update_shape(  b * 50e-9   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
 
-post_dm_field = test_field.applyDM( zwfs.dm )
-fig,ax = plt.subplots(1,2)
-ax[0].imshow(zwfs.pup * test_field.phase[zwfs.wvls[0]])
-ax[1].imshow(zwfs.pup * post_dm_field.phase[zwfs.wvls[0]])
-ax[0].set_title('field before DM')
-ax[1].set_title('field after DM')
+    plt.figure()
+    if zz.dm.DM_model=='square_12' :
+        plt.imshow( zz.dm.surface.reshape(12,12) )
+    elif zz.dm.DM_model=='BMC-multi3.5':
+        plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zz.dm.surface ) )
+    plt.title('DM surface')
+    # now apply DM to field 
+
+    post_dm_field = test_field.applyDM( zz.dm )
+    fig,ax = plt.subplots(1,2)
+    ax[0].imshow(zz.pup * test_field.phase[zz.wvls[0]])
+    ax[1].imshow(zz.pup * post_dm_field.phase[zz.wvls[0]])
+    ax[0].set_title('field before DM')
+    ax[1].set_title('field after DM')
 
 
-#output =  zwfs.detection_chain( test_field )
-sig_on = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM, zwfs.det, replace_nan_with=0)
-sig_off = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM_off, zwfs.det, replace_nan_with=0) #replace_nan_with=None
+    #output =  zz.detection_chain( test_field )
+    sig_on = zz.detection_chain( test_field, zz.dm, zz.FPM, zz.det, replace_nan_with=1e19)
+    sig_off = zz.detection_chain( test_field, zz.dm, zz.FPM_off, zz.det, replace_nan_with=1e19) #replace_nan_with=None
+    sig_on_list.append( sig_on )
+    sig_off_list.append( sig_off )
 
-
-fig,ax = plt.subplots(1,2)
-if zwfs.dm.DM_model=='square_12' :
-    ax[0].imshow(zwfs.dm.surface.reshape(12,12))
-elif zwfs.dm.DM_model=='BMC-multi3.5':
-    ax[0].imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zwfs.dm.surface ) )
-ax[1].imshow(sig_on.signal )
-ax[0].set_title('DM surface')
-ax[1].set_title('ZWFS intensity')
+    fig,ax = plt.subplots(1,2)
+    if zz.dm.DM_model=='square_12' :
+        ax[0].imshow(zz.dm.surface.reshape(12,12))
+    elif zz.dm.DM_model=='BMC-multi3.5':
+        ax[0].imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zz.dm.surface ) )
+    ax[1].imshow(sig_on.signal )
+    ax[0].set_title('DM surface')
+    ax[1].set_title('ZWFS intensity')
 plt.show() 
 
+# changed I2M and M2C in simulation - check multiplication.
+
+
 """
-2 Issues !! 
+2 Issues :
 1. using BMC-multi3.5 the output field after applying DM is attenuated compared to square_12! (when using replace_nan_with=0)
     ... Issue with interpolation? lucky I didnt delete tests!
 2. sig_on seems to be the same as sig_off 
@@ -136,6 +137,8 @@ quick check:
     print( zwfs.FPM_off.d_on - zwfs.FPM_off.d_off )
 ok
 
+# looking at 2:
+#first part of detection chain after applying DM:
 In [37]: a = zwfs.FPM.get_output_field(post_dm_field)
 
 In [38]: b = zwfs.FPM_off.get_output_field(post_dm_field)
@@ -150,6 +153,37 @@ Out[41]: <matplotlib.image.AxesImage at 0x7f33181944a0>
     
 
 """
+
+#---------------------
+# define an internal calibration source 
+calibration_source_config_dict = config.init_calibration_source_config_dict(use_default_values = True)
+calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stabilized Tungsten Fiber-Coupled IR Light Source )
+calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
+
+nbasismodes = 10
+lab = 'control_{nbasismodes}_zernike_modes'
+zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 50e-9 , label=lab)
+
+print( zwfs.control_variables[lab ].keys() )
+
+control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
+M2C = control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+I2M = np.array( zwfs.control_variables[lab ]['I2M'] ).T  
+IM = np.array(zwfs.control_variables[lab ]['IM'] )
+I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
+N0 = np.array(zwfs.control_variables[lab ]['sig_off_ref'].signal )
+
+# example go to intensity signal -> mode (via I2M) -> DM command (via M2C)
+#M2C @ ( I2M @ IM[5] )
+# ===============
+# Need to also make sure this is compatiple with reading into RTC (I think M2C is transposed? )
+
+
+
+
+
+# ---------------
+
 
 
 
