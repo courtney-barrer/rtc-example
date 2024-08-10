@@ -3,6 +3,7 @@ import glob
 from astropy.io import fits
 import os 
 import matplotlib.pyplot as plt 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import sys
 import rtc
 sys.path.append('simBaldr/' )
@@ -14,13 +15,57 @@ import data_structure_functions as config
 # sys.path.append('/Users/bencb/Documents/rtc-example/simBaldr/' )
 # dont import pyBaldr since dont have locally FLI / BMC 
 
+
+
+# ========== PLOTTING STANDARDS 
+def nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None):
+
+    n = len(im_list)
+    fs = fontsize
+    fig = plt.figure(figsize=(5*n, 5))
+
+    for a in range(n) :
+        ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
+        ax1.set_title(title_list[a] ,fontsize=fs)
+
+        if vlims!=None:
+            im1 = ax1.imshow(  im_list[a] , vmin = vlims[a][0], vmax = vlims[a][1])
+        else:
+            im1 = ax1.imshow(  im_list[a] )
+        ax1.set_title( title_list[a] ,fontsize=fs)
+        ax1.set_xlabel( xlabel_list[a] ,fontsize=fs) 
+        ax1.set_ylabel( ylabel_list[a] ,fontsize=fs) 
+        ax1.tick_params( labelsize=fs ) 
+
+        if axis_off:
+            ax1.axis('off')
+        divider = make_axes_locatable(ax1)
+        if cbar_orientation == 'bottom':
+            cax = divider.append_axes('bottom', size='5%', pad=0.05)
+            cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
+                
+        elif cbar_orientation == 'top':
+            cax = divider.append_axes('top', size='5%', pad=0.05)
+            cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
+                
+        else: # we put it on the right 
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            cbar = fig.colorbar( im1, cax=cax, orientation='vertical')  
+        
+   
+        cbar.set_label( cbar_label_list[a], rotation=0,fontsize=fs)
+        cbar.ax.tick_params(labelsize=fs)
+    if savefig!=None:
+        plt.savefig( savefig , bbox_inches='tight', dpi=300) 
+
+    plt.show() 
 #%%
 #===================== SIMULATION 
 
 # =========== Setup simulation 
 
-throughput = 0.01
-Hmag = 0
+#throughput = 0.01
+#Hmag = 0
 #Hmag_at_vltiLab = Hmag  - 2.5*np.log10(throughput)
 #flux_at_vltilab = baldr.star2photons('H',Hmag_at_vltiLab,airmass=1,k=0.18,ph_m2_s_nm=True) #ph/m2/s/nm
 
@@ -50,6 +95,11 @@ mode_dict = config.create_mode_config_dict( tel_config, phasemask_config, DM_con
 
 #create our zwfs object with square DM
 zwfs = baldrSim.ZWFS(mode_dict)
+# we can optimize the depths
+zwfs.FPM.optimise_depths(90, zwfs.wvls)
+zwfs.FPM.d_on = 4.210526315789474e-05 #m
+zwfs.FPM.d_off = 4.122526315789484e-05 #m
+
 # now create another one with the BMC DM 
 mode_dict_bmc = mode_dict.copy() 
 mode_dict_bmc['DM']['DM_model'] = 'BMC-multi3.5'
@@ -61,13 +111,82 @@ zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
 # -------- trialling this 
 
 # Cold stops have to be updated for both FPM and FPM_off!!!!!!!
-zwfs.FPM.update_cold_stop_parameters(None)
-zwfs.FPM_off.update_cold_stop_parameters(None)
+zwfs.FPM.update_cold_stop_parameters( None )
+zwfs.FPM_off.update_cold_stop_parameters( None )
 
-zwfs_bmc.FPM.update_cold_stop_parameters(None)
-zwfs_bmc.FPM_off.update_cold_stop_parameters(None)
+zwfs_bmc.FPM.update_cold_stop_parameters( None )
+zwfs_bmc.FPM_off.update_cold_stop_parameters( None )
 
-#------------------
+
+#---------------------
+# define an internal calibration source 
+calibration_source_config_dict = config.init_calibration_source_config_dict(use_default_values = True)
+calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stabilized Tungsten Fiber-Coupled IR Light Source )
+calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
+
+nbasismodes = 20
+lab = 'control_{nbasismodes}_zernike_modes'
+zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 150e-9 , label=lab)
+
+print( zwfs.control_variables[lab ].keys() )
+
+control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
+M2C = zwfs.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+I2M = np.array( zwfs.control_variables[lab ]['I2M'] ).T  
+IM = np.array(zwfs.control_variables[lab ]['IM'] )
+I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
+N0 = np.array(zwfs.control_variables[lab ]['sig_off_ref'].signal )
+
+
+test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, \
+                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
+                                           r0=0.1, L0 = 25, phase_scale_factor=1)
+
+test_field = baldrSim.init_a_field( Hmag=-10, mode=10, wvls=zwfs.wvls, \
+                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'] ,\
+                                           phase_scale_factor=1)
+
+    
+"""
+THe issues 
+1. M2C is just set to the normalized basis - doesn't account for the poke amp! 
+2. applyDM assumes (correctly) that input DM surface is OPL so explicitly converts to phase in the function !    
+    
+"""
+
+i = zwfs.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None)
+o = zwfs.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None )
+
+
+sig = i.signal /np.sum( o.signal ) - I0 / np.sum( N0 )
+
+cmd = -1 * M2C @ (I2M @ sig.reshape(-1) ) 
+
+plt.figure() 
+plt.imshow ( cmd.reshape(12,12)); plt.colorbar()
+
+zwfs.dm.update_shape( cmd - np.mean( cmd ) )
+
+post_dm_field = test_field.applyDM( zwfs.dm )
+
+
+wvl_i = 0 
+im_list = [ 1e9 * zwfs.wvls[0]/(2*np.pi) * test_field.phase[zwfs.wvls[0]], sig, 1e9 * cmd.reshape(12,12), 1e9 * zwfs.wvls[0]/(2*np.pi) * post_dm_field.phase[zwfs.wvls[0]] ]
+xlabel_list = ['' for _ in range(len(im_list))]
+ylabel_list = ['' for _ in range(len(im_list))]
+title_list = ['phase pre DM','detector signal', 'DM surface','phase post DM']
+cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
+
+
+nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+
+print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
+print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
+
+
+
 """
 testing updates: simulation is not compatiple with BMC muli3.5 DM (square without corners).
 To update this we first
