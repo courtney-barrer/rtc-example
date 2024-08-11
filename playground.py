@@ -74,15 +74,18 @@ tel_config =  config.init_telescope_config_dict(use_default_values = True)
 phasemask_config = config.init_phasemask_config_dict(use_default_values = True) 
 
 # -------- trialling this 
-#phasemask_config['on-axis phasemask depth'] = 4.210526315789474e-05
-#phasemask_config['off-axis phasemask depth'] = 4.122526315789484e-05
+phasemask_config['on-axis phasemask depth'] = 4.210526315789474e-05
+phasemask_config['off-axis phasemask depth'] = 4.122526315789484e-05
 
-#phasemask_config['phasemask_diameter'] = 1.5 * (phasemask_config['fratio'] * 1.65e-6)
+phasemask_config['phasemask_diameter'] = 1.5 * (phasemask_config['fratio'] * 1.65e-6)
 
 #---------------------
 
-DM_config = config.init_DM_config_dict(use_default_values = True) 
-DM_config['DM_model'] = 'square_12'
+DM_config_square = config.init_DM_config_dict(use_default_values = True) 
+DM_config_bmc = config.init_DM_config_dict(use_default_values = True) 
+DM_config_bmc['DM_model'] = 'BMC-multi3.5' #'square_12'
+DM_config_square['DM_model'] = 'square_12'#'square_12'
+
 # default is 'BMC-multi3.5'
 detector_config = config.init_detector_config_dict(use_default_values = True)
 
@@ -91,20 +94,31 @@ detector_config = config.init_detector_config_dict(use_default_values = True)
 tel_config['pup_geometry'] = 'disk'
 
 # define a hardware mode for the ZWFS 
-mode_dict = config.create_mode_config_dict( tel_config, phasemask_config, DM_config, detector_config)
+mode_dict_bmc = config.create_mode_config_dict( tel_config, phasemask_config, DM_config_bmc, detector_config)
+mode_dict_square = config.create_mode_config_dict( tel_config, phasemask_config, DM_config_square, detector_config)
 
 #create our zwfs object with square DM
-zwfs = baldrSim.ZWFS(mode_dict)
-# we can optimize the depths
-zwfs.FPM.optimise_depths(90, zwfs.wvls)
-zwfs.FPM.d_on = 4.210526315789474e-05 #m
-zwfs.FPM.d_off = 4.122526315789484e-05 #m
-
+zwfs = baldrSim.ZWFS(mode_dict_square)
 # now create another one with the BMC DM 
-mode_dict_bmc = mode_dict.copy() 
-mode_dict_bmc['DM']['DM_model'] = 'BMC-multi3.5'
 zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
 
+
+"""# we can optimize the depths
+#zwfs.FPM.optimise_depths(90, zwfs.wvls)
+#zwfs.FPM.d_on = 4.210526315789474e-05 #m
+#zwfs.FPM.d_off = 4.122526315789484e-05 #m
+
+
+# now create another one with the BMC DM 
+mode_dict_bmc = copy.copy( mode_dict )
+mode_dict_bmc['DM']['DM_model'] = 'BMC-multi3.5'
+zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
+"""
+
+""" 
+cannot copy dictionaries 
+
+"""
 
 
 
@@ -126,28 +140,34 @@ calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
 
 nbasismodes = 20
 lab = 'control_{nbasismodes}_zernike_modes'
-zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 150e-9 , label=lab)
 
-print( zwfs.control_variables[lab ].keys() )
+# square DM 
+zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 150e-9 , label=lab, replace_nan_with=0)
+# BMC multi3.5 DM 
+zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 150e-9 , label=lab,replace_nan_with=0)
 
-control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
+
+
+"""control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
 M2C = zwfs.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
 I2M = np.array( zwfs.control_variables[lab ]['I2M'] ).T  
 IM = np.array(zwfs.control_variables[lab ]['IM'] )
 I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
 N0 = np.array(zwfs.control_variables[lab ]['sig_off_ref'].signal )
+"""
+
 
 
 test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, \
                                    pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
                                        dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
-                                           r0=0.1, L0 = 25, phase_scale_factor=1)
+                                           r0=0.1, L0 = 25, phase_scale_factor=1.3)
 
-test_field = baldrSim.init_a_field( Hmag=-10, mode=10, wvls=zwfs.wvls, \
+"""test_field = baldrSim.init_a_field( Hmag=-10, mode=10, wvls=zwfs.wvls, \
                                    pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
                                        dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'] ,\
                                            phase_scale_factor=1)
-
+"""
     
 """
 THe issues 
@@ -156,22 +176,72 @@ THe issues
     
 """
 
-i = zwfs.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None)
-o = zwfs.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=None )
+def AO_iteration( z, test_field ): 
+
+  
+    #z = copy.deepcopy( zwfs )
+    
+    #if 1:
+    #z = copy.deepcopy( zwfs_bmc )
+    
+    control_basis =  np.array(z.control_variables[lab ]['control_basis'])
+    M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+    I2M = np.array( z.control_variables[lab ]['I2M'] ).T  
+    IM = np.array(z.control_variables[lab ]['IM'] )
+    I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
+    N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
+    
+    
+    i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    
+    sig = i.signal / np.sum( o.signal ) - I0 / np.sum( N0 )
+    
+    cmd = -1 * M2C @ (I2M @ sig.reshape(-1) ) 
+    
+    #plt.figure() 
+    #plt.imshow ( cmd.reshape(12,12)); plt.colorbar()
+    
+    z.dm.update_shape( cmd - np.mean( cmd ) )
+    
+    post_dm_field = test_field.applyDM( z.dm )
+    
+    wvl_i = 0 
+    if 'square' in z.dm.DM_model:
+        im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], sig, 1e9 * cmd.reshape(12,12), 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
+    elif z.dm.DM_model == 'BMC-multi3.5':
+        im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], sig, 1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D( cmd ), 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
+    xlabel_list = ['' for _ in range(len(im_list))]
+    ylabel_list = ['' for _ in range(len(im_list))]
+    title_list = ['phase pre DM','detector signal', 'DM surface','phase post DM']
+    cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
+    nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
 
 
-sig = i.signal /np.sum( o.signal ) - I0 / np.sum( N0 )
-
-cmd = -1 * M2C @ (I2M @ sig.reshape(-1) ) 
-
-plt.figure() 
-plt.imshow ( cmd.reshape(12,12)); plt.colorbar()
-
-zwfs.dm.update_shape( cmd - np.mean( cmd ) )
-
-post_dm_field = test_field.applyDM( zwfs.dm )
+    return( sig, cmd, post_dm_field )
 
 
+zz = copy.deepcopy( zwfs) 
+sig, cmd, post_dm_field = AO_iteration( z = zz , test_field =  test_field )
+for _ in range( 10 ):
+    
+    sig, cmd, post_dm_field = AO_iteration( z = zz , test_field = post_dm_field  )
+    print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
+    print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
+
+
+# testing with the other DM 
+zz = copy.deepcopy( zwfs_bmc ) 
+sig, cmd, post_dm_field = AO_iteration(z = zz,  test_field =  test_field)
+for _ in range( 10 ):
+    
+    sig, cmd, post_dm_field = AO_iteration( z = zz, test_field = post_dm_field  )
+    print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
+    print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
+
+    
+
+    
 wvl_i = 0 
 im_list = [ 1e9 * zwfs.wvls[0]/(2*np.pi) * test_field.phase[zwfs.wvls[0]], sig, 1e9 * cmd.reshape(12,12), 1e9 * zwfs.wvls[0]/(2*np.pi) * post_dm_field.phase[zwfs.wvls[0]] ]
 xlabel_list = ['' for _ in range(len(im_list))]
@@ -239,6 +309,11 @@ for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
     #output =  zz.detection_chain( test_field )
     sig_on = zz.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 ) #zz.detection_chain( test_field, zz.dm, zz.FPM, zz.det, replace_nan_with=0)
     sig_off =  zz.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 ) #zz.detection_chain( test_field, zz.dm, zz.FPM_off, zz.det, replace_nan_with=0) #replace_nan_with=None
+    
+    # to test it also works using base function
+    #sig_on = baldrSim._detection_chain( test_field, zz.dm, zz.FPM, zz.det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0)
+    #sig_off = baldrSim._detection_chain( test_field, zz.dm, zz.FPM_off, zz.det,include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0) #replace_nan_with=None
+    
     sig_on_list.append( sig_on )
     sig_off_list.append( sig_off )
 

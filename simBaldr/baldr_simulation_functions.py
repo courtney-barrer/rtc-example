@@ -11,7 +11,7 @@ updates
 
 # had acciedently mixed zwfs method and function detection_chain
 # relabelled for standalone function _detection_chain, and  detection_chain for zwfs
-
+# replace_nan_with=0 should always be used in detection chains with BMC-multi3.5 due to missing corners!
 To Do
 ======
 # check where detection_chain(.., replace_nan_with) should be 0 or None  
@@ -134,7 +134,28 @@ class field:
 
 
   def applyDM(self, DM):
+      """
+      Assumes DM.surface units are in meters! 
+      Here we explicitly convert them to radians based on the wavelegnth 
+      of the field in self.phase.
       
+      (ideally radians!)
+
+      Parameters
+      ----------
+      DM : TYPE DM object
+          DESCRIPTION. 
+
+      Raises
+      ------
+      TypeError
+          DESCRIPTION. 'DM model unknown (check DM.DM_model) in applyDM method'
+
+      Returns
+      -------
+      field object post DM correction 
+
+      """
       if (not hasattr(DM, 'x') ) or (not hasattr(DM, 'y') ): # add coordinate system
           # Note: for BMC-multi3.5 DM x,y coordinates won't match X,Y coordinates since we remove corners
           # independant on DM model define coordinates on square grid spanning field size (physcial units)
@@ -200,7 +221,6 @@ class field:
 
       dm_at_field_pt = dm_at_field_pt.reshape( self.nx_size, self.nx_size )
         
-    
       phase_shifts = {w:2*np.pi/w * (2*np.cos(DM.angle)) * dm_at_field_pt for w in self.wvl} # (2*np.cos(DM.angle)) because DM is double passed
       
       field_despues = copy.copy(self)
@@ -1008,8 +1028,8 @@ class ZWFS():
         self.FPM_off.sample_phase_shift_region( nx_pix=self.mode['phasemask']['nx_size_focal_plane'], dx=self.mode['phasemask']['phasemask_diameter']/self.mode['phasemask']['N_samples_across_phase_shift_region'], wvl_2_count_res_elements = np.mean(self.wvls), verbose=True)
     
         
-    def setup_control_parameters( self, calibration_source_config_dict, N_controlled_modes, modal_basis='zernike', pokeAmp = 50e-9 , label='control_1'):
-
+    def setup_control_parameters( self, calibration_source_config_dict, N_controlled_modes, modal_basis='zernike', pokeAmp = 50e-9 , label='control_1', replace_nan_with=None):
+        # EDIT: 
         # NOTE IF WE MODIFY KEY ENTRIES HERE WE SHOULD DO THE SAME FOR setup_KL_control_basis() METHOD TOO! 
         
         self.control_variables[label] = {}
@@ -1018,13 +1038,13 @@ class ZWFS():
         
         control_basis = create_control_basis(self.dm, N_controlled_modes=N_controlled_modes, basis_modes=modal_basis)
         
-        interaction_matrix, control_matrix = build_IM(calibration_field, self.dm, self.FPM, self.det, control_basis, pokeAmp=pokeAmp)
+        interaction_matrix, control_matrix = build_IM(calibration_field, self.dm, self.FPM, self.det, control_basis, pokeAmp=pokeAmp, replace_nan_with = replace_nan_with)
         
         #!!!! WARNING !!! WE DO NOT REPLACE NAN VALUES WITH CALIBRATION SOURCE
         # make sure DM is flat! 
         self.dm.update_shape(np.zeros(self.dm.surface.shape)) # <-- updated here 
-        sig_on = self.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
-        sig_off = self.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
+        sig_on = self.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with= replace_nan_with ) #detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
+        sig_off = self.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with= replace_nan_with) #detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
         
         Nph_cal = np.sum(sig_off.signal)
         
@@ -1081,7 +1101,7 @@ class ZWFS():
         self.control_variables[label]['sig_off_ref'] = sig_off_ref.signal
         """
         
-    def setup_KL_control_basis(self, from_label=None) :
+    def setup_KL_control_basis(self, from_label=None, replace_nan_with=None) :
         """
         REQUIRES THAT self.control_variables has been populated with control dictionaries using self.setup_control_parameters 
         before we can calculate a KL basis that diagonalizes the covariance of the systems interactions. 
@@ -1126,12 +1146,12 @@ class ZWFS():
         KL_basis = develop_KL_system_basis(system_interaction_matrix)
         
         # build a new IM / CM using it 
-        interaction_matrix, control_matrix = build_IM(calibration_field, self.dm, self.FPM, self.det, control_basis=KL_basis, pokeAmp=pokeAmp)
+        interaction_matrix, control_matrix = build_IM(calibration_field, self.dm, self.FPM, self.det, control_basis=KL_basis, pokeAmp=pokeAmp, replace_nan_with=replace_nan_with)
         
         
         #!!!! WARNING !!! WE DO NOT REPLACE NAN VALUES WITH CALIBRATION SOURCE
-        sig_on = self.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
-        sig_off = self.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=None) #detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
+        sig_on = self.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=replace_nan_with) #detection_chain(calibration_field, self.dm, self.FPM, self.det, replace_nan_with = None)
+        sig_off = self.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=replace_nan_with) #detection_chain(calibration_field, self.dm, self.FPM_off, self.det, replace_nan_with = None)
         
         Nph_cal = np.sum(sig_off.signal)
         
@@ -1638,10 +1658,10 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
 
 
 
-def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=50e-9,replace_nan_with=None):
+def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=150e-9,replace_nan_with=None): 
     """
-    
-
+    Edit: Tried replace_nan_with = None ---> 0 . This may be important when using BMC multi3.5 DM.
+        result - not clear that it fixed it
     Parameters
     ----------
     calibration_field : TYPE field object from baldr module
@@ -1675,8 +1695,8 @@ def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=50e-9,repla
     
     
     # get the reference signal from calibration field with phase mask in
-    sig_on_ref = _detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with)
-    sig_on_ref.signal = np.mean( [_detection_chain(calibration_field, dm, FPM, det,replace_nan_with).signal for _ in range(10)]  , axis=0) # average over a few 
+    sig_on_ref = _detection_chain(calibration_field, dm, FPM, det, replace_nan_with=replace_nan_with)
+    sig_on_ref.signal = np.mean( [_detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with).signal for _ in range(10)]  , axis=0) # average over a few 
     
     # estimate #photons of in calibration field by removing phase mask (zero phase shift)   
     sig_off_ref = _detection_chain(calibration_field, dm, FPM_cal, det,replace_nan_with=replace_nan_with)
@@ -1692,9 +1712,9 @@ def build_IM(calibration_field, dm, FPM, det, control_basis, pokeAmp=50e-9,repla
         
         dm.update_shape(cmd)
     
-        sig = _detection_chain(calibration_field, dm, FPM, det,replace_nan_with=replace_nan_with)
+        sig = _detection_chain(calibration_field, dm, FPM, det, replace_nan_with=replace_nan_with)
         #average over a few 
-        sig.signal = np.mean( [_detection_chain(calibration_field, dm, FPM, det).signal for _ in range(10)] ,axis=0)
+        sig.signal = np.mean( [_detection_chain(calibration_field, dm, FPM, det, replace_nan_with=replace_nan_with).signal for _ in range(10)] ,axis=0)
         modal_signal_list.append( sig ) 
     
     
