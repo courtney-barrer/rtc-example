@@ -219,8 +219,8 @@ r.rtc_state.camera_simulation_mode = True
 r.rtc_state.signal_simulation_mode = False
 r.rtc_state.dm_simulation_mode = True
 
-
-test_field = baldrSim.init_a_field( Hmag=2, mode=1, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+mode_idx = 5
+test_field = baldrSim.init_a_field( Hmag=2, mode=mode_idx, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
 
 # -- (1)
 # flatten DM ! 
@@ -270,12 +270,13 @@ xlabel_list = ['' for _ in range(len(im_list))]
 ylabel_list = ['' for _ in range(len(im_list))]
 title_list = ['phase pre DM','detector signal', 'DM surface reco.','phase post DM']
 cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
-util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+savename = f'tmp/reco_input-Z{mode_idx}_basis-{lab}.png' #None
+util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, \
+                           title_list,cbar_label_list, fontsize=15, \
+                            cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=savename)
 
 print( f'strehl_before ({round(1e6*wvl_ref,2)}um) = ',np.exp( -np.nanvar( test_field.phase[wvl_ref][zwfs.pup>0] ) ))
 print( f'strehl_after ({round(1e6*wvl_ref,2)}um)= ',np.exp( -np.nanvar( post_dm_field.phase[wvl_ref][zwfs.pup>0] ) ))
-
-
 
 
 # -- (5)
@@ -284,6 +285,120 @@ print( f'strehl_after ({round(1e6*wvl_ref,2)}um)= ',np.exp( -np.nanvar( post_dm_
 
 # =========================
 # Trying closed loop 
+
+
+# SET CONTROLLERS (PID and leaky integrator)
+Nmodes = M2C.shape[1]
+
+"""
+bug one ki !+ 0 
+"""
+
+# pid
+kp = list( 1 * np.ones(Nmodes) )
+ki = list( 0.5 * np.ones(Nmodes) )
+kd = list( 0.0 * np.ones(Nmodes) )
+pid_setpoint = list( np.zeros( Nmodes ))
+# leaky
+rho = list( 0.8 * np.ones(Nmodes))
+
+lower_limit = list( -100.0 * np.ones(Nmodes) )
+upper_limit = list( 100.0 * np.ones(Nmodes) )
+
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit, pid_setpoint  )
+leaky_tmp = rtc.LeakyIntegrator( rho, lower_limit, upper_limit ) 
+
+r.pid = pid_tmp 
+r.LeakyInt = leaky_tmp
+
+
+
+test_field = baldrSim.init_a_field( Hmag=3, mode='Kolmogorov', wvls=zwfs.wvls, \
+                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
+                                           r0=0.1, L0 = 25, phase_scale_factor=1.)
+
+
+c_list = []
+strehl_list = []
+residual_list = []
+
+wvl_ref = zwfs.wvls[0] # where to calculate Strehl ratio etc
+r.pid.reset()
+r.LeakyInt.reset()
+
+#initial cmd 
+c = np.zeros( M2C.shape[0] )
+z.dm.update_shape( c )
+
+r.pid.kp[0] = 0
+r.pid.kp[1] = 0
+
+r.LeakyInt.rho[0]  = 0
+r.LeakyInt.rho[1]  = 0
+
+plot=False
+for it in range(100):
+    
+    strehl = np.exp( -np.nanvar( test_field.phase[wvl_ref][zwfs.pup>0] ) )
+    print( strehl )
+    strehl_list.append( strehl )
+    
+    i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    
+    # check saturation
+    if np.max( i.signal ) > 2**16:
+        raise TypeError('Saturation! max adu for detector in rtc is uint16. peak signal here > 2**16. Consider making test field fainter.')
+    # update our flux normalization based on FPM out measurement (simulated)
+    r.reco.flux_norm.update( np.sum( o.signal.reshape(-1)[r.regions.pupil_pixels.current] )) 
+    r.reco.commit_all()
+
+    if r.rtc_state.camera_simulation_mode :
+        r.rtc_simulation_signals.simulated_image = list( i.signal.reshape(-1) )# simulated image
+        print(' updated simulated image in simulation mode')
+
+    if plot:
+        im_list = [ zwfs.pup * 1e9 * wvl_ref /(2*np.pi) * test_field.phase[wvl_ref], i.signal, \
+            1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D(  np.mean( c ) - c  ) ]
+        xlabel_list = ['' for _ in range(len(im_list))]
+        ylabel_list = ['' for _ in range(len(im_list))]
+        title_list = ['phase', 'signal', 'DM surface reco.']
+        cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]']
+        savename = f'tmp/telem_basis-{lab}_it{it}.png' #None
+        util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, \
+                                title_list,cbar_label_list, fontsize=15, \
+                                    cbar_orientation = 'bottom', axis_off=True, vlims=[[-500,500],[1000,6000], [-200,200]], savefig=savename)
+
+
+    # with PID: 113, with leaky integrator: 123
+    # leaky integrator doesn't work great
+    c = r.single_compute( 113 )
+
+    z.dm.update_shape(  np.mean( c ) - c )
+    
+    test_field = test_field.applyDM( z.dm )
+    
+    c_list.append( c )
+    
+    residual_list.append( test_field.phase[z.wvls[0]] )
+    
+
+plt.figure()
+plt.plot( strehl_list )
+plt.ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
+plt.xlabel('iterations')
+plt.savefig( f'tmp/strehl_static_CL_basis-{lab}.png')
+ 
+i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+# phase mask out
+o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+# check saturation
+if np.max( i.signal ) > 2**16:
+    raise TypeError('Saturation! max adu for detector in rtc is uint16. peak signal here > 2**16. Consider making test field fainter.')
+# update our flux normalization based on FPM out measurement (simulated)
+r.reco.flux_norm.update( np.sum( o.signal.reshape(-1)[r.regions.pupil_pixels.current] )) 
+r.reco.commit_all()
 
 
 
