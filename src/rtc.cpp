@@ -20,6 +20,8 @@
 #include <vector>
 #include <fstream>
 
+#include <omp.h>
+
 #include <BMCApi.h>
 #include "FliSdk.h"
 
@@ -111,6 +113,7 @@ public:
     void reset() {
         std::fill(integrals.begin(), integrals.end(), 0.0f);
         std::fill(prev_errors.begin(), prev_errors.end(), 0.0f);
+        std::fill(output.begin(), output.end(), 0.0f);
     }
 
     std::vector<double> kp;
@@ -129,7 +132,7 @@ class LeakyIntegrator {
 public:
     // Constructor to initialize the leaky integrator with a given rho vector and limits for anti-windup
     LeakyIntegrator()
-        : rho(0.0), lower_limit(0.0), upper_limit(0.0) {}
+        : rho(0.0), lower_limit(-1.0), upper_limit(1.0) {}
 
     LeakyIntegrator(const std::vector<double>& rho, const std::vector<double>& lower_limit, const std::vector<double>& upper_limit)
         : rho(rho), output(rho.size(), 0.0), lower_limit(lower_limit), upper_limit(upper_limit) {
@@ -243,6 +246,8 @@ void getValuesAtIndices(std::vector<DestType>& values, const T & data, std::span
 //     }
 // }
 // USE VECTOR INSTEAD OF SPAN
+
+
 void matrix_vector_multiply(
     const std::vector<float>& v,         // Input vector
     const std::vector<float>& R,          // Matrix as a vector (assuming row-major order)
@@ -267,6 +272,28 @@ void matrix_vector_multiply(
 }
 
 
+// if input vector v is doubles ( also trialing here to parallise outer loop using omp)
+void matrix_vector_multiply_double(
+    const std::vector<double>& v,       // Input vector of doubles
+    const std::vector<float>& R,        // Matrix as a vector of floats (row-major order)
+    std::vector<double>& result         // Output result vector of doubles
+) {
+    std::size_t N = v.size();      // Number of columns in the matrix
+    std::size_t M = R.size() / N;  // Number of rows in the matrix
+
+    // Ensure the result vector has the correct size
+    result.resize(M, 0.0);
+
+    // Parallelize the loop over rows
+    #pragma omp parallel for
+    for (std::size_t i = 0; i < M; ++i) {
+        double sum = 0.0;
+        for (std::size_t j = 0; j < N; ++j) {
+            sum += static_cast<double>(R[i * N + j]) * v[j];
+        }
+        result[i] = sum;
+    }
+}
 
 /// @brief read in a csv file and store as pointer to array
 /// @param filePath
@@ -565,6 +592,7 @@ struct RTC {
     std::vector<double> TT_cmd_err; // holds the DM Tip-Tilt command offset (error) from the reference flat DM surface
     std::vector<double> HO_cmd_err; // holds the DM Higher Order command offset (error) from the reference flat DM surface
     std::vector<double> mode_err; // holds mode error from matrix multiplication of I2M with processed signal 
+    std::vector<double> dm_cmd; // final DM command 
 
     //std::vector<double> pid_setpoint // set-point of PID controller
 
@@ -1018,6 +1046,25 @@ struct RTC {
                 break;
 
 
+            // Hundreds
+
+            case 113: //mode u_leaky @ M2C:
+                cout << "mode amplitudes PID output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                pid.process( mode_err ) ;
+                // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+                matrix_vector_multiply_double( pid.output, reco.M2C.current(), dm_cmd_err ) ;
+                return dm_cmd_err ;
+                break;
+
+            case 123: //mode u_leaky @ M2C:
+                cout << "mode amplitudes leaky integrator output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                leakyInt.process( mode_err ) ;
+                // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+                matrix_vector_multiply_double( leakyInt.output, reco.M2C.current(), dm_cmd_err ) ;
+                return dm_cmd_err ;
+                break;
 
             default:
                 cout << "no to_return cases met. Returning CM @ signal" << endl;
@@ -1084,24 +1131,24 @@ struct RTC {
             //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), HO_cmd_err )
 
             // PID and leaky to TT_cmd_err and HO_cmd_err (in cmd space)
-            //u_TT = pid.process(  TT_cmd_err   ) // use PID for tip/tilt
-            //u_HO = LeakyInt.process( HO_cmd_err  ) //use leaky integrator for HO 
+            pid.process(  TT_cmd_err   ) ;// use PID for tip/tilt
+            leakyInt.process( HO_cmd_err  ) ;//use leaky integrator for HO 
 
+            /*
             //cmd =  flat_cmd + TT_cmd_err + HO_cmd_err
             //Perform element-wise addition
-            // for (size_t i = 0; i < dm_size; ++i) {
+            for (size_t i = 0; i < dm_size; ++i) {
             //     //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
 
-            //     cmd[i] = flat_dm_array[i] + u_HO[i] + u_TT[i]; // just roughly offset to center
-            // }
+                dm_cmd[i] = flat_dm_array[i] + LeakyInt.output[i] + pid.output[i]; // just roughly offset to center
+             }
 
             // send DM cmd 
+            // get cmd pointer 
+            double *cmd_ptr = dm_cmd.data();
 
-
-            
-            
-
-
+            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+            */
         }
         
         // When computation is done, check if a commit is requested.
@@ -1373,6 +1420,7 @@ NB_MODULE(_rtc, m) {
         .def_rw("TT_cmd_err",  &RTC::TT_cmd_err)
         .def_rw("HO_cmd_err" , &RTC::HO_cmd_err)
         .def_rw("mode_err" , &RTC::mode_err)
+        .def_rw("dm_cmd" , &RTC::dm_cmd)
 
 
         // controllers
@@ -1502,7 +1550,7 @@ NB_MODULE(_rtc, m) {
         .def("process", &PIDController::process,
              "Compute PID",
              nb::arg("measured"))// recentchange
-        .def("reset", &PIDController::reset, "Reset the controlleßßr")
+        .def("reset", &PIDController::reset, "Reset the controller")
         .def_rw("kp", &PIDController::kp, "Proportional gain")
         .def_rw("ki", &PIDController::ki, "Integral gain")
         .def_rw("kd", &PIDController::kd, "Derivative gain")

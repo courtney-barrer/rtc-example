@@ -432,7 +432,7 @@ def nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list,cbar_l
     if savefig!=None:
         plt.savefig( savefig , bbox_inches='tight', dpi=300) 
 
-    plt.show() 
+    #plt.show() 
 
 def nice_DM_plot( data, savefig=None ): #for a 140 actuator BMC 3.5 DM
     fig,ax = plt.subplots(1,1)
