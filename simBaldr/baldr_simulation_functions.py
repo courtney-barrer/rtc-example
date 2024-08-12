@@ -1211,6 +1211,76 @@ class ZWFS():
         
         return( sig )
     
+    
+
+
+class PIDController:
+    def __init__(self, kp=None, ki=None, kd=None, upper_limit=None, lower_limit=None, setpoint=None):
+        if kp is None:
+            kp = np.zeros(1)
+        if ki is None:
+            ki = np.zeros(1)
+        if kd is None:
+            kd = np.zeros(1)
+        if lower_limit is None:
+            lower_limit = np.zeros(1)
+        if upper_limit is None:
+            upper_limit = np.ones(1)
+        if setpoint is None:
+            setpoint = np.zeros(1)
+
+        self.kp = np.array(kp)
+        self.ki = np.array(ki)
+        self.kd = np.array(kd)
+        self.lower_limit = np.array(lower_limit)
+        self.upper_limit = np.array(upper_limit)
+        self.setpoint = np.array(setpoint)
+
+        size = len(self.kp)
+        self.output = np.zeros(size)
+        self.integrals = np.zeros(size)
+        self.prev_errors = np.zeros(size)
+
+    def process(self, measured):
+        measured = np.array(measured)
+        size = len(self.setpoint)
+
+        if len(measured) != size:
+            raise ValueError(f"Input vector size must match setpoint size: {size}")
+
+        # Check all vectors have the same size
+        error_message = []
+        for attr_name in ['kp', 'ki', 'kd', 'lower_limit', 'upper_limit']:
+            if len(getattr(self, attr_name)) != size:
+                error_message.append(attr_name)
+        
+        if error_message:
+            raise ValueError(f"Input vectors of incorrect size: {' '.join(error_message)}")
+
+        if len(self.integrals) != size:
+            print("Reinitializing integrals, prev_errors, and output to zero with correct size.")
+            self.integrals = np.zeros(size)
+            self.prev_errors = np.zeros(size)
+            self.output = np.zeros(size)
+
+        for i in range(size):
+            error = self.setpoint[i] - measured[i]
+            self.integrals[i] += error
+            self.integrals[i] = np.clip(self.integrals[i], self.lower_limit[i], self.upper_limit[i])
+
+            derivative = error - self.prev_errors[i]
+            self.output[i] = (self.kp[i] * error +
+                              self.ki[i] * self.integrals[i] +
+                              self.kd[i] * derivative)
+            self.prev_errors[i] = error
+
+        return self.output
+
+    def reset(self):
+        self.integrals.fill(0.0)
+        self.prev_errors.fill(0.0)
+        
+        
 
 def get_BMCmulti35_DM_command_in_2D(cmd, Nx_act=12):
     # BMC multi3.5 DM is missing corners (cmd length = 140) so we want to see in 2D
@@ -1623,13 +1693,16 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
 
     elif dm.DM_model == 'BMC-multi3.5':
         """
-        Not working/ tested yet! 
+        Testing
         """
+        # corners of the DM which aren't active
+        corner_indices = [0, dm.Nx_act-1, dm.Nx_act * (dm.Nx_act-1), -1]
+        
         if basis_modes == 'zonal':
             control_basis = np.eye(dm.N_act) # 140 x 140 
             
         elif basis_modes == 'zernike':
-            corner_indices = [0, dm.Nx_act-1, dm.Nx_act * (dm.Nx_act-1), -1]
+            
 
             raw_basis = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
             bmcdm_basis_list = []
@@ -1653,7 +1726,39 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
                 # now append our basis function removing corners (nan values)
                 bmcdm_basis_list.append( flat_B[np.isfinite(flat_B)] )
                 control_basis = bmcdm_basis_list
+                
+        elif basis_modes == 'KL':
+            # want to get change of basis matrix to go from Zernike to KL modes 
+            # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
+            b0 = np.array( [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act)] )
+            cov0 = np.cov( b0.reshape(len(b0),-1) )  # have to be careful how nan to zero replacements are made since cov should be calculated only where Zernike basis is valid , ie not nan
+            KL_B , S,  iKL_B = np.linalg.svd( cov0 )
+            # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
+            raw_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
+            
+            bmcdm_basis_list = []
+            for i,B in enumerate(raw_basis):
+                B = B.reshape(-1)
+                B[corner_indices] = np.nan
+                bmcdm_basis_list.append( B[np.isfinite(B)] )
+            
+            # flatten& normalize  each basis cmd 
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]
+                
+        elif basis_modes == 'fourier':
+            # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
+            control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
+            raw_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
+            
+            bmcdm_basis_list = []
+            for i,B in enumerate(raw_basis):
+                B = B.reshape(-1)
+                B[corner_indices] = np.nan
+                bmcdm_basis_list.append( B[np.isfinite(B)] )
+            # flatten & normalize each basis cmd 
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]
 
+        
     return(control_basis)
 
 

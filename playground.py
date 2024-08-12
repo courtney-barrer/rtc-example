@@ -11,54 +11,18 @@ sys.path.append('pyBaldr/' )
 from pyBaldr import utilities as util
 import baldr_simulation_functions as baldrSim
 import data_structure_functions as config
-
+import copy 
 # sys.path.append('/Users/bencb/Documents/rtc-example/simBaldr/' )
 # dont import pyBaldr since dont have locally FLI / BMC 
 
 
 
-# ========== PLOTTING STANDARDS 
-def nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None):
 
-    n = len(im_list)
-    fs = fontsize
-    fig = plt.figure(figsize=(5*n, 5))
+    
+    
 
-    for a in range(n) :
-        ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
-        ax1.set_title(title_list[a] ,fontsize=fs)
 
-        if vlims!=None:
-            im1 = ax1.imshow(  im_list[a] , vmin = vlims[a][0], vmax = vlims[a][1])
-        else:
-            im1 = ax1.imshow(  im_list[a] )
-        ax1.set_title( title_list[a] ,fontsize=fs)
-        ax1.set_xlabel( xlabel_list[a] ,fontsize=fs) 
-        ax1.set_ylabel( ylabel_list[a] ,fontsize=fs) 
-        ax1.tick_params( labelsize=fs ) 
 
-        if axis_off:
-            ax1.axis('off')
-        divider = make_axes_locatable(ax1)
-        if cbar_orientation == 'bottom':
-            cax = divider.append_axes('bottom', size='5%', pad=0.05)
-            cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
-                
-        elif cbar_orientation == 'top':
-            cax = divider.append_axes('top', size='5%', pad=0.05)
-            cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
-                
-        else: # we put it on the right 
-            cax = divider.append_axes('right', size='5%', pad=0.05)
-            cbar = fig.colorbar( im1, cax=cax, orientation='vertical')  
-        
-   
-        cbar.set_label( cbar_label_list[a], rotation=0,fontsize=fs)
-        cbar.ax.tick_params(labelsize=fs)
-    if savefig!=None:
-        plt.savefig( savefig , bbox_inches='tight', dpi=300) 
-
-    plt.show() 
 #%%
 #===================== SIMULATION 
 
@@ -103,24 +67,6 @@ zwfs = baldrSim.ZWFS(mode_dict_square)
 zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
 
 
-"""# we can optimize the depths
-#zwfs.FPM.optimise_depths(90, zwfs.wvls)
-#zwfs.FPM.d_on = 4.210526315789474e-05 #m
-#zwfs.FPM.d_off = 4.122526315789484e-05 #m
-
-
-# now create another one with the BMC DM 
-mode_dict_bmc = copy.copy( mode_dict )
-mode_dict_bmc['DM']['DM_model'] = 'BMC-multi3.5'
-zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
-"""
-
-""" 
-cannot copy dictionaries 
-
-"""
-
-
 
 # -------- trialling this 
 
@@ -139,23 +85,17 @@ calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stab
 calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
 
 nbasismodes = 20
-lab = 'control_{nbasismodes}_zernike_modes'
+basis_labels = [ 'zernike','fourier', 'KL']
+control_labels = [f'control_{nbasismodes}_{b}_modes' for b in basis_labels]
 
-# square DM 
-zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 150e-9 , label=lab, replace_nan_with=0)
-# BMC multi3.5 DM 
-zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 150e-9 , label=lab,replace_nan_with=0)
+for b,lab in zip( basis_labels, control_labels):
+    # square DM  
+    zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab, replace_nan_with=0)
+    # BMC multi3.5 DM 
+    zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab,replace_nan_with=0)
 
 
-
-"""control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
-M2C = zwfs.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
-I2M = np.array( zwfs.control_variables[lab ]['I2M'] ).T  
-IM = np.array(zwfs.control_variables[lab ]['IM'] )
-I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
-N0 = np.array(zwfs.control_variables[lab ]['sig_off_ref'].signal )
-"""
-
+# test zonal differently 
 
 
 test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, \
@@ -163,426 +103,17 @@ test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, \
                                        dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
                                            r0=0.1, L0 = 25, phase_scale_factor=1.3)
 
-"""test_field = baldrSim.init_a_field( Hmag=-10, mode=10, wvls=zwfs.wvls, \
-                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
-                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'] ,\
-                                           phase_scale_factor=1)
-"""
-    
-"""
-THe issues 
-1. M2C is just set to the normalized basis - doesn't account for the poke amp! 
-2. applyDM assumes (correctly) that input DM surface is OPL so explicitly converts to phase in the function !    
-    
-"""
 
-def AO_iteration( z, test_field ): 
 
-  
-    #z = copy.deepcopy( zwfs )
-    
-    #if 1:
-    #z = copy.deepcopy( zwfs_bmc )
-    
-    control_basis =  np.array(z.control_variables[lab ]['control_basis'])
-    M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
-    I2M = np.array( z.control_variables[lab ]['I2M'] ).T  
-    IM = np.array(z.control_variables[lab ]['IM'] )
-    I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
-    N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
-    
-    
-    i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
-    o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
-    
-    sig = i.signal / np.sum( o.signal ) - I0 / np.sum( N0 )
-    
-    cmd = -1 * M2C @ (I2M @ sig.reshape(-1) ) 
-    
-    #plt.figure() 
-    #plt.imshow ( cmd.reshape(12,12)); plt.colorbar()
-    
-    z.dm.update_shape( cmd - np.mean( cmd ) )
-    
-    post_dm_field = test_field.applyDM( z.dm )
-    
-    wvl_i = 0 
-    if 'square' in z.dm.DM_model:
-        im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], sig, 1e9 * cmd.reshape(12,12), 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
-    elif z.dm.DM_model == 'BMC-multi3.5':
-        im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], sig, 1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D( cmd ), 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
-    xlabel_list = ['' for _ in range(len(im_list))]
-    ylabel_list = ['' for _ in range(len(im_list))]
-    title_list = ['phase pre DM','detector signal', 'DM surface','phase post DM']
-    cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
-    nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
 
-
-    return( sig, cmd, post_dm_field )
-
-
-zz = copy.deepcopy( zwfs) 
-sig, cmd, post_dm_field = AO_iteration( z = zz , test_field =  test_field )
-for _ in range( 10 ):
-    
-    sig, cmd, post_dm_field = AO_iteration( z = zz , test_field = post_dm_field  )
-    print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
-    print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
-
-
-# testing with the other DM 
-zz = copy.deepcopy( zwfs_bmc ) 
-sig, cmd, post_dm_field = AO_iteration(z = zz,  test_field =  test_field)
-for _ in range( 10 ):
-    
-    sig, cmd, post_dm_field = AO_iteration( z = zz, test_field = post_dm_field  )
-    print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
-    print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
-
-    
-
-    
-wvl_i = 0 
-im_list = [ 1e9 * zwfs.wvls[0]/(2*np.pi) * test_field.phase[zwfs.wvls[0]], sig, 1e9 * cmd.reshape(12,12), 1e9 * zwfs.wvls[0]/(2*np.pi) * post_dm_field.phase[zwfs.wvls[0]] ]
-xlabel_list = ['' for _ in range(len(im_list))]
-ylabel_list = ['' for _ in range(len(im_list))]
-title_list = ['phase pre DM','detector signal', 'DM surface','phase post DM']
-cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
-
-
-nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
-
-print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
-print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
-
-
-
-"""
-testing updates: simulation is not compatiple with BMC muli3.5 DM (square without corners).
-To update this we first
-- make sure zwfs.dm.surface is always a 1D array (apply DM interpolates this and reshapes appropiately)
-  DM coordinates are always set up relative to the input field in field.applyDM method such that spreads across entire input field
-- we could define method for plotting in 2D (although not necessary)
-- update zwfs.mode[dm][nact] to be total number of actuators - from this redefine how to build basis (maybe include
-   a DM geometry field for this!! two options: square, BMC multi3.5 )
-"""
-
-
-#zwfs.control_variables[lab ]['control_basis'] = np.array( zwfs.control_variables[lab ]['control_basis'] ).reshape(-1,12,12)
-
-## TEST 1. verification after making dm.surface is always 1D (previously it was 2D)
-# USING zwfs here (assuming zwfs, and zwfs_BMC have same dimensions)
-test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
-
-# put a mode on the DM 
-square_basis = baldrSim.create_control_basis(zwfs.dm, N_controlled_modes=20, basis_modes='zernike')
-bmc_basis = baldrSim.create_control_basis(zwfs_bmc.dm, N_controlled_modes=20, basis_modes='zernike')
-
-
-# fixing bug for DM normalization
-sig_on_list = []
-sig_off_list = []
-for zz, bb in zip([zwfs, zwfs_bmc], [square_basis, bmc_basis]):
-    b = bb[5] #zwfs.control_variables[lab ]['control_basis'][5]
-    b.reshape(1,-1)
-    zz.dm.update_shape(  b * 450e-9   )# zwfs.control_variables[lab ]['pokeAmp'] * M2C.T[5] )
-
-    plt.figure()
-    if zz.dm.DM_model=='square_12' :
-        plt.imshow( zz.dm.surface.reshape(12,12) )
-    elif zz.dm.DM_model=='BMC-multi3.5':
-        plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zz.dm.surface ) )
-    plt.title('DM surface')
-    # now apply DM to field 
-
-    post_dm_field = test_field.applyDM( zz.dm )
-    fig,ax = plt.subplots(1,3)
-    im0 = ax[0].imshow(zz.pup * test_field.phase[zz.wvls[0]])
-    plt.colorbar(im0, ax=ax[0])
-    im1 = ax[1].imshow(zz.pup * post_dm_field.phase[zz.wvls[0]])
-    plt.colorbar(im1, ax=ax[1])
-    ax[2].imshow(zz.pup * post_dm_field.flux[zz.wvls[0]])
-    ax[0].set_title('field phase before DM')
-    ax[1].set_title('field phase after DM')
-    ax[2].set_title('field flux')
-    
-    #output =  zz.detection_chain( test_field )
-    sig_on = zz.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 ) #zz.detection_chain( test_field, zz.dm, zz.FPM, zz.det, replace_nan_with=0)
-    sig_off =  zz.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 ) #zz.detection_chain( test_field, zz.dm, zz.FPM_off, zz.det, replace_nan_with=0) #replace_nan_with=None
-    
-    # to test it also works using base function
-    #sig_on = baldrSim._detection_chain( test_field, zz.dm, zz.FPM, zz.det, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0)
-    #sig_off = baldrSim._detection_chain( test_field, zz.dm, zz.FPM_off, zz.det,include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0) #replace_nan_with=None
-    
-    sig_on_list.append( sig_on )
-    sig_off_list.append( sig_off )
-
-    fig,ax = plt.subplots(1,2)
-    if zz.dm.DM_model=='square_12' :
-        ax[0].imshow(zz.dm.surface.reshape(12,12))
-    elif zz.dm.DM_model=='BMC-multi3.5':
-        ax[0].imshow( baldrSim.get_BMCmulti35_DM_command_in_2D(zz.dm.surface ) )
-    ax[1].imshow(sig_on.signal )
-    ax[0].set_title('DM surface')
-    ax[1].set_title('ZWFS intensity')
-plt.show() 
-
- 
-
-
-
-## ============================
-# Now fix bug of why zwfs.FPM_off and zwfs.FPM are same 
-
-fig,ax = plt.subplots( 2, 1 )
-ax[0].set_title('post FPM field phase')
-ax[0].imshow( sig_on.signal  )
-ax[1].imshow( sig_off.signal  )
-ax[0].set_ylabel('FPM on')
-ax[1].set_ylabel('FPM off')
-
-
-#line 1151 and 1470 have two definitions of detection_chain
-zwfs = baldrSim.ZWFS(mode_dict)
-zwfs.FPM.update_cold_stop_parameters(None)
-zwfs.FPM_off.update_cold_stop_parameters(None)
-
-test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
-
-zwfs.dm.update_shape(  square_basis[5] * 450e-9   )
-
-post_dm_field = test_field.applyDM( zwfs.dm )
-
-print('FPM on : d_on = d_off? ', zwfs.FPM.d_on == zwfs.FPM.d_off )
-print('FPM off : d_on = d_off? ', zwfs.FPM_off.d_on == zwfs.FPM_off.d_off )
-
-square_basis = baldrSim.create_control_basis(zwfs.dm, N_controlled_modes=20, basis_modes='zernike')
-
-# fields after phase mask 
-
-
-
-
-test_out_on = zwfs.FPM.get_output_field( post_dm_field , keep_intermediate_products=False, replace_nan_with= 0 )
-test_out_off = zwfs.FPM_off.get_output_field( post_dm_field, keep_intermediate_products=False, replace_nan_with= 0  )
-
-fig,ax = plt.subplots( 2, 1 )
-ax[0].set_title('post FPM field phase')
-ax[0].imshow( test_out_on.phase[zwfs.wvls[0]] )
-ax[1].imshow( test_out_off.phase[zwfs.wvls[0]] )
-ax[0].set_ylabel('FPM on')
-ax[1].set_ylabel('FPM off')
-
-fig,ax = plt.subplots( 2, 1 )
-ax[0].set_title('post FPM field flux')
-ax[0].imshow( test_out_on.flux[zwfs.wvls[0]] )
-ax[1].imshow( test_out_off.flux[zwfs.wvls[0]] )
-ax[0].set_ylabel('FPM on')
-ax[1].set_ylabel('FPM off')
-
-# detect fields 
-test_out_on.define_pupil_grid(dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['telescope_diameter_pixels'], D_pix=zwfs.mode['telescope']['telescope_diameter_pixels']) 
-test_out_off.define_pupil_grid(dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['telescope_diameter_pixels'], D_pix=zwfs.mode['telescope']['telescope_diameter_pixels']) 
-
-test_inten_on = zwfs.det.detect_field(test_out_on, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True)
-test_inten_off = zwfs.det.detect_field(test_out_off, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True)
-
-fig,ax = plt.subplots( 3, 1 )
-ax[0].set_title('post FPM field flux')
-ax[0].imshow( test_inten_on.signal )
-ax[1].imshow( test_inten_off.signal )
-ax[2].imshow(test_inten_on.signal - test_inten_off.signal )
-ax[0].set_ylabel('FPM on')
-ax[1].set_ylabel('FPM off')
-ax[2].set_ylabel('difference')
-
-
-
-
-
-test_inten_on = zwfs.detection_chain( test_field, FPM_on=True ,  include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=0 )
-
-test_inten_off = zwfs.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True,grids_aligned=True , replace_nan_with=0)
-
-
-fig,ax = plt.subplots( 3, 1 )
-ax[0].set_title('post FPM field flux')
-ax[0].imshow( test_inten_on.signal )
-ax[1].imshow( test_inten_off.signal )
-ax[2].imshow(test_inten_on.signal - test_inten_off.signal )
-ax[0].set_ylabel('FPM on')
-ax[1].set_ylabel('FPM off')
-ax[2].set_ylabel('difference')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#testing multi3.5 DM interpolation 
-import scipy 
-
-def _get_corner_indices(N):
-    # util for BMC multi 3.5 DM which has missing corners 
-    return [
-        (0, 0),        # Top-left
-        (0, N-1),      # Top-right
-        (N-1, 0),      # Bottom-left
-        (N-1, N-1)     # Bottom-right
-    ]
-
-
-x = np.linspace(-1,1,12)
-y =  np.linspace(-1,1,12)
-X, Y = np.meshgrid(x,y)  
-coor = np.vstack([X.ravel(), Y.ravel()]).T
-z = np.sin( X+Y )
-nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( coor, z.reshape(-1) , fill_value = np.nan)
-# works fine.. Now remove corners
-x_flat = X.flatten()
-y_flat = Y.flatten()
-corner_indices = _get_corner_indices( len(x) )
-corner_indices_flat = [i * 12 + j for i, j in corner_indices]
-
-X2 = np.delete( x_flat, corner_indices_flat)
-Y2 = np.delete( y_flat, corner_indices_flat)
-coor2 = np.vstack([X2.ravel(), Y2.ravel()]).T
-z2 =  np.sin( X2+Y2 )
-nearest_interp_fn2 = scipy.interpolate.LinearNDInterpolator( coor, z.reshape(-1) , fill_value = np.nan)
-
-nearest_interp_fn2(X,Y)
-
-### 
-import copy 
-
-fig,ax = plt.subplots(2,1,sharex=True)
-for zz,axx  in zip( [zwfs, zwfs_bmc], ax.reshape(-1) ):
-    x = np.linspace(-test_field.dx * (test_field.nx_size //2) , test_field.dx * (test_field.nx_size //2) , zz.dm.Nx_act)
-    y =  np.linspace(-test_field.dx * (test_field.nx_size //2) , test_field.dx * (test_field.nx_size //2) , zz.dm.Nx_act)
-    
-    if 'square' in zz.dm.DM_model:
-      # simple square DM, DM values defined at each point on square grid
-      X, Y = np.meshgrid(x, y)  
-    
-    elif 'BMC-multi3.5' == zz.dm.DM_model:
-      #this DM is square with missing corners so need to handle corners 
-      # (since no DM value at corners we delete the associated coordinates here 
-      # before interpolation )
-      X,Y = np.meshgrid( x, y) 
-      x_flat = X.flatten()
-      y_flat = Y.flatten()
-      corner_indices = _get_corner_indices(zz.dm.Nx_act)
-      corner_indices_flat = [i * 12 + j for i, j in corner_indices]
-      
-      X = np.delete(x_flat, corner_indices_flat)
-      Y = np.delete(y_flat, corner_indices_flat)
-      
-    
-    else:
-      raise TypeError('DM model unknown (check DM.DM_model) in applyDM method')
-    
-    coordinates = np.vstack([X.ravel(), Y.ravel()]).T
-    
-    
-    # This runs everytime... We should only build these interpolators once..
-    if zz.dm.surface_type == 'continuous' :
-        # DM.surface is now 1D so reshape(1,-1)[0] not necessary! delkete and test
-        nearest_interp_fn = scipy.interpolate.LinearNDInterpolator( coordinates, zz.dm.surface.reshape(-1) , fill_value = np.mean(zz.dm.surface)  )
-    elif zz.dm.surface_type == 'segmented':
-        nearest_interp_fn = scipy.interpolate.NearestNDInterpolator( coordinates, zz.dm.surface.reshape(-1) , fill_value = np.mean(zz.dm.surface) )
-    else:
-        raise TypeError('\nDM object does not have valid surface_type\nmake sure DM.surface_type = "continuous" or "segmented" ')
-    
-    
-    
-    dm_at_field_pt = nearest_interp_fn( test_field.coordinates ) # these x, y, points may need to be meshed...and flattened
-    
-    dm_at_field_pt = dm_at_field_pt.reshape( test_field.nx_size, test_field.nx_size )
-      
-      
-    phase_shifts = {w:2*np.pi/w * (2*np.cos(zz.dm.angle)) * dm_at_field_pt for w in test_field.wvl} # (2*np.cos(DM.angle)) because DM is double passed
-    
-    field_despues = copy.copy(test_field)
-    
-    field_despues.phase = {w: field_despues.phase[w] + phase_shifts[w] for w in field_despues.wvl}
-    
-    
-    #im = axx.imshow( field_despues.phase[zwfs.wvls[0]] )
-    #plt.colorbar(im, ax= axx)
-    axx.hist( zz.dm.surface , alpha =0.4 )
-    
-    #Xn, Yn = np.meshgrid(x, y) 
-    #coordinates_new = np.vstack([Xn.ravel(), Yn.ravel()]).T
-    # changed I2M and M2C in simulation - check multiplication.
-
-
-"""
-2 Issues :
-1. using BMC-multi3.5 the output field after applying DM is attenuated compared to square_12! (when using replace_nan_with=0)
-    ... Issue with interpolation? lucky I didnt delete tests!
-2. sig_on seems to be the same as sig_off 
-quick check:
-    print( zwfs.FPM.d_on - zwfs.FPM.d_off )
-    print( zwfs.FPM_off.d_on - zwfs.FPM_off.d_off )
-ok
-
-# looking at 2:
-#first part of detection chain after applying DM:
-In [37]: a = zwfs.FPM.get_output_field(post_dm_field)
-
-In [38]: b = zwfs.FPM_off.get_output_field(post_dm_field)
-
-In [39]: fig,ax = plt.subplots(1,3)
-
-In [40]: ax[0].imshow( a.phase[zwfs.wvls[0]] )
-Out[40]: <matplotlib.image.AxesImage at 0x7f330c6b0aa0>
-
-In [41]: ax[1].imshow( b.phase[zwfs.wvls[0]] )
-Out[41]: <matplotlib.image.AxesImage at 0x7f33181944a0>
-    
-
-"""
-
-#---------------------
-# define an internal calibration source 
-calibration_source_config_dict = config.init_calibration_source_config_dict(use_default_values = True)
-calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stabilized Tungsten Fiber-Coupled IR Light Source )
-calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
-
-nbasismodes = 10
-lab = 'control_{nbasismodes}_zernike_modes'
-zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis='zernike', pokeAmp = 50e-9 , label=lab)
-
-print( zwfs.control_variables[lab ].keys() )
-
-control_basis =  np.array(zwfs.control_variables[lab ]['control_basis'])
-M2C = control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
-I2M = np.array( zwfs.control_variables[lab ]['I2M'] ).T  
-IM = np.array(zwfs.control_variables[lab ]['IM'] )
-I0 = np.array(zwfs.control_variables[lab ]['sig_on_ref'].signal )
-N0 = np.array(zwfs.control_variables[lab ]['sig_off_ref'].signal )
-
-# example go to intensity signal -> mode (via I2M) -> DM command (via M2C)
-#M2C @ ( I2M @ IM[5] )
-# ===============
-# Need to also make sure this is compatiple with reading into RTC (I think M2C is transposed? )
-
-
+z = copy.deepcopy( zwfs) 
+lab = 'control_20_zernike_modes' # 'control_20_fourier_modes'
+control_basis =  np.array(z.control_variables[lab ]['control_basis'])
+M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+I2M = np.array( z.control_variables[lab ]['I2M'] ).T  
+IM = np.array(z.control_variables[lab ]['IM'] )
+I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
+N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
 
 
 
@@ -648,7 +179,7 @@ r.reco = reconstructors_tmp
 #dx = zwfs.mode['telescope']['telescope_diameter'] / zwfs.mode['telescope']['telescope_diameter_pixels']
 #input_field = baldrSim.init_a_field( Hmag=0, mode=5, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=dx)
 #input_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=dx,r0=0.1, L0=25, phase_scale_factor = 1)
-test_field = baldr.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
 
 # put a mode on the DM 
 zwfs.dm.update_shape( zwfs.control_variables[lab ]['pokeAmp'] * M2C[5] )
@@ -697,6 +228,8 @@ r.reco = reconstructors_tmp
 r.regions = pupil_regions_tmp 
 r.pid = pid_tmp 
 r.LeakyInt = leaky_tmp
+
+
 
 
 
