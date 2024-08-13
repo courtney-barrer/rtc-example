@@ -1,3 +1,5 @@
+
+#include <push_record.hpp>
 #include "span_cast.hpp"
 #include "span_format.hpp"
 
@@ -44,8 +46,8 @@ public:
     : kp(1, 0.0), ki(1, 0.0), kd(1, 0.0), lower_limit(1, 0.0), upper_limit(1, 1.0), setpoint(1, 0.0),
       integrals(1, 0.0), prev_errors(1, 0.0) {}
 
-    PIDController(const std::vector<double>& kp, const std::vector<double>& ki, const std::vector<double>& kd, const std::vector<double>& upper_limit, const std::vector<double>& lower_limit,const std::vector<double>& setpoint)
-    : kp(kp), ki(ki), kd(kd), output(kp.size(), 0.0), lower_limit(lower_limit), upper_limit(upper_limit), setpoint(setpoint) {}
+    PIDController(const std::vector<double>& kp, const std::vector<double>& ki, const std::vector<double>& kd, const std::vector<double>& lower_limit, const std::vector<double>& upper_limit,const std::vector<double>& setpoint)
+    : kp(kp), ki(ki), kd(kd), output(kp.size(), 0.0), integrals(kp.size(), 0.0), prev_errors(kp.size(), 0.0), lower_limit(lower_limit), upper_limit(upper_limit), setpoint(setpoint) {}
 
     std::vector<double> process( const std::vector<double>& measured) {
         // Ensure all vectors have the same size - this could lead to unpredictable behaviour!
@@ -95,7 +97,7 @@ public:
 
         //std::vector<double> output(setpoint.size());
         for (size_t i = 0; i < setpoint.size(); ++i) {
-            double error = measured[i] - setpoint[i]; // should this be other way round? Needs to be consistent with leaky integrator!
+            double error =  setpoint[i] - measured[i]; // should this be other way round? Needs to be consistent with leaky integrator!
             integrals[i] += error;
 
             // Anti-windup: clamp the integrative term within upper and lower limits
@@ -575,8 +577,8 @@ struct RTC {
     // -------- SIMULATED SIGNALS (for if in simulation mode )
     simulated_signals_struct rtc_simulation_signals;
 
-    // variables 
 
+    // variables 
     uint16_t current_frame_number; // the current frame number
     int32_t previous_frame_number; // the previous frame number 
     //(signed 32 int since at uint16 overflow the previous frame number needs to go to -1)
@@ -598,7 +600,7 @@ struct RTC {
 
 
     //telemetry
-    size_t telemetry_cnt = 0;
+    size_t telemetry_cnt = 0; // save telemtry for how many iterations? (>0 to save)
 
     std::atomic<bool> commit_asked = false; /**< Flag indicating if a commit is requested. */
 
@@ -1066,6 +1068,31 @@ struct RTC {
                 return dm_cmd_err ;
                 break;
 
+            case 223: // mode u_leaky @ M2C with telemetry
+
+                cout << "mode amplitudes leaky integrator output" << endl;
+                matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+                leakyInt.process( mode_err ) ;
+                // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+                matrix_vector_multiply_double( leakyInt.output, reco.M2C.current(), dm_cmd_err ) ;
+
+
+                if (telemetry_cnt > 0){
+                    telem_entry entry;
+
+                    entry.image_in_pupil = std::move(image_in_pupil); // im);
+        
+                    entry.image_err_signal = std::move(image_err_signal);
+                    entry.mode_err = std::move(mode_err ); // reconstructed DM command
+                    entry.dm_cmd_err = std::move( dm_cmd_err); // final command sent
+
+                    append_telemetry(std::move(entry));
+
+                    --telemetry_cnt;
+                }
+                return dm_cmd_err ;
+                break;
+
             default:
                 cout << "no to_return cases met. Returning CM @ signal" << endl;
                 matrix_vector_multiply( image_err_signal, reco.CM.current(), dm_cmd_err ) ;
@@ -1156,96 +1183,14 @@ struct RTC {
             commit();
             commit_asked = false;
         }
+
     }
 
 
-    //RECONSTRUCTOR MATRIX
-    // void set_CM(std::vector<float> mat) {
-    //     reco.CM.update(mat); // control matrix (not filtered for tip/tilt or higher order modes)
-    // }
-
-    // void set_R_TT(std::vector<float> mat) {
-    //     reco.R_TT.update(mat);
-    // }
-
-    // void set_R_HO(std::vector<float> mat) {
-    //     reco.R_HO.update(mat);
-    // }
-
-    // void set_I2M(std::vector<float> array){
-    //     reco.I2M.update(array);
-    // }
-
-    // //void set_I2M_a(std::span<float> array){
-    // //    //USE I2Ma BECAUSE OF BUG IN UPDATABLE I2M (IT RANDOMLY CHANGES/ ASIGNS VALUES IN NANOBIND)
-    // //    I2M_a = array;
-    // //}
-
-    // void set_M2C(std::vector<float> array){
-    //     reco.M2C.update(array);
-    // }
-
-
-
-    // void set_I0(std::vector<float> array) {
-    //     reco.I0.update(array);
-    // }
-
-    // void set_fluxNorm(float value) {
-    //     reco.flux_norm.update(value);
-    // }
-
-    // // defined region in pupil (where we do phase control)
-    // void set_pupil_pixels(std::vector<int> array) {
-    //     regions.pupil_pixels.update(array);
-    // }
-
-
-    // // defined region in secondary obstruction
-    // void set_secondary_pixels(std::vector<int> array) {
-    //     regions.secondary_pixels.update(array);
-    // }
-
-    // // defined region in  outside pupil (not including secondary obstruction)
-    // void set_outside_pixels(std::vector<int> array) {
-    //     regions.outside_pixels.update(array);
-    // }
-
-
-
-    /**
-     * @brief Sets the slope offsets.
-     * @param new_offsets The new slope offsets to set.
-
-    void set_slope_offsets(std::span<const float> new_offsets) {
-        slope_offsets.update(new_offsets);
+    void enable_telemetry(size_t iteration_nb) {
+        telemetry_cnt = iteration_nb;
     }
-     */
-    /**
-     * @brief Sets the gain.
-     * @param new_gain The new gain to set.
 
-    void set_gain(float new_gain) {
-        gain.update(new_gain);
-    }
-     */
-
-    /**
-     * @brief Sets the offset.
-     * @param new_offset The new offset to set.
-
-    void set_offset(float new_offset) {
-        offset.update(new_offset);
-    }
-     */
-
-    /**
-     * @brief Commits the updated values of slope offsets, gain, and offset.
-     *
-     * This function should only be called when RTC is not running.
-     * Otherwise, call request_commit to ask for a commit to be performed after  the next iteration.
-     *
-     */
     void commit() {
         //slope_offsets.commit();
         //gain.commit();
@@ -1396,6 +1341,7 @@ struct AsyncRunner {
 };
 
 
+void bind_telemetry(nb::module_& m);
 
 NB_MODULE(_rtc, m) {
     using namespace nb::literals;
@@ -1412,7 +1358,9 @@ NB_MODULE(_rtc, m) {
 
         .def("apply_camera_settings", &RTC::apply_camera_settings)
 
+        .def("enable_telemetry", &RTC::enable_telemetry)
         // main variables in image->dm command pipeline (all things that would be good in telemetry)
+        .def_rw("telemetry_cnt", &RTC::telemetry_cnt)
         .def_rw("image_in_pupil" ,    &RTC::image_in_pupil)
         .def_rw("image_setpoint"  ,    &RTC::image_setpoint)
         .def_rw("image_err_signal",  &RTC::image_err_signal)
@@ -1581,4 +1529,12 @@ NB_MODULE(_rtc, m) {
         .def("state", &AsyncRunner::state)
         .def("flush", &AsyncRunner::flush);
 
+
+    nb::class_<telem_entry>(m, "TelemEntry")
+        .def_ro("image_in_pupil", &telem_entry::image_in_pupil)
+        .def_ro("image_err_signal", &telem_entry::image_err_signal) 
+        .def_ro("mode_err", &telem_entry::mode_err) 
+        .def_ro("dm_cmd_err", &telem_entry::dm_cmd_err); 
+
+    bind_telemetry(m);
 }

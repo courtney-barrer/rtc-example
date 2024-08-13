@@ -171,14 +171,17 @@ calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stab
 calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
 
 nbasismodes = 20
-basis_labels = [ 'zernike','fourier', 'KL']
+basis_labels = [ 'zernike','fourier'] #, 'KL']
 control_labels = [f'control_{nbasismodes}_{b}_modes' for b in basis_labels]
 
 for b,lab in zip( basis_labels, control_labels):
     # square DM  
-    zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab, replace_nan_with=0)
+    zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, \
+                                  modal_basis=b, pokeAmp = 150e-9 , label=lab, replace_nan_with=0, without_piston=True)
     # BMC multi3.5 DM 
-    zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab,replace_nan_with=0)
+    zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, \
+                                      modal_basis=b, pokeAmp = 150e-9 , label=lab,replace_nan_with=0, without_piston=True)
+
 
 
 
@@ -212,8 +215,8 @@ for zz in [zwfs]: #, zwfs_bmc ]:
 
 # NOW LETS SEE CLOSED LOOP ON A STATIC ABERRATION
 
-z = copy.deepcopy( zwfs) 
-lab = 'control_20_zernike_modes' # 'control_20_fourier_modes'
+z = copy.deepcopy( zwfs ) #copy.deepcopy( zwfs) 
+lab = 'control_20_fourier_modes' #'control_20_zernike_modes' # 'control_20_fourier_modes'
 control_basis =  np.array(z.control_variables[lab ]['control_basis'])
 M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
 I2M = np.array( z.control_variables[lab ]['I2M'] ).T  
@@ -221,14 +224,16 @@ IM = np.array(z.control_variables[lab ]['IM'] )
 I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
 N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
 
+pupil_pixels = np.arange( len( I0.reshape(-1))).astype(int) 
 
-kp = 1 * np.ones( len(M2C.T) )
-kp[0] = 0 # filter out 
+kp = 0.5 * np.ones( len(M2C.T) )
 ki = 0. * np.ones( len(M2C.T) )
-kd = np.zeros( len(M2C.T) )
+kd = 0.0 * np.ones( len(M2C.T) )
 upper_limit = 100 *  np.ones( len(M2C.T) )
 lower_limit = -100 * np.ones( len(M2C.T) )
 setpoint = np.zeros( len(M2C.T) )
+
+
 
 pid = baldrSim.PIDController(kp, ki, kd, upper_limit, lower_limit, setpoint)
 
@@ -238,8 +243,12 @@ test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, \
                                        dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
                                            r0=0.1, L0 = 25, phase_scale_factor=1.)
 
+
+
+
 s_list = []
 e_list = []
+e_list_real = []
 u_list = []
 c_list = []
 strehl_list = []
@@ -247,8 +256,17 @@ residual_list = []
 
 wvl_ref = zwfs.wvls[0] # where to calculate Strehl ratio etc
 pid.reset() 
+
+# construct the same basis in the field space so we can estimate the TRUE
+# aberrations vs estimated aberrations 
+field_basis = baldrSim.create_control_basis(None, N_controlled_modes=20, basis_modes=lab.split('_')[-2],\
+                                    without_piston=True, not_associated_with_DM=zwfs.pup.shape[0])
+
+###  FOURIER BASIS DIVERGES! ZERNIKE CONVERGES.. CIRCULAR PUPIL? SOLN: INCLUDING MORE MODES?
+
 for _ in range(40):
     
+
     strehl = np.exp( -np.nanvar( test_field.phase[wvl_ref][zwfs.pup>0] ) )
     strehl_list.append( strehl )
     
@@ -257,21 +275,24 @@ for _ in range(40):
     
     sig = i.signal / np.sum( o.signal ) - I0 / np.sum( N0 )
 
-    e = I2M @ sig.reshape(-1)
-    
+    e = I2M @ sig.reshape(-1)[pupil_pixels]
+
+    e_real = [np.nansum( test_field.phase[wvl_ref].reshape(-1) * a ) for a in field_basis ]
+
+
     #print( e )
-    u = pid.process( I2M @ sig.reshape(-1) )
+    u = pid.process( e )
     
     c = 1 * M2C @ u 
     
-    z.dm.update_shape( c - np.mean( c ) )
+    z.dm.update_shape(  np.mean( c ) - c) # same way to rtc PID 
     
     test_field = test_field.applyDM( z.dm )
     
-    
-    
+
     s_list.append( sig )
     e_list.append( e )
+    e_list_real.append( e_real )
     u_list.append( u )
     c_list.append( c )
     
@@ -279,11 +300,18 @@ for _ in range(40):
     
     print( strehl )
 
+fig,ax = plt.subplots(3,1,sharex=True)
+#plt.figure(); 
+ax[0].plot( np.array(e_list)[:,:] )
+ax[0].set_ylabel(f'estimated modal residual')
+ax[1].plot( np.array(e_list_real)[:,:] )
+ax[1].set_ylabel(f'real modal residual')
+ax[2].plot( strehl_list )
+ax[2].set_ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
+ax[2].set_xlabel('iterations')
+plt.savefig( 'tmp/temp2.png' )
 
-plt.figure()
-plt.plot( strehl_list )
-plt.ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
-plt.xlabel('iterations')
+
 
  
 

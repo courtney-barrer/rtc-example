@@ -1028,7 +1028,7 @@ class ZWFS():
         self.FPM_off.sample_phase_shift_region( nx_pix=self.mode['phasemask']['nx_size_focal_plane'], dx=self.mode['phasemask']['phasemask_diameter']/self.mode['phasemask']['N_samples_across_phase_shift_region'], wvl_2_count_res_elements = np.mean(self.wvls), verbose=True)
     
         
-    def setup_control_parameters( self, calibration_source_config_dict, N_controlled_modes, modal_basis='zernike', pokeAmp = 50e-9 , label='control_1', replace_nan_with=None):
+    def setup_control_parameters( self, calibration_source_config_dict, N_controlled_modes, modal_basis='zernike', pokeAmp = 50e-9 , label='control_1', replace_nan_with=None,without_piston=True):
         # EDIT: 
         # NOTE IF WE MODIFY KEY ENTRIES HERE WE SHOULD DO THE SAME FOR setup_KL_control_basis() METHOD TOO! 
         
@@ -1036,7 +1036,7 @@ class ZWFS():
         
         calibration_field = create_calibration_field_for_ZWFS(self, calibration_source_config_dict)
         
-        control_basis = create_control_basis(self.dm, N_controlled_modes=N_controlled_modes, basis_modes=modal_basis)
+        control_basis = create_control_basis(self.dm, N_controlled_modes=N_controlled_modes, basis_modes=modal_basis, without_piston=without_piston)
         
         interaction_matrix, control_matrix = build_IM(calibration_field, self.dm, self.FPM, self.det, control_basis, pokeAmp=pokeAmp, replace_nan_with = replace_nan_with)
         
@@ -1264,7 +1264,7 @@ class PIDController:
             self.output = np.zeros(size)
 
         for i in range(size):
-            error = self.setpoint[i] - measured[i]
+            error = measured[i] - self.setpoint[i]  # same as rtc
             self.integrals[i] += error
             self.integrals[i] = np.clip(self.integrals[i], self.lower_limit[i], self.upper_limit[i])
 
@@ -1632,21 +1632,28 @@ def create_calibration_field_for_ZWFS(ZWFS, calibration_source_config_dict):
 
 	return( calibration_field )
 	
-	
-def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
+
+
+
+
+def create_control_basis(dm, N_controlled_modes, basis_modes='zernike', without_piston=True, not_associated_with_DM=0):
     """
     
     All basis should be normalized <m|m> = 1
     
     Parameters
     ----------
-    dm : TYPE dm object from baldr module
+    dm : TYPE dm object from baldr module or int
         DESCRIPTION. what DM do we want our control basis to be built for?
     N_controlled_modes : TYPE : int
         DESCRIPTION. How many modes to consider in our control basis 
     basis_modes : TYPE, optional
         DESCRIPTION. The default is 'zernike'. The other option is 'KL', 'Fourier'
-        
+    without_piston :TYPE optional 
+        DESCRIPTION. default True - do not include piston in the basis functions 
+    not_associated_with_DM :TYPE optional 
+        DESCRIPTION. default 0 - it is associated with DM. Otherwise if not_associated_with_DM>0 then it is 
+        interpretted as number of pixels across basis diameter
     Raises
     ------
     TypeError
@@ -1658,7 +1665,61 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
 
     """
     
-    if 'square' in dm.DM_model: # just any old NxN square DM geometry
+    if not_associated_with_DM > 0 : # then we don't asssociate basis with DM and build it for a user defined size
+        if type(not_associated_with_DM)!=int:
+            raise TypeError('if not_associated_with_DM > 0, it must be of type int!!!')
+        
+        nx_pixels = not_associated_with_DM  # rename 
+
+        if basis_modes == 'zonal':
+            control_basis = np.eye(nx_pixels) 
+            
+        elif basis_modes == 'zernike':
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
+            control_basis  = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=nx_pixels) ]
+            # flatten& normalize  each basis cmd 
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]# take transpose to make columns the modes in command space.
+            
+        elif basis_modes == 'KL':
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
+            # want to get change of basis matrix to go from Zernike to KL modes 
+            # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
+            b0 = np.array( [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=nx_pixels)] )
+            cov0 = np.cov( b0.reshape(len(b0),-1) )  # have to be careful how nan to zero replacements are made since cov should be calculated only where Zernike basis is valid , ie not nan
+            KL_B , S,  iKL_B = np.linalg.svd( cov0 )
+            # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
+            control_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
+            # flatten& normalize  each basis cmd 
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]# take transpose to make columns the modes in command space.
+            
+        elif basis_modes == 'fourier':
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
+            # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
+            control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * nx_pixels, Nx = nx_pixels, Ny = nx_pixels)
+            control_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
+            # flatten & normalize each basis cmd 
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]# take transpose to make columns the modes in command space.
+            
+        else:
+            raise TypeError('basis_modes needs to be a string with either "actuators", "fourier", "zernike" or "KL"')
+                     
+
+    elif 'square' in dm.DM_model: # just any old NxN square DM geometry
         # Zernike control basis (used to calculate KL modes if required)
         #zernike_control_basis  = [np.nan_to_num(b).reshape(-1) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
         
@@ -1666,11 +1727,20 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
             control_basis = np.eye(dm.N_act) 
             
         elif basis_modes == 'zernike':
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
             control_basis  = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
             # flatten& normalize  each basis cmd 
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]# take transpose to make columns the modes in command space.
             
         elif basis_modes == 'KL':
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
             # want to get change of basis matrix to go from Zernike to KL modes 
             # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
             b0 = np.array( [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act)] )
@@ -1679,14 +1749,24 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
             # take a look plt.figure(): plt.imshow( (b0.T @ KL_B[:,:] ).T [2])
             control_basis  = (b0.T @ KL_B[:,:] ).T  #[b.T @ KL_B[:,:] for b in b0 ]
             # flatten& normalize  each basis cmd 
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]
-
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]# take transpose to make columns the modes in command space.
+            
         elif basis_modes == 'fourier':
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
             # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
             control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
             control_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
             # flatten & normalize each basis cmd 
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in control_basis]# take transpose to make columns the modes in command space.
+            
         else:
             raise TypeError('basis_modes needs to be a string with either "actuators", "fourier", "zernike" or "KL"')
             
@@ -1702,32 +1782,31 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
             control_basis = np.eye(dm.N_act) # 140 x 140 
             
         elif basis_modes == 'zernike':
-            
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
 
             raw_basis = [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act) ]
             bmcdm_basis_list = []
-            for i,B in enumerate(raw_basis):
-                # normalize <B|B>=1, <B>=0 (so it is an offset from flat DM shape)
-                Bnorm = np.sqrt( 1/np.nansum( B**2 ) ) * B
-                # pad with zeros to fit DM square shape and shift pixels as required to center
-                # we also shift the basis center with respect to DM if required
-                """
-                if np.mod( Nx_act_basis, 2) == 0:
-                    pad_width = (Nx_act_DM - B.shape[0] )//2
-                    padded_B = shift( np.pad( Bnorm , pad_width , constant_values=(np.nan,)) , c[0], c[1])
-                else:
-                    pad_width = (Nx_act_DM - B.shape[0] )//2 + 1
-                    padded_B = shift( np.pad( Bnorm , pad_width , constant_values=(np.nan,)) , c[0], c[1])[:-1,:-1]  # we take off end due to odd numebr
-                """
-                flat_B = Bnorm.reshape(-1) # flatten basis so we can put it in the accepted DM command format
+            for i, B in enumerate(raw_basis):
+
+                flat_B = B.reshape(-1) # flatten basis so we can put it in the accepted DM command format
                 #np.nan_to_num( flat_B, 0 ) # convert nan -> 0
                 flat_B[corner_indices] = np.nan # convert DM corners to nan (so lenght flat_B = 140 which corresponds to BMC-3.5 DM)
 
                 # now append our basis function removing corners (nan values)
                 bmcdm_basis_list.append( flat_B[np.isfinite(flat_B)] )
-                control_basis = bmcdm_basis_list
+            # noramlize after corners are removed! 
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
+            
                 
         elif basis_modes == 'KL':
+
+            if without_piston:
+                 N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
             # want to get change of basis matrix to go from Zernike to KL modes 
             # do this by by diaonalizing covariance matrix of Zernike basis  with SVD , since Hermitian Vt=U^-1 , therefore our change of basis vectors! 
             b0 = np.array( [np.nan_to_num(b) for b in zernike.zernike_basis(nterms=N_controlled_modes, npix=dm.Nx_act)] )
@@ -1743,9 +1822,17 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
                 bmcdm_basis_list.append( B[np.isfinite(B)] )
             
             # flatten& normalize  each basis cmd 
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
+            
                 
         elif basis_modes == 'fourier':
+
+            if without_piston:
+                N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
             # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
             control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
             raw_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
@@ -1756,8 +1843,11 @@ def create_control_basis(dm, N_controlled_modes, basis_modes='zernike'):
                 B[corner_indices] = np.nan
                 bmcdm_basis_list.append( B[np.isfinite(B)] )
             # flatten & normalize each basis cmd 
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]
-
+            if without_piston:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+            else:
+                control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
+            
         
     return(control_basis)
 

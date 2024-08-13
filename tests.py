@@ -441,3 +441,40 @@ for i, (lens, lab) in enumerate(zip([R_TT.shape[0],R_HO.shape[0],I2M.shape[0],CM
     else:
         print( f' FAILED --- test5 .single_compute({i+1+20}) ({lab} reconstructor multiplication+leaky integrator output)')
 
+
+
+# Testing Telemetry 
+
+# Testing leaky integration behaviour
+mode_num = 5
+r.rtc_simulation_signals.simulated_image = I0.reshape(-1) # simulated image
+r.rtc_simulation_signals.simulated_signal = IM[mode_num] # simulated signal (processed image) - 
+r.rtc_simulation_signals.simulated_dm_cmd = M2C.T[0] # simulated DM command 
+
+r.enable_telemetry(10)
+print( 'initial telemetry_cnt = ',r.telemetry_cnt)
+init_leakyInt_to_right_size_given_casenumber( base_case_number = 3 )
+test_telemetry = r.single_compute( 223 )
+print( 'telemetry_cnt after 1 call = ', r.telemetry_cnt)
+
+# TO GET TELEMETRY 
+t = rtc.get_telemetry()
+tel_img = np.array([tt.image_in_pupil for tt in t] )
+tel_imgErr = np.array([tt.image_err_signal for tt in t])
+tel_modeErr = np.array([tt.mode_err for tt in t])
+tel_dmErr = np.array([tt.dm_cmd_err for tt in t])
+
+
+
+#plt.imshow( util.get_DM_command_in_2D( tel_dmErr[0] ) ); plt.show()
+signal_on_mode = abs( tel_modeErr[0][mode_num ] - 1) < 0.1
+nosignal_outside_mode = np.all( abs( tel_modeErr[0][np.arange(len(mode_reco_test))!=mode_num ]) < 0.01 )
+if signal_on_mode & nosignal_outside_mode :
+    print( f'--\npassed mode reconstruction test WITH TELEMETRY DATA using interaction matrix signal injection for mode {mode_num}' )
+elif not signal_on_mode :
+    print( f'--\nfailed mode reconstruction test  WITH TELEMETRY DATA : signal on mode {mode_num} injection not close to 1' )
+elif not nosignal_outside_mode:
+    print( f'--\nfailed mode reconstruction test  WITH TELEMETRY DATA : signal on mode other modes !={mode_num} (mode injected) not close to 0' )
+
+
+

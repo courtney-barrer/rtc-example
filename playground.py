@@ -95,7 +95,8 @@ for b,lab in zip( basis_labels, control_labels):
     # square DM  
     # zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab, replace_nan_with=0)
     # BMC multi3.5 DM 
-    zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab,replace_nan_with=0)
+    zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, \
+                                      pokeAmp = 150e-9 , label=lab,replace_nan_with=0, without_piston=True)
 
 
 
@@ -125,7 +126,7 @@ r = rtc.RTC()
 
 z = copy.deepcopy( zwfs_bmc ) # general name so we could potentially do this in for loop
 
-lab = 'control_20_fourier_modes' #'control_20_zernike_modes' # 'control_20_fourier_modes'
+lab = f'control_{nbasismodes}_zernike_modes' #f'control_{nbasismodes}_fourier_modes' #'control_20_zernike_modes' # 'control_20_fourier_modes'
 
 control_basis =  np.array(z.control_variables[lab ]['control_basis'])
 M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
@@ -133,6 +134,12 @@ I2M = np.array( z.control_variables[lab ]['I2M'] ).T
 IM = np.array(z.control_variables[lab ]['IM'] )
 I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
 N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
+
+#lets have a look at basis functions 
+fig,ax = plt.subplots(int(np.sqrt(len(control_basis))),int(np.sqrt(len(control_basis))),figsize=(20,20))
+for m, axx in zip(control_basis, ax.reshape(-1)):
+    axx.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( m ))
+plt.show()
 
 # ---------------
 # populating rtc structures
@@ -295,8 +302,8 @@ bug one ki !+ 0
 """
 
 # pid
-kp = list( 1 * np.ones(Nmodes) )
-ki = list( 0.5 * np.ones(Nmodes) )
+kp = list( 0.5 * np.ones(Nmodes) )
+ki = list( 0.0 * np.ones(Nmodes) )
 kd = list( 0.0 * np.ones(Nmodes) )
 pid_setpoint = list( np.zeros( Nmodes ))
 # leaky
@@ -313,15 +320,17 @@ r.LeakyInt = leaky_tmp
 
 
 
-test_field = baldrSim.init_a_field( Hmag=3, mode='Kolmogorov', wvls=zwfs.wvls, \
+test_field = baldrSim.init_a_field( Hmag=1, mode='Kolmogorov', wvls=zwfs.wvls, \
                                    pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
                                        dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
-                                           r0=0.1, L0 = 25, phase_scale_factor=1.)
+                                           r0=0.1, L0 = 25, phase_scale_factor=0.9)
 
 
 c_list = []
 strehl_list = []
 residual_list = []
+u_list = []
+e_list_real = []
 
 wvl_ref = zwfs.wvls[0] # where to calculate Strehl ratio etc
 r.pid.reset()
@@ -331,11 +340,15 @@ r.LeakyInt.reset()
 c = np.zeros( M2C.shape[0] )
 z.dm.update_shape( c )
 
-r.pid.kp[0] = 0
-r.pid.kp[1] = 0
+#r.pid.kp[0] = 0
+#r.pid.kp[1] = 0
 
-r.LeakyInt.rho[0]  = 0
-r.LeakyInt.rho[1]  = 0
+#r.LeakyInt.rho[0]  = 0
+#r.LeakyInt.rho[1]  = 0
+
+# aberrations vs estimated aberrations 
+field_basis = baldrSim.create_control_basis(None, N_controlled_modes=20, basis_modes=lab.split('_')[-2],\
+                                    without_piston=True, not_associated_with_DM=zwfs.pup.shape[0])
 
 plot=False
 for it in range(100):
@@ -344,6 +357,9 @@ for it in range(100):
     print( strehl )
     strehl_list.append( strehl )
     
+    # the real field aberation error 
+    e_real = [np.nansum( test_field.phase[wvl_ref].reshape(-1) * a ) for a in field_basis ]
+
     i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
     o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
     
@@ -372,36 +388,43 @@ for it in range(100):
 
 
     # with PID: 113, with leaky integrator: 123
-    # leaky integrator doesn't work great
+    # leaky integrator works great after removing piston from basis function
     c = r.single_compute( 113 )
 
-    z.dm.update_shape(  np.mean( c ) - c )
+
+    z.dm.update_shape( c - np.mean( c ) )#  - c ) #
     
     test_field = test_field.applyDM( z.dm )
     
     c_list.append( c )
-    
+    u_list.append( r.pid.output )
+    e_list_real.append( e_real )
     residual_list.append( test_field.phase[z.wvls[0]] )
     
 
-plt.figure()
-plt.plot( strehl_list )
-plt.ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
-plt.xlabel('iterations')
-plt.savefig( f'tmp/strehl_static_CL_basis-{lab}.png')
- 
-i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
-# phase mask out
-o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
-# check saturation
-if np.max( i.signal ) > 2**16:
-    raise TypeError('Saturation! max adu for detector in rtc is uint16. peak signal here > 2**16. Consider making test field fainter.')
-# update our flux normalization based on FPM out measurement (simulated)
-r.reco.flux_norm.update( np.sum( o.signal.reshape(-1)[r.regions.pupil_pixels.current] )) 
-r.reco.commit_all()
+fig,ax = plt.subplots(3,1,sharex=True,figsize=(15,5))
+#plt.figure(); 
+ax[0].plot( np.array(u_list)[:,:] )
+ax[0].set_ylabel(f'modal residual (post controller)')
+ax[1].plot( np.array(e_list_real)[:,:] )
+ax[1].set_ylabel(f'real modal residual')
+ax[2].plot( strehl_list )
+ax[2].set_ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
+ax[2].set_xlabel('iterations')
+plt.savefig( 'tmp/temp2.png' )
 
 
 
+"""
+fig,ax = plt.subplots(2,1,sharex=True)
+#plt.figure(); 
+ax[0].plot( np.array(u_list)[:,:] )
+ax[0].set_ylabel(f'modal residual')
+ax[1].plot( strehl_list )
+ax[1].set_ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
+ax[1].set_xlabel('iterations')
+plt.savefig( 'tmp/temp2.png' )
+"""
 
 
 
