@@ -1529,7 +1529,7 @@ NB_MODULE(_rtc, m) {
         .def("state", &AsyncRunner::state)
         .def("flush", &AsyncRunner::flush);
 
-
+    
     nb::class_<telem_entry>(m, "TelemEntry")
         .def_ro("image_in_pupil", &telem_entry::image_in_pupil)
         .def_ro("image_err_signal", &telem_entry::image_err_signal) 

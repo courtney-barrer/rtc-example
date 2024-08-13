@@ -402,7 +402,7 @@ for it in range(100):
     residual_list.append( test_field.phase[z.wvls[0]] )
     
 
-fig,ax = plt.subplots(3,1,sharex=True,figsize=(15,5))
+fig,ax = plt.subplots(3,1,sharex=True,figsize=(5,10))
 #plt.figure(); 
 ax[0].plot( np.array(u_list)[:,:] )
 ax[0].set_ylabel(f'modal residual (post controller)')
