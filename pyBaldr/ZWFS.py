@@ -257,6 +257,10 @@ class ZWFS():
     def get_processed_image(self):
         FliSdk_V2.GetProcessedImage(self.camera, -1)
 
+    def send_fli_cmd( cmd ):
+        # for sending FLI commands as defined in user manual 
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, cmd)
+
     def get_image_in_another_region(self, crop_region=[0,-1,0,-1]):
         
         # I do not check if the camera is running. Users should check this 
@@ -273,9 +277,25 @@ class ZWFS():
 
     def build_bias(self, number_frames=256):
         #nb = 256 # number of frames for building bias 
+        # cred 3 
         #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
+        # Cred 2 
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"exec buildbias")
-    
+
+    def build_flat(self, number_frames=256):
+        #nb = 256 # number of frames for building bias 
+        # cred 3 
+        #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
+        # Cred 2 
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"exec buildflat")
+
+
+    def flat_on(self):
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set flat on")
+
+    def flat_off(self):
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set flat off")
+
     def bias_on(self):
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set bias on")
 
@@ -353,6 +373,7 @@ class ZWFS():
         """
         gain_string must be "low", "medium" or "high"
         """
+        # cred 3
         #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensitivity {gain_string}")
         # cred 2 
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensibility {gain_string}")
