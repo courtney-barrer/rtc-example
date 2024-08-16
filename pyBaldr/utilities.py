@@ -114,16 +114,108 @@ def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 
         else:
             M2C = np.array( bmcdm_basis_list ).T # take transpose to make columns the modes in command space.
 
+
+    #elif basis == 'Sensor_Eigenmodes': this is done specifically in a phase_control.py function - as it needs a interaction matrix covariance first 
+
+             
+    elif basis_modes == 'fourier':
+        # NOT TESTED YET ON REAL DM!! 
+        if without_piston:
+            N_controlled_modes += 1 # we add one more mode since we dont include piston 
+
+        # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
+        control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
+        raw_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
+        
+        bmcdm_basis_list = []
+        for i,B in enumerate(raw_basis):
+            B = B.reshape(-1)
+            B[corner_indices] = np.nan
+            bmcdm_basis_list.append( B[np.isfinite(B)] )
+        # flatten & normalize each basis cmd 
+        if without_piston:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+        else:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
+        M2C = np.array( control_basis ).T 
+
     elif basis == 'Zonal': 
         #hardcoded for BMC multi3.5 DM (140 actuators)
         M2C = np.eye( 140 ) # we just consider this over all actuators (so defaults to 140 modes) 
         # we filter zonal basis in the eigenvectors of the control matrix. 
- 
-    #elif basis == 'Sensor_Eigenmodes': this is done specifically in a phase_control.py function - as it needs a interaction matrix covariance first 
-
+    
     return(M2C)
 
 
+
+def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
+    """
+    
+
+    Parameters
+    ----------
+    n : TYPE int
+        DESCRIPTION. what order in x (column) dimension do we create Fourier basis for?
+    m : TYPE int
+        DESCRIPTION. what order in y (row) dimension do we create Fourier basis for?
+
+    Returns
+    -------
+    basis_dict - a dictionary indexed by mode order tuple (n,m) with corresponding 2D Fourier basis
+    
+    
+    # what is logical indexing? 
+    basis naturally forms 2 NxN squares, one square corresponding to odd components (sin) in x,y other to even (cos)
+
+    for each axis dimension count, with even numbers corresponding to even functions (cos), odd numbers to odd functions (sin)
+    therefore to recover cos or sin order we simply divide by 2 and round (//2)
+
+    we do not count piston  
+    e.g. indexing for x dimension:
+    0 = np.real(F_basis_x[0] )  
+    1 = np.imag(F_basis_x[0] )  
+    2 = np.iamg(F_basis_x[1] ) 
+    3 = np.real(F_basis_x[1] ) 
+
+    therefore for example index (3,2)
+    B_(3,2) = np.real(F_basis_x[1] ) * np.imag(F_basis_y[1] )
+    first index corresponds to variation across columns (x), 
+    second index corresponds to variation across rows (y)
+
+    """
+    basis_dict = {}
+
+    for x_idx in range(0,n):
+        for y_idx in range(0,m):
+            
+            #
+            x_order = x_idx//2
+            y_order = y_idx//2
+            
+            if not ((x_idx==0) | (y_idx==0)): # otherwise we get lots of pistons 
+                Bx, By = fourier_vector(x_order, y_order, P , Nx , Ny )
+                    
+                if not np.mod(x_idx,2): #odd number take imaginary (odd) part
+                    Bx_q = np.imag( Bx )
+    
+                else: # even number take real (even) part
+                    Bx_q = np.real( Bx )
+    
+                    
+                if not np.mod(y_idx,2): #odd number take imaginary (odd) part
+                    By_q = np.imag( By )
+                    
+                else: # even number take real (even) part
+                    By_q = np.real( By )
+            
+                #if x_idx > 1:
+                mode_tmp = Bx_q * By_q - np.mean(Bx_q * By_q)
+                if np.sum( mode_tmp**2):
+                    mode_tmp *= 1/np.sum( mode_tmp**2)**0.5 #normalized <M|M>=1
+                basis_dict[(x_idx-1,y_idx-1)] =  mode_tmp
+
+
+    return(basis_dict)
 
 def get_DM_command_in_2D(cmd,Nx_act=12):
     # function so we can easily plot the DM shape (since DM grid is not perfectly square raw cmds can not be plotted in 2D immediately )
@@ -432,7 +524,7 @@ def nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list,cbar_l
     if savefig!=None:
         plt.savefig( savefig , bbox_inches='tight', dpi=300) 
 
-    plt.show() 
+    #plt.show() 
 
 def nice_DM_plot( data, savefig=None ): #for a 140 actuator BMC 3.5 DM
     fig,ax = plt.subplots(1,1)

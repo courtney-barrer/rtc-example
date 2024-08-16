@@ -7,8 +7,7 @@ Created on Thu Apr  4 11:53:02 2024
 
 ZWFS class can only really get an image and send a command to the DM and/or update the camera settings
 
-it does have an state machine, any processes interacting with ZWFS object
-must do the logic to check and update state
+
 
 """
 
@@ -43,10 +42,10 @@ class ZWFS():
         # print some info and exit if nothing detected
         if len(listOfGrabbers) == 0:
             print("No grabber detected, exit.")
-            FliSdk_V2.exit()
+            FliSdk_V2.Exit(camera)
         if len(listOfCameras) == 0:
             print("No camera detected, exit.")
-            FliSdk_V2.exit()
+            FliSdk_V2.Exit(camera)
         for i,s in enumerate(listOfCameras):
             print("- index:" + str(i) + " -> " + s)
        
@@ -55,14 +54,14 @@ class ZWFS():
         camera_err_flag = FliSdk_V2.SetCamera(camera, listOfCameras[cameraIndex])
         if not camera_err_flag:
             print("Error while setting camera.")
-            FliSdk_V2.exit()
+            FliSdk_V2.Exit(camera)
         print("Setting mode full.")
         FliSdk_V2.SetMode(camera, FliSdk_V2.Mode.Full)
         print("Updating...")
         camera_err_flag = FliSdk_V2.Update(camera)
         if not camera_err_flag:
             print("Error while updating SDK.")
-            FliSdk_V2.exit()
+            FliSdk_V2.Exit(camera)
            
         # connecting to DM
        
@@ -274,7 +273,8 @@ class ZWFS():
 
     def build_bias(self, number_frames=256):
         #nb = 256 # number of frames for building bias 
-        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
+        #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"exec buildbias")
     
     def bias_on(self):
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "set bias on")
@@ -353,7 +353,9 @@ class ZWFS():
         """
         gain_string must be "low", "medium" or "high"
         """
-        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensitivity {gain_string}")
+        #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensitivity {gain_string}")
+        # cred 2 
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensibility {gain_string}")
         
     def restore_default_settings(self): 
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "restorefactory")

@@ -1,184 +1,592 @@
-
 import numpy as np
 import glob 
 from astropy.io import fits
 import os 
 import matplotlib.pyplot as plt 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import sys
+import copy 
 
 import rtc
+sys.path.append('simBaldr/' )
+sys.path.append('pyBaldr/' )
 from pyBaldr import utilities as util
-from pyBaldr import ZWFS
-from pyBaldr import phase_control
-from pyBaldr import pupil_control
+import baldr_simulation_functions as baldrSim
+import data_structure_functions as config
+
+# sys.path.append('/Users/bencb/Documents/rtc-example/simBaldr/' )
+# dont import pyBaldr since dont have locally FLI / BMC 
 
 """
-1)
-init rtc
-read in reconstructor configuration (fits) file and configure rtc struc with it
-
-2) 
-set up simulation signals if rtc_state.camera_simulation_mode = true
-
-3)
-test single compute with the simulated signals to ensure we get correct behaviour
-
-4) 
-t
-
-
+Testing the RTC in simulation mode using realistic inputs/outputs from baldrSim  
 
 """
 
-#%% 1) ------------------------------------------------------------------
+
+
+#%%
+#===================== SIMULATION 
+
+# =========== Setup simulation 
+
+#throughput = 0.01
+#Hmag = 0
+#Hmag_at_vltiLab = Hmag  - 2.5*np.log10(throughput)
+#flux_at_vltilab = baldr.star2photons('H',Hmag_at_vltiLab,airmass=1,k=0.18,ph_m2_s_nm=True) #ph/m2/s/nm
+
+# setting up the hardware and software modes of our ZWFS
+tel_config =  config.init_telescope_config_dict(use_default_values = True)
+phasemask_config = config.init_phasemask_config_dict(use_default_values = True) 
+
+# -------- trialling this 
+phasemask_config['on-axis phasemask depth'] = 4.210526315789474e-05
+phasemask_config['off-axis phasemask depth'] = 4.122526315789484e-05
+
+phasemask_config['phasemask_diameter'] = 1.1 * (phasemask_config['fratio'] * 1.65e-6)
+
+#---------------------
+
+DM_config_square = config.init_DM_config_dict(use_default_values = True) 
+DM_config_bmc = config.init_DM_config_dict(use_default_values = True) 
+DM_config_bmc['DM_model'] = 'BMC-multi3.5' #'square_12'
+DM_config_square['DM_model'] = 'square_12'#'square_12'
+
+# default is 'BMC-multi3.5'
+detector_config = config.init_detector_config_dict(use_default_values = True)
+
+
+# the only thing we need to be compatible is the pupil geometry and Npix, Dpix 
+tel_config['pup_geometry'] = 'disk'
+
+# define a hardware mode for the ZWFS 
+mode_dict_bmc = config.create_mode_config_dict( tel_config, phasemask_config, DM_config_bmc, detector_config)
+mode_dict_square = config.create_mode_config_dict( tel_config, phasemask_config, DM_config_square, detector_config)
+
+#create our zwfs object with square DM
+zwfs = baldrSim.ZWFS(mode_dict_square)
+# now create another one with the BMC DM 
+zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
+
+
+
+# -------- trialling this 
+
+# Cold stops have to be updated for both FPM and FPM_off!!!!!!!
+zwfs.FPM.update_cold_stop_parameters( None )
+zwfs.FPM_off.update_cold_stop_parameters( None )
+
+zwfs_bmc.FPM.update_cold_stop_parameters( None )
+zwfs_bmc.FPM_off.update_cold_stop_parameters( None )
+
+
+#---------------------
+# define an internal calibration source 
+calibration_source_config_dict = config.init_calibration_source_config_dict(use_default_values = True)
+calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stabilized Tungsten Fiber-Coupled IR Light Source )
+calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
+
+nbasismodes = 20
+basis_labels = [ 'zernike','fourier', 'KL']
+control_labels = [f'control_{nbasismodes}_{b}_modes' for b in basis_labels]
+
+
+
+for b,lab in zip( basis_labels, control_labels):
+    # square DM  
+    # zwfs.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, pokeAmp = 150e-9 , label=lab, replace_nan_with=0)
+    # BMC multi3.5 DM 
+    zwfs_bmc.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, modal_basis=b, \
+                                      pokeAmp = 150e-9 , label=lab,replace_nan_with=0, without_piston=True)
+
+
+
+
+# ==================== A few basic checks for our ZWFS 
+
+test_field = baldrSim.init_a_field( Hmag=10, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+
+print( 'phase shift (deg) at 1.6um = ', zwfs.FPM.phase_mask_phase_shift( 1.6e-6 ))
+
+
+psi_b = zwfs.FPM.get_output_field( test_field, keep_intermediate_products=True)
+
+im_list = [ zwfs.FPM.phase_shift_region, abs( zwfs.FPM.Psi_B[0] )**2 ]
+xlabel_list = ['' for _ in range(len(im_list))]
+ylabel_list = ['' for _ in range(len(im_list))]
+title_list = ['phase shift region','PSF \n(diffraction limited)']
+cbar_label_list = ['[1/0]', 'intensity [adu]']
+util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+
+
+
+#===================== SET-UP RTC (IN SIMULATION MODE)  
+
+# set up RTC controller in C++
 r = rtc.RTC() 
-conig_file_name = None #if None we just get most recent reconstructor file in /data/ path
 
-# Note we do not do this as a function because the \
-# we get memory errors in RTC struc when manipulating in 
-# local scope of python function
+z = copy.deepcopy( zwfs_bmc ) # general name so we could potentially do this in for loop
 
-#states_tmp = rtc.rtc_state_struct() 
-#sim_signals = rtc.simulated_signals_struct()
+lab = f'control_{nbasismodes}_zernike_modes' #f'control_{nbasismodes}_fourier_modes' #'control_20_zernike_modes' # 'control_20_fourier_modes'
+
+control_basis =  np.array(z.control_variables[lab ]['control_basis'])
+M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+I2M = np.array( z.control_variables[lab ]['I2M'] ).T  
+IM = np.array(z.control_variables[lab ]['IM'] )
+I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
+N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
+
+#lets have a look at basis functions 
+fig,ax = plt.subplots(int(np.sqrt(len(control_basis))),int(np.sqrt(len(control_basis))),figsize=(20,20))
+for m, axx in zip(control_basis, ax.reshape(-1)):
+    axx.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( m ))
+plt.show()
+
+# ---------------
+# populating rtc structures
 cam_settings_tmp = rtc.camera_settings_struct()
 reconstructors_tmp = rtc.phase_reconstuctor_struct()
 pupil_regions_tmp = rtc.pupil_regions_struct()
 
-if conig_file_name==None:
-    # get most recent 
-    list_of_recon_files = glob.glob('data/' + 'RECONS*')
-    conig_file_name = max(list_of_recon_files, key=os.path.getctime) #'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
-    #/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data
-    #reco_filename = reco_filename
-
-
-config_fits = fits.open( conig_file_name  ) 
-
-# camera settings used to build reconstructor 
-det_fps = float(config_fits['info'].header['camera_fps']) # frames per sec (Hz) 
-
-det_dit = float( config_fits['info'].header['camera_tint'] )  # integration time (seconds)
-
-det_gain = str(config_fits['info'].header['camera_gain']) # camera gain 
-
-det_cropping_rows = str( config_fits['info'].header['cropping_rows'] ).split('rows: ')[1]
-
-det_cropping_cols = str( config_fits['info'].header['cropping_columns'] ).split('columns: ')[1]
-
-cam_settings_tmp.det_fps = det_fps
-cam_settings_tmp.det_dit = det_dit
-cam_settings_tmp.det_gain = det_gain
-cam_settings_tmp.det_cropping_rows = det_cropping_rows
-cam_settings_tmp.det_cropping_cols = det_cropping_cols 
-
-
-# reconstructor data 
-R_TT = config_fits['R_TT'].data.astype(np.float32) #tip-tilt reconstructor
-
-R_HO = config_fits['R_HO'].data.astype(np.float32) #higher-oder reconstructor
-
-IM = config_fits['IM'].data.astype(np.float32) # interaction matrix (unfiltered)
-
-M2C = config_fits['M2C'].data.astype(np.float32) # mode to command matrix 
-
-I2M = np.transpose( config_fits['I2M'].data).astype(np.float32) # intensity (signal) to mode matrix  
-# (# transposed so we can multiply directly I2M @ signal)
-    
-CM = config_fits['CM'].data.astype(np.float32)  # full control matrix 
-
-I0 = config_fits['I0'].data.astype(np.float32) # calibration source reference intensity (FPM IN)
-
-N0 = config_fits['N0'].data.astype(np.float32) # calibration source reference intensity (FPM OUT)
-
-reconstructors_tmp.IM.update(IM.reshape(-1))
-reconstructors_tmp.CM.update(CM.reshape(-1))
-reconstructors_tmp.R_TT.update(R_TT.reshape(-1))
-reconstructors_tmp.R_HO.update(R_HO.reshape(-1))
-reconstructors_tmp.M2C.update(M2C.reshape(-1))
-reconstructors_tmp.I2M.update(I2M.reshape(-1))
-reconstructors_tmp.I0.update(I0.reshape(-1))
-reconstructors_tmp.N0.update(N0.reshape(-1))
-
-# COMMIT IT ALL 
-reconstructors_tmp.commit_all()
-# -----------------------------
-
-# pupil region classification data 
-pupil_pixels = np.array( config_fits['pupil_pixels'].data, dtype=np.int32)
-
-secondary_pixels = np.array( config_fits['secondary_pixels'].data, dtype=np.int32)
-
-outside_pixels = np.array( config_fits['outside_pixels'].data, dtype=np.int32)
-
-pupil_regions_tmp.pupil_pixels.update( pupil_pixels )
-pupil_regions_tmp.secondary_pixels.update( secondary_pixels ) 
-pupil_regions_tmp.outside_pixels.update( outside_pixels )
-#filter(lambda a: not a.startswith('__'), dir(pupil_regions_tmp))
+# SET PUPIL REGIONS
+pupil_regions_tmp.pupil_pixels.update( np.arange( len( I0.reshape(-1))).astype(int) )
+pupil_regions_tmp.secondary_pixels.update( [len( I0.reshape(-1))//2] ) 
+pupil_regions_tmp.outside_pixels.update( [] )
 
 # COMMIT IT ALL 
 pupil_regions_tmp.commit_all()
-# -----------------------------
-
-# Simple check 
-if len( pupil_pixels ) != CM.shape[1]:
-    raise TypeError("number of pupil pixels (for control) does not match\
-    control matrix size!!! CHeck why, did you input correct files?")
-
-# update our RTC object 
-# _RTC.regions = pupil_regions_tmp
-# _RTC.reco = reconstructors_tmp
-# _RTC.camera_settings = cam_settings_tmp
-
+# append to our rtc 
 r.regions = pupil_regions_tmp
+
+# SET OUR RECO 
+reconstructors_tmp = rtc.phase_reconstuctor_struct()
+
+reconstructors_tmp.IM.update(IM.reshape(-1))
+reconstructors_tmp.CM.update((M2C @ I2M).reshape(-1))
+
+reconstructors_tmp.R_TT.update((M2C @ I2M).reshape(-1))
+reconstructors_tmp.R_HO.update((M2C @ I2M).reshape(-1))
+
+reconstructors_tmp.M2C.update(M2C.reshape(-1))
+
+reconstructors_tmp.I2M.update(I2M.reshape(-1))
+# I0 should be normalized by the reference with phase mask out, 
+# we can use I0 for normalization only when considering large  enough area
+reconstructors_tmp.I0.update(I0.reshape(-1)/np.sum( N0.reshape(-1)[r.regions.pupil_pixels.current] )) #normalized
+reconstructors_tmp.N0.update(N0.reshape(-1)) #normalized
+# THIS HAS TO BE UPDATED ON ANY NEW SOURCE!!! 
+# HERE IS ONLY PLACEHOLDER 
+reconstructors_tmp.flux_norm.update(np.sum( N0.reshape(-1)[r.regions.pupil_pixels.current] ))   #normalized
+
+# COMMIT IT ALL 
+reconstructors_tmp.commit_all()
+# append to our rtc 
 r.reco = reconstructors_tmp
-r.camera_settings = cam_settings_tmp
-# do we return it or is it static?
-#return(_RTC)
 
 
-# check it updated correcetly 
-#print('current CM for r:', r.reco.CM.current )
-#print('current pupil_pixels for r:', r.regions.pupil_pixels.current )
 
-r.apply_camera_settings()  # <------ segmentation fault here 
+# SET CONTROLLERS (PID and leaky integrator)
+Nmodes = M2C.shape[1]
+# pid
+kp = list( 1.0 * np.ones(Nmodes) )
+ki = list( 0.0 * np.ones(Nmodes) )
+kd = list( 0.0 * np.ones(Nmodes) )
+pid_setpoint = list( np.zeros( Nmodes ))
+# leaky
+rho = list( 1.0 * np.ones(Nmodes))
 
+lower_limit = list( -100.0 * np.ones(Nmodes) )
+upper_limit = list( 100.0 * np.ones(Nmodes) )
 
-#%% 2) ------------------------------------------------------------------
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit, pid_setpoint  )
+leaky_tmp = rtc.LeakyIntegrator( rho, lower_limit, upper_limit ) 
+
+r.pid = pid_tmp 
+r.LeakyInt = leaky_tmp
+
+# ====================
+# Now generate input and run simulation 
+# ====================
+# Notes: DM active actuators and field don't have 1:1 overlap - so putting a field mode in (on the same basis)
+# as DM is not necesarily orthogonal and can cause cross coupling. Using Fourier improves this for some modes! 
+# (at least for lower order modes). Really need to move to Eigenbasis.
+# also try removing tip/tilt?
+
+# 0) set up simulation state and create a test input field 
+# 1) in Baldrsim generate a detector intensity from input field and u
+#   update normalization flux 
+# 2) set this to the rtc simulated intensity 
+# 3) do a single_compute that from:
+#   intensity -> signal -> modal space -> apply controller -> DM command. Returns DM command
+# 4) get the DM command, apply it to the simulated field, 
+# 5) repeat from step 1 with the updated field.
+
+# -- (0)
+# we only simulate the input images and dm (do not simulated the processed signal)
+r.rtc_state.camera_simulation_mode = True
+r.rtc_state.signal_simulation_mode = False
+r.rtc_state.dm_simulation_mode = True
+
+mode_idx = 5
+test_field = baldrSim.init_a_field( Hmag=2, mode=mode_idx, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+
+# -- (1)
+# flatten DM ! 
+z.dm.update_shape(  np.zeros( M2C.shape[0] ) )
+# phase mask in 
+i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+# phase mask out
+o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+# check saturation
+if np.max( i.signal ) > 2**16:
+    raise TypeError('Saturation! max adu for detector in rtc is uint16. peak signal here > 2**16. Consider making test field fainter.')
+# update our flux normalization based on FPM out measurement (simulated)
+r.reco.flux_norm.update( np.sum( o.signal.reshape(-1)[r.regions.pupil_pixels.current] )) 
+r.reco.commit_all()
+
+# -- (2)
 if r.rtc_state.camera_simulation_mode :
-    r.rtc_simulation_signals.simulated_image = I0.reshape(-1) # simulated image
-    r.rtc_simulation_signals.simulated_signal = IM[0] # simulated signal (processed image) - 
-    # if r.rtc_state.signal_simulation_mode=true than this simulated signal over-rides any 
-    # images (simulated or not) as input to the controllers.
-    r.rtc_simulation_signals.simulated_dm_cmd = M2C.T[0] # simulated DM command 
+    r.rtc_simulation_signals.simulated_image = list( i.signal.reshape(-1) )# simulated image
+    print(' updated simulated image in simulation mode')
 
-# to check it
-#plt.figure();plt.imshow( util.get_DM_command_in_2D( r.rtc_simulation_signals.simulated_dm_cmd) ); plt.show()
+# -- (3)
+# single compute argunment has case numbers for testing different functionalities / modes of RTC
+# case 113 corresponds to :
+#    intensity -> signal -> modal space -> apply PID -> DM command.
+# case 123 corresponds to :
+#    intensity -> signal -> modal space -> apply leaky integrator -> DM command.
+# where the intensity here is the simulated input 
 
+r.pid.reset()
+r.LeakyInt.reset()
+# The reset doesn't really reset output!!!! 
 
-#%% 3) ------------------------------------------------------------------
-# test some functionality 
-
-# polling image and convert to vector 
-test1 = r.im2vec_test()
-if(len(test1) == r.camera_settings.full_image_length):
-    print( ' passed im2vec_test')
-else:
-    print( ' FAILED --- im2vec_test')
-
-# polling image and convert to vector and filter for pupil pixels 
-test2 = r.im2filtered_im_test()
-if(len(test2 ) == len(r.regions.pupil_pixels.current)):
-    print( ' passed im2vec_test')
-else:
-    print( ' FAILED --- im2vec_test')
+#r.pid.kp[0] = 0
+#r.LeakyInt.rho[0] = 0
+cmd = r.single_compute( 123 )
 
 
-# filter reference intensity setpoint for pupil pixels 
+# -- (4)
+z.dm.update_shape(  np.mean( cmd ) - cmd )
+post_dm_field = test_field.applyDM( z.dm )
 
-# process image 
+wvl_ref = z.wvls[0] # wvl wher eto plot and compute metrics
+im_list = [ zwfs.pup * 1e9 * wvl_ref /(2*np.pi) * test_field.phase[wvl_ref], i.signal, \
+           1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D( cmd ), \
+            zwfs.pup * 1e9 * wvl_ref/(2*np.pi) * post_dm_field.phase[wvl_ref] ]
+xlabel_list = ['' for _ in range(len(im_list))]
+ylabel_list = ['' for _ in range(len(im_list))]
+title_list = ['phase pre DM','detector signal', 'DM surface reco.','phase post DM']
+cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
+savename = f'tmp/reco_input-Z{mode_idx}_basis-{lab}.png' #None
+util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, \
+                           title_list,cbar_label_list, fontsize=15, \
+                            cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=savename)
 
-# matrix multiplication ( to go to command space)
+print( f'strehl_before ({round(1e6*wvl_ref,2)}um) = ',np.exp( -np.nanvar( test_field.phase[wvl_ref][zwfs.pup>0] ) ))
+print( f'strehl_after ({round(1e6*wvl_ref,2)}um)= ',np.exp( -np.nanvar( post_dm_field.phase[wvl_ref][zwfs.pup>0] ) ))
 
-# matrix multiplication (to go to modal space )
+
+# -- (5)
+# repeat  
+
+
+# =========================
+# Trying closed loop 
+
+
+# SET CONTROLLERS (PID and leaky integrator)
+Nmodes = M2C.shape[1]
+
+"""
+bug one ki !+ 0 
+"""
+
+# pid
+kp = list( 0.5 * np.ones(Nmodes) )
+ki = list( 0.0 * np.ones(Nmodes) )
+kd = list( 0.0 * np.ones(Nmodes) )
+pid_setpoint = list( np.zeros( Nmodes ))
+# leaky
+rho = list( 0.8 * np.ones(Nmodes))
+
+lower_limit = list( -100.0 * np.ones(Nmodes) )
+upper_limit = list( 100.0 * np.ones(Nmodes) )
+
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit, pid_setpoint  )
+leaky_tmp = rtc.LeakyIntegrator( rho, lower_limit, upper_limit ) 
+
+r.pid = pid_tmp 
+r.LeakyInt = leaky_tmp
+
+
+
+test_field = baldrSim.init_a_field( Hmag=1, mode='Kolmogorov', wvls=zwfs.wvls, \
+                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
+                                           r0=0.1, L0 = 25, phase_scale_factor=0.9)
+
+
+c_list = []
+strehl_list = []
+residual_list = []
+u_list = []
+e_list_real = []
+
+wvl_ref = zwfs.wvls[0] # where to calculate Strehl ratio etc
+r.pid.reset()
+r.LeakyInt.reset()
+
+#initial cmd 
+c = np.zeros( M2C.shape[0] )
+z.dm.update_shape( c )
+
+#r.pid.kp[0] = 0
+#r.pid.kp[1] = 0
+
+#r.LeakyInt.rho[0]  = 0
+#r.LeakyInt.rho[1]  = 0
+
+# aberrations vs estimated aberrations 
+field_basis = baldrSim.create_control_basis(None, N_controlled_modes=20, basis_modes=lab.split('_')[-2],\
+                                    without_piston=True, not_associated_with_DM=zwfs.pup.shape[0])
+
+plot=False
+for it in range(100):
+    
+    strehl = np.exp( -np.nanvar( test_field.phase[wvl_ref][zwfs.pup>0] ) )
+    print( strehl )
+    strehl_list.append( strehl )
+    
+    # the real field aberation error 
+    e_real = [np.nansum( test_field.phase[wvl_ref].reshape(-1) * a ) for a in field_basis ]
+
+    i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    
+    # check saturation
+    if np.max( i.signal ) > 2**16:
+        raise TypeError('Saturation! max adu for detector in rtc is uint16. peak signal here > 2**16. Consider making test field fainter.')
+    # update our flux normalization based on FPM out measurement (simulated)
+    r.reco.flux_norm.update( np.sum( o.signal.reshape(-1)[r.regions.pupil_pixels.current] )) 
+    r.reco.commit_all()
+
+    if r.rtc_state.camera_simulation_mode :
+        r.rtc_simulation_signals.simulated_image = list( i.signal.reshape(-1) )# simulated image
+        print(' updated simulated image in simulation mode')
+
+    if plot:
+        im_list = [ zwfs.pup * 1e9 * wvl_ref /(2*np.pi) * test_field.phase[wvl_ref], i.signal, \
+            1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D(  np.mean( c ) - c  ) ]
+        xlabel_list = ['' for _ in range(len(im_list))]
+        ylabel_list = ['' for _ in range(len(im_list))]
+        title_list = ['phase', 'signal', 'DM surface reco.']
+        cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]']
+        savename = f'tmp/telem_basis-{lab}_it{it}.png' #None
+        util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, \
+                                title_list,cbar_label_list, fontsize=15, \
+                                    cbar_orientation = 'bottom', axis_off=True, vlims=[[-500,500],[1000,6000], [-200,200]], savefig=savename)
+
+
+    # with PID: 113, with leaky integrator: 123
+    # leaky integrator works great after removing piston from basis function
+    c = r.single_compute( 113 )
+
+
+    z.dm.update_shape( c - np.mean( c ) )#  - c ) #
+    
+    test_field = test_field.applyDM( z.dm )
+    
+    c_list.append( c )
+    u_list.append( r.pid.output )
+    e_list_real.append( e_real )
+    residual_list.append( test_field.phase[z.wvls[0]] )
+    
+
+fig,ax = plt.subplots(3,1,sharex=True,figsize=(5,10))
+#plt.figure(); 
+ax[0].plot( np.array(u_list)[:,:] )
+ax[0].set_ylabel(f'modal residual (post controller)')
+ax[1].plot( np.array(e_list_real)[:,:] )
+ax[1].set_ylabel(f'real modal residual')
+ax[2].plot( strehl_list )
+ax[2].set_ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
+ax[2].set_xlabel('iterations')
+plt.savefig( 'tmp/temp2.png' )
+
+
+
+"""
+fig,ax = plt.subplots(2,1,sharex=True)
+#plt.figure(); 
+ax[0].plot( np.array(u_list)[:,:] )
+ax[0].set_ylabel(f'modal residual')
+ax[1].plot( strehl_list )
+ax[1].set_ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
+ax[1].set_xlabel('iterations')
+plt.savefig( 'tmp/temp2.png' )
+"""
+
+
+
+
+
+"""
+# -- (2.1) double checking in local simulation (not using RTC processes)
+
+kp = 1 * np.ones( len(M2C.T) )
+kp[0] = 0 # filter out 
+ki = 0. * np.ones( len(M2C.T) )
+kd = np.zeros( len(M2C.T) )
+upper_limit = 100 *  np.ones( len(M2C.T) )
+lower_limit = -100 * np.ones( len(M2C.T) )
+setpoint = np.zeros( len(M2C.T) )
+
+pid = baldrSim.PIDController(kp, ki, kd, upper_limit, lower_limit, setpoint)
+
+i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+
+# this works 
+sig = i.signal / np.sum( o.signal ) - I0 / np.sum( N0 )
+# this does not work 
+#sig = i.signal / np.sum( N0 ) - I0 / np.sum( N0 )
+
+e = I2M @ sig.reshape(-1)
+
+#print( e )
+u = pid.process( I2M @ sig.reshape(-1) )
+
+c = 1 * M2C @ u 
+
+im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], zwfs_intensity.signal, 1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D( c ), 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
+xlabel_list = ['' for _ in range(len(im_list))]
+ylabel_list = ['' for _ in range(len(im_list))]
+title_list = ['phase pre DM','detector signal', 'DM surface', 'phase post DM']
+cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]','OPD [nm]']
+util.nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+
+"""
+
+
+
+mode_num = 5
+r.rtc_state.signal_simulation_mode = True
+r.rtc_simulation_signals.simulated_signal = IM[mode_num] 
+mode_reco_test = np.array( r.single_compute(3) ) 
+
+
+
+
+
+
+
+
+# TO DO 
+# - won't be able to interact properly unless DM in simulation matches DM shape here (removing corners)
+
+# generate static mode
+#dx = zwfs.mode['telescope']['telescope_diameter'] / zwfs.mode['telescope']['telescope_diameter_pixels']
+#input_field = baldrSim.init_a_field( Hmag=0, mode=5, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=dx)
+#input_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=dx,r0=0.1, L0=25, phase_scale_factor = 1)
+test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+
+# put a mode on the DM 
+zwfs.dm.update_shape( zwfs.control_variables[lab ]['pokeAmp'] * M2C[5] )
+
+#output =  zwfs.detection_chain( test_field )
+sig_off = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM_off, zwfs.det, replace_nan_with=None)
+sig_on = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM, zwfs.det, replace_nan_with=None)
+
+#sig = sig_on.signal / np.sum( sig_off.signal)  -  I0 / np.sum(N0)  
+
+# do we reconstruct the mode? 
+#I2M.T @ sig.reshape(-1)
+
+Nph_obj = np.sum( sig_off.signal) 
+Nph_cal = zwfs.control_variables[lab ]['Nph_cal']
+
+#sig = sig_on.signal / np.sum( sig_off.signal)  -  I0 / np.sum(N0)  
+
+mode_err = I2M.T @ ( 1/Nph_obj * (sig_on.signal - Nph_obj/Nph_cal * I0) ).reshape(-1) 
+#cmd_err = M2C.T @ mode_err 
+
+
+
+
+
+plt.figure()
+plt.imshow( input_field.phase[zwfs.wvls[0]] )
+plt.show()
+
+
+
+
+Nmodes = M2C.shape[1]
+kp = 1 * np.ones(Nmodes)
+ki = 0.1 * np.ones(Nmodes)
+kd = 0 * np.ones(Nmodes)
+lower_limit = -100 * np.ones(Nmodes)
+upper_limit = 100 * np.ones(Nmodes)
+
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit )
+leaky_tmp = rtc.LeakyIntegrator( ki, lower_limit, upper_limit ) 
+
+
+r = rtc.RTC()
+r.reco = reconstructors_tmp
+r.regions = pupil_regions_tmp 
+r.pid = pid_tmp 
+r.LeakyInt = leaky_tmp
+
+
+
+<<<<<<< HEAD
+r.apply_camera_settings()  # <------ segmentation fault here 
+=======
+>>>>>>> ebcb198b61353925d5194db419b1082549946db8
+
+
+
+
+
+
+#
+# test 
+#test_field = baldr.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], r0=0.1, L0=25, phase_scale_factor = 9e-1)
+test_field = baldr.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'], dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+
+zwfs.dm.update_shape( zwfs.control_variables[lab ]['pokeAmp'] * M2C[5] )
+
+#output =  zwfs.detection_chain( test_field )
+
+sig_off = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM_off, zwfs.det, replace_nan_with=None)
+sig_on = zwfs.detection_chain( test_field, zwfs.dm, zwfs.FPM, zwfs.det, replace_nan_with=None)
+
+#sig = sig_on.signal / np.sum( sig_off.signal)  -  I0 / np.sum(N0)  
+
+# do we reconstruct the mode? 
+#I2M.T @ sig.reshape(-1)
+
+Nph_obj = np.sum( sig_off.signal) 
+Nph_cal = zwfs.control_variables[lab ]['Nph_cal']
+
+#sig = sig_on.signal / np.sum( sig_off.signal)  -  I0 / np.sum(N0)  
+
+mode_err = I2M.T @ (  1/Nph_obj * (sig_on.signal - Nph_obj/Nph_cal * I0) ).reshape(-1) 
+#cmd_err = M2C.T @ mode_err 
+
+
+
+
+
+
+PID 
+
+
+
+
+
+
 
 
 

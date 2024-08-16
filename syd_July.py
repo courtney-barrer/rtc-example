@@ -31,6 +31,33 @@ DM_serial_number = '17DW019#122'# Syd = '17DW019#122', ANU = '17DW019#053'
 #zwfs.shutdown()
 ###
 
+"""
+import FliSdk_V2
+camera = FliSdk_V2.Init() # init camera object
+listOfGrabbers = FliSdk_V2.DetectGrabbers(camera)
+listOfCameras = FliSdk_V2.DetectCameras(camera)
+
+import bmc
+dm = bmc.BmcDm()
+dm_err_flag  = dm.open_dm(DM_serial_number)
+DMshapes_path='DMShapes/'
+files = glob.glob(DMshapes_path+'*.csv')
+
+print(files)
+ 'DMShapes/17DW019#122_FLAT_MAP_COMMANDS.csv',
+ 'DMShapes/four_torres.csv',
+ 'DMShapes/four_torres_2.csv',
+ 'DMShapes/Crosshair140.csv',
+ 'DMShapes/waffle.csv'
+
+flatdm = pd.read_csv('DMShapes/17DW019#122_FLAT_MAP_COMMANDS.csv', header=None)[0].values
+crosshair = pd.read_csv('DMShapes/Crosshair140.csv', header=None)[0].values
+
+dm.send_data(flatdm)
+
+"""
+
+
 # timestamp
 tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
