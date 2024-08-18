@@ -258,8 +258,9 @@ class ZWFS():
         FliSdk_V2.GetProcessedImage(self.camera, -1)
 
     def send_fli_cmd( cmd ):
-        # for sending FLI commands as defined in user manual 
-        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, cmd)
+        camera_err_flag = FliSdk_V2.FliSerialCamera.SendCommand(self.camera, cmd)
+        if not camera_err_flag:
+            print(f"Error with command {cmd}")
 
     def get_image_in_another_region(self, crop_region=[0,-1,0,-1]):
         
@@ -280,14 +281,14 @@ class ZWFS():
         # cred 3 
         #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
         # Cred 2 
-        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"exec buildbias")
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "exec buildbias")
 
-    def build_flat(self, number_frames=256):
+    def build_flat(self ):
         #nb = 256 # number of frames for building bias 
         # cred 3 
-        #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"buildnuc bias {number_frames}")
+        #FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"exec buildflat")
         # Cred 2 
-        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"exec buildflat")
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "exec buildflat")
 
 
     def flat_on(self):
