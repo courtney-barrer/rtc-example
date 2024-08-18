@@ -206,7 +206,12 @@ plt.show()
 #control_model_report
 zwfs.dm.send_data( zwfs.dm_shapes['flat_dm'] )
 ctrl_method_label = 'ctrl_1'
+
+# TRY model_2 WITH  method='single_side_poke', or 'double_sided_poke'
+#phase_ctrl.build_control_model_2(self, ZWFS, poke_amp = -0.15, label='ctrl_1', method='single_side_poke',  debug = True):
 phase_ctrl.build_control_model( zwfs , poke_amp = -0.15, label=ctrl_method_label, debug = True)  
+
+
 
 # to check that matrices are ok, product interaction matrix onto modes and onto DM commands
 mode_idx = 3

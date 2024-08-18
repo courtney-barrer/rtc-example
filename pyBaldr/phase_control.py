@@ -148,10 +148,109 @@ class phase_controller_1():
 
 
 
+    def build_control_model_2(self, ZWFS, poke_amp = -0.15, label='ctrl_1', method='single_side_poke',  debug = True):
+        # newer version without reliance on FPM out. (before sydney test)
+        # DOES NOT MEASURE N0
+        imgs_to_median = 10 
+        I0_list = []
+        for _ in range(imgs_to_median):
+            time.sleep(0.1)
+            I0_list.append( ZWFS.get_image(  ) ) #REFERENCE INTENSITY WITH FPM IN
+        I0 = np.median( I0_list, axis = 0 )
+
+        # === ADD ATTRIBUTES 
+        self.I0 = I0.reshape(-1)[np.array( ZWFS.pupil_pixels )] / np.mean( I0 ) # append reference intensity over defined     pupil with FPM IN 
+
+        # === also add the unfiltered so we can plot and see them easily on square grid after 
+        self.I0_2D = I0 / np.mean( I0 ) # 2D array (not filtered by pupil pixel filter)  
+        #self.N0 = N0.reshape(-1)[np.array( ZWFS.pupil_pixels )] / np.mean( N0 ) # append reference intensity over defined pupil with FPM OUT 
+
+        modal_basis = self.config['M2C'].copy().T # more readable
+        IM=[] # init our raw interaction matrix 
+
+        for i,m in enumerate(modal_basis):
+
+            print(f'executing cmd {i}/{len(modal_basis)}')
+
+            if method=='single_sided_poke': # just poke one side             
+                ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] + poke_amp * m )  )
+                time.sleep(0.05)
+                img_list = []  # to take median of 
+                for _ in range(imgs_to_median):
+                    img_list.append( ZWFS.get_image( ).reshape(-1) )
+                    time.sleep(0.01)
+                I = np.median( img_list, axis = 0) 
+
+                I *= 1/np.mean( I ) # we normalize by mean over total region! 
+                
+                # then filter for getting error signal 
+                errsig =  self.get_img_err( I[np.array( ZWFS.pupil_pixels )] )
+
+                IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
+            elif method=='double_sided_poke':
+                # Trialling 
+                for sign in [-1,1]:
+                    ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] + sign * poke_amp/2 * m )  )
+                    time.sleep(0.05)
+                    img_list = []  # to take median of 
+                    for _ in range(imgs_to_median):
+                        img_list.append( ZWFS.get_image( ).reshape(-1) )
+                        time.sleep(0.01)
+                    # normalize here 
+                    if sign > 0:
+                        I_plus = np.median( img_list, axis = 0) 
+                        I_plus *= 1/np.mean( I_plus )
+                    if sign < 0:
+                        I_minus = np.median( img_list, axis = 0) 
+                        I_minus *= 1/np.mean( I_minus )
+                errsig = (I_plus - I_minus)[np.array( ZWFS.pupil_pixels )]
+                IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
+
+            #U, S, Vt = np.linalg.svd( IM , full_matrices=True)
+
+        # intensity to mode matrix 
+        I2M = np.linalg.pinv( IM )
+
+        #control matrix (note in zonal method M2C is just identity matrix)
+        CM = self.config['M2C'] @ I2M.T
+
+        # class specific controller parameters
+        ctrl_parameters = {}
+       
+        ctrl_parameters['active'] = 0 # 0 if unactive, 1 if active (should only have one active phase controller)
+
+        ctrl_parameters['ref_pupil_FPM_out'] = N0
+
+        ctrl_parameters['ref_pupil_FPM_in'] = I0
+
+        ctrl_parameters['pupil_pixels'] = ZWFS.pupil_pixels
+
+        ctrl_parameters['secondary_pupil_pixels'] = ZWFS.secondary_pixels
+
+        ctrl_parameters['outside_pupil_pixels'] = ZWFS.outside_pixels
+
+        ctrl_parameters['dm_center_ref_pixels'] = ZWFS.dm_center_ref_pixels
+
+        ctrl_parameters['IM'] = IM # interaction matrix
+       
+        ctrl_parameters['I2M'] = I2M # intensity to mode matrix 
+
+        ctrl_parameters['CM'] = CM # control matrix (intensity to DM cmd)
+       
+        ctrl_parameters['P2C'] = None # pixel to cmd registration (i.e. what region)
+
+        ZWFS.states['busy'] = 0
+       
+        self.ctrl_parameters[label] = ctrl_parameters
+       
+
+
+
+
 
     def build_control_model(self, ZWFS, poke_amp = -0.15, label='ctrl_1', debug = True):
         
-        
+
         # remember that ZWFS.get_image automatically crops at corners ZWFS.pupil_crop_region
         ZWFS.states['busy'] = 1
         #update_references = int( input('get new reference intensities (1/0)') )
@@ -234,13 +333,14 @@ class phase_controller_1():
         ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] ) )
                
         # SVD
-        U,S,Vt = np.linalg.svd( IM , full_matrices=True)
+        U, S, Vt = np.linalg.svd( IM , full_matrices=True)
 
         # filter number of modes in eigenmode space when using zonal control  
         if self.config['basis'] == 'Zonal': # then we filter number of modes in the eigenspace of IM 
             S_filt = S > 0 #(i.e. we dont filter here) #S >= np.min(S) # we consider the highest eigenvalues/vectors up to the number_of_controlled_modes
             Sigma = np.zeros( np.array(IM).shape, float)
             np.fill_diagonal(Sigma, S[S_filt], wrap=False) #
+
         else: # else #modes decided by the construction of modal basis. We may change their gains later
             S_filt = S > 0 # S > S[ np.min( np.where( abs(np.diff(S)) < 1e-2 )[0] ) ]
             Sigma = np.zeros( np.array(IM).shape, float)
@@ -261,7 +361,7 @@ class phase_controller_1():
 
 
         # intensity to mode matrix 
-        I2M =  np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
+        I2M = np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
         
         #control matrix (note in zonal method M2C is just identity matrix)
         CM = self.config['M2C'] @ I2M.T
