@@ -17,6 +17,7 @@ import os
 import glob 
 import sys  
 import pandas as pd 
+import time
 import datetime 
 import matplotlib.pyplot as plt 
 from astropy.io import fits 
@@ -67,15 +68,26 @@ class ZWFS():
        
         dm = bmc.BmcDm() # init DM object
         dm_err_flag  = dm.open_dm(DM_serial_number) # open DM
+
+        dm_sim_mode = False # temporary thing for remote testing camera - sometimes DM is off and no one there to turn on 
         if dm_err_flag :
             print('Error initializing DM')
-            raise Exception(dm.error_string(dm_err_flag))
+            print( 'PUTTING IN SIMULATION MODE - ZWFS WILL NOT HAVE FULL FUNCTIONALITY ')
+            #raise Exception(dm.error_string(dm_err_flag))
+            dm_sim_mode = True
        
         # ========== CAMERA & DM
         self.camera = camera
-        self.dm = dm
+        if not dm_sim_mode:
+            self.dm = dm
+            self.dm.DM_serial_number = DM_serial_number
+        else: 
+            self.dm = {} # place holder 
         self.dm_number_of_actuators = 140
-        self.dm.DM_serial_number = DM_serial_number
+        
+        # ========== dictionary to hold reduction products
+        self.reduction_dict = {'bias':[], 'dark':[], 'flat':[], 'bad_pixel_mask':[]}
+
 
         # ========== DM shapes
         shapes_dict = {}
@@ -148,11 +160,17 @@ class ZWFS():
         self.secondary_pixel_filter = [np.nan]
         self.outside_pixel_filter = [np.nan]
         self.refpeak_pixel_filter = [np.nan]
+
         # pixels in reference regions  
         self.pupil_pixels = [np.nan]  
         self.secondary_pixels = [np.nan]
         self.outside_pixels = [np.nan]
         self.refpeak_pixels = [np.nan]
+
+        # bad pixels 
+        self.bad_pixel_filter = [np.nan]  
+        self.bad_pixels = [np.nan]  
+
         # reference centers 
         self.pupil_center_ref_pixels = (np.nan, np.nan)
         self.dm_center_ref_pixels = (np.nan, np.nan)
@@ -241,13 +259,102 @@ class ZWFS():
                 except:
                     print('raise an error or implement some workaround if the requested state cannot be realised')
 
-    def get_image(self):
+    def build_manual_dark( self ):
+        fps = self.get_camera_fps()
+        dark_list = []
+        for _ in range(1000):
+            time.sleep(1/fps)
+            dark_list.append( self.get_image(apply_manual_reduction  = False) )
+        dark = np.median(dark_list ,axis = 0).astype(int)
+
+        if len( self.reduction_dict['bias'] ) > 0:
+            dark -= self.reduction_dict['bias'][0]
+
+        self.reduction_dict['dark'].append( dark )
+
+
+    def get_bad_pixel_indicies( self, no_frames = 1000, std_threshold = 100 , flatten=False):
+        # To get bad pixels we just take a bunch of images and look at pixel variance 
+        self.enable_frame_tag( True )
+        time.sleep(0.5)
+        #zwfs.get_image_in_another_region([0,1,0,4])
+        i=0
+        dark_list = []
+        while len( dark_list ) < no_frames: # poll 1000 individual images
+            full_img = self.get_image_in_another_region() # we can also specify region (#zwfs.get_image_in_another_region([0,1,0,4]))
+            current_frame_number = full_img[0][0] #previous_frame_number
+            if i==0:
+                previous_frame_number = current_frame_number
+            if current_frame_number > previous_frame_number:
+                if current_frame_number == 65535:
+                    previous_frame_number = -1 #// catch overflow case for int16 where current=0, previous = 65535
+                else:
+                    previous_frame_number = current_frame_number 
+                    dark_list.append( self.get_image( apply_manual_reduction  = False) )
+            i+=1
+        dark_std = np.std( dark_list ,axis=0)
+        # define our bad pixels where std > 100 or zero variance
+        #if not flatten:
+        bad_pixels = np.where( (dark_std > std_threshold) + (dark_std == 0 ))
+        #else:  # flatten is useful for when we filter regions by flattened pixel indicies
+        bad_pixels_flat = np.where( (dark_std.reshape(-1) > std_threshold) + (dark_std.reshape(-1) == 0 ))
+
+        #self.bad_pixels = bad_pixels_flat
+
+        if not flatten:
+            return( bad_pixels )
+        else:
+            return( bad_pixels_flat )
+
+
+    def build_bad_pixel_mask( self, bad_pixels , set_bad_pixels_to = 0):
+        """
+        bad_pixels = tuple of array of row and col indicies of bad pixels.
+        Can create this simply by bad_pixels = np.where( <condition on image> )
+        gets a current image to generate bad_pixel_mask shape
+        - Note this also updates zwfs.bad_pixel_filter  and zwfs.bad_pixels
+           which can be used to filterout bad pixels in the controlled pupil region 
+        """
+        i = self.get_image(apply_manual_reduction = False )
+        bad_pixel_mask = np.ones( i.shape )
+        for ibad,jbad in list(zip(bad_pixels[0], bad_pixels[1])):
+            bad_pixel_mask[ibad,jbad] = set_bad_pixels_to
+
+        self.reduction_dict['bad_pixel_mask'].append( bad_pixel_mask )
+
+        badpixel_bool_array = np.zeros(i.shape , dtype=bool)
+        for ibad,jbad in list(zip(bad_pixels[0], bad_pixels[1])):
+            badpixel_bool_array[ibad,jbad] = True
+        
+        self.bad_pixel_filter = badpixel_bool_array.reshape(-1)
+        self.bad_pixels = np.where( self.bad_pixel_filter )[0]
+
+
+    def get_image(self, apply_manual_reduction  = True ):
 
         # I do not check if the camera is running. Users should check this 
         # gets the last image in the buffer
-        img = FliSdk_V2.GetRawImageAsNumpyArray( self.camera , -1)
-        cropped_img = img[self.pupil_crop_region[0]:self.pupil_crop_region[1],self.pupil_crop_region[2]: self.pupil_crop_region[3]].astype(int)  # make sure int and not uint16 which overflows easily     
-        
+        if not apply_manual_reduction:
+            img = FliSdk_V2.GetRawImageAsNumpyArray( self.camera , -1)
+            cropped_img = img[self.pupil_crop_region[0]:self.pupil_crop_region[1],self.pupil_crop_region[2]: self.pupil_crop_region[3]].astype(int)  # make sure int and not uint16 which overflows easily     
+        else :
+            img = FliSdk_V2.GetRawImageAsNumpyArray( self.camera , -1)
+            cropped_img = img[self.pupil_crop_region[0]:self.pupil_crop_region[1],self.pupil_crop_region[2]: self.pupil_crop_region[3]].astype(int)  # make sure 
+
+            if len( self.reduction_dict['bias'] ) > 0:
+                cropped_img -= self.reduction_dict['bias'][0] # take the most recent bias. bias must be set in same cropping state 
+
+            if len( self.reduction_dict['dark'] ) > 0:
+                cropped_img -= self.reduction_dict['dark'][0] # take the most recent dark. Dark must be set in same cropping state 
+
+            if len( self.reduction_dict['flat'] ) > 0:
+                cropped_img /= np.array( self.reduction_dict['flat'][0] , dtype = type( cropped_img[0][0]) ) # take the most recent flat. flat must be set in same cropping state 
+
+            if len( self.reduction_dict['bad_pixel_mask'] ) > 0:
+                # enforce the same type for mask
+                cropped_img *= np.array( self.reduction_dict['bad_pixel_mask'][0] , dtype = type( cropped_img[0][0]) ) # bad pixel mask must be set in same cropping state 
+
+
         if type( self.pixelation_factor ) == int : 
             cropped_img = util.block_sum(ar=cropped_img, fact = self.pixelation_factor)
         elif self.pixelation_factor != None:
@@ -257,7 +364,7 @@ class ZWFS():
     def get_processed_image(self):
         FliSdk_V2.GetProcessedImage(self.camera, -1)
 
-    def send_fli_cmd( cmd ):
+    def send_fli_cmd(self, cmd ):
         camera_err_flag = FliSdk_V2.FliSerialCamera.SendCommand(self.camera, cmd)
         if not camera_err_flag:
             print(f"Error with command {cmd}")

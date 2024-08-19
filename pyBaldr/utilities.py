@@ -18,6 +18,8 @@ sys.path.insert(1, '/opt/FirstLightImaging/FliSdk/Python/demo/')
 sys.path.insert(1,'/opt/Boston Micromachines/lib/Python3/site-packages/')
 import FliSdk_V2 
 import FliCredThree
+import FliCredTwo
+import FliCredOne
 
 import bmc
 # ============== UTILITY FUNCTIONS
@@ -167,7 +169,7 @@ def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
     # what is logical indexing? 
     basis naturally forms 2 NxN squares, one square corresponding to odd components (sin) in x,y other to even (cos)
 
-    for each axis dimension count, with even numbers corresponding to even functions (cos), odd numbers to odd functions (sin)
+    for each axis dimension cnt, with even numbers corresponding to even functions (cos), odd numbers to odd functions (sin)
     therefore to recover cos or sin order we simply divide by 2 and round (//2)
 
     we do not count piston  
@@ -733,8 +735,11 @@ def apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_ima
 
 def get_camera_info(camera):
     if FliSdk_V2.IsCredOne(camera):
-        cred = FliCredThree.FliCredThree() #cred1 object 
+        cred = FliCredOne.FliCredOne() #cred1 object 
 
+    elif FliSdk_V2.IsCredTwo(camera):
+        cred = FliCredTwo.FliCredTwo() #cred3 object 
+    
     elif FliSdk_V2.IsCredThree(camera):
         cred = FliCredThree.FliCredThree() #cred3 object 
     camera_info_dict = {} 
@@ -748,14 +753,15 @@ def get_camera_info(camera):
     tint_res, tint_response = FliSdk_V2.FliSerialCamera.SendCommand(camera, "tint raw")
   
     # gain
-    gain = cred.GetConversionGain(camera)[1]
+    #gain = cred.GetConversionGain(camera)[1]
+    _, gain = FliSdk_V2.FliSerialCamera.SendCommand(camera, "sensibility") #NOTE OLD FIRMWARE, NEWER USES sensitivity
 
     #camera headers
     camera_info_dict['timestamp'] = str(datetime.datetime.now()) 
     camera_info_dict['camera'] = FliSdk_V2.GetCurrentCameraName(camera) 
     camera_info_dict['camera_fps'] = fps_response
     camera_info_dict['camera_tint'] = tint_response
-    camera_info_dict['camera_gain'] = gain
+    camera_info_dict['camera_gain'] = gain.split(':')[-1]
     camera_info_dict['cropping_rows'] = cropping_rows
     camera_info_dict['cropping_columns'] = cropping_columns
 
@@ -932,9 +938,8 @@ def Ic_model_constrained_3param(x, A,  F, mu):
     return I 
 
 
-
 # should this be free standing or a method? ZWFS? controller? - output a report / fits file
-def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, active_dm_actuator_filter=None, debug=True, savefits=None) :
+def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_actuator_filter=None, debug=True, savefits=None) :
     """
     # calibration of our ZWFS: 
     # this will fit M0, b0, mu, F which can be appended to a phase_controller,
@@ -948,6 +953,9 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, active_dm_actuator_filter=None, 
     # plot fits, histograms of values (corner plot?), also image highlighting the regions (coloring pixels) 
     # estimate center of DM in pixels and center of pupil in pixels (using previous method)   
     # note A^2 can be measured with FPM out, M can be sampled with FPM in where A^2 = 0. 
+    
+    # e.g. to generate bad pixel tuple in correct format
+    # np.where( (np.std( poke_imgs ,axis = (0,1)) > 100) + (np.std( poke_imgs ,axis = (0,1)) == 0 ) )
     """    
 
 
@@ -973,6 +981,23 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, active_dm_actuator_filter=None, 
     # the first image is another reference I0 with FPM IN and flat DM
     poke_imgs = recon_data['SEQUENCE_IMGS'].data[1:].reshape(No_ramps, 140, I0.shape[0], I0.shape[1])
     #poke_imgs = poke_imgs[1:].reshape(No_ramps, 140, I0.shape[0], I0.shape[1])
+
+    plt.figure( ) 
+    plt.imshow( np.std( poke_imgs ,axis = (0,1)) )
+    plt.colorbar(label = 'std pixels') 
+    
+    recomended_bad_pixels = np.where( (np.std( poke_imgs ,axis = (0,1)) > 100) + (np.std( poke_imgs ,axis = (0,1)) == 0 ))
+    print('recommended bad pixels (high or zero std) at :',recomended_bad_pixels )
+    
+    if len(bad_pixels[0]) > 0:
+        
+        bad_pixel_mask = np.ones(I0.shape)
+        for ibad,jbad in list(zip(bad_pixels[0], bad_pixels[1])):
+            bad_pixel_mask[ibad,jbad] = 0
+            
+        I0 *= bad_pixel_mask
+        N0 *= bad_pixel_mask
+        poke_imgs  = poke_imgs * bad_pixel_mask
 
     a0 = len(ramp_values)//2 - 2 # which poke value (index) do we want to consider for finding region of influence. Pick a value near the center of the ramp (ramp values are from negative to positive) where we are in a linear regime.
     
@@ -1273,6 +1298,7 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, active_dm_actuator_filter=None, 
         output_fits.writeto( savefits )  #data_path + 'ZWFS_internal_calibration.fits'
 
     return( output_fits ) 
+
 
 
 def twoD_Gaussian(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):

@@ -4,6 +4,7 @@ from . import utilities as util
 import matplotlib.pyplot as plt 
 import numpy as np
 import time 
+import datetime
 class phase_controller_1():
     """
     linear interaction model on internal calibration source
@@ -148,9 +149,11 @@ class phase_controller_1():
 
 
 
-    def build_control_model_2(self, ZWFS, poke_amp = -0.15, label='ctrl_1', method='single_side_poke',  debug = True):
+    def build_control_model_2(self, ZWFS, poke_amp = -0.15, label='ctrl_1', method='single_sided_poke',  debug = True):
         # newer version without reliance on FPM out. (before sydney test)
-        # DOES NOT MEASURE N0
+    
+        # DOES NOT MEASURE N0!!! we should include this when we can control motors from python 
+
         imgs_to_median = 10 
         I0_list = []
         for _ in range(imgs_to_median):
@@ -168,11 +171,9 @@ class phase_controller_1():
         modal_basis = self.config['M2C'].copy().T # more readable
         IM=[] # init our raw interaction matrix 
 
-        for i,m in enumerate(modal_basis):
-
-            print(f'executing cmd {i}/{len(modal_basis)}')
-
-            if method=='single_sided_poke': # just poke one side             
+        if method=='single_sided_poke': # just poke one side  
+            for i,m in enumerate(modal_basis):
+                print(f'executing cmd {i}/{len(modal_basis)}')           
                 ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] + poke_amp * m )  )
                 time.sleep(0.05)
                 img_list = []  # to take median of 
@@ -187,7 +188,10 @@ class phase_controller_1():
                 errsig =  self.get_img_err( I[np.array( ZWFS.pupil_pixels )] )
 
                 IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
-            elif method=='double_sided_poke':
+
+        elif method=='double_sided_poke':
+            for i,m in enumerate(modal_basis):
+                print(f'executing cmd {i}/{len(modal_basis)}')
                 # Trialling 
                 for sign in [-1,1]:
                     ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] + sign * poke_amp/2 * m )  )
@@ -206,9 +210,12 @@ class phase_controller_1():
                 errsig = (I_plus - I_minus)[np.array( ZWFS.pupil_pixels )]
                 IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
 
+        else:
+            raise TypeError( ' no matching method for building control model. Try (for example) method="single_side_poke"')
             #U, S, Vt = np.linalg.svd( IM , full_matrices=True)
 
         # intensity to mode matrix 
+        print( np.array( IM ).shape ) ## delme 
         I2M = np.linalg.pinv( IM )
 
         #control matrix (note in zonal method M2C is just identity matrix)
@@ -219,7 +226,7 @@ class phase_controller_1():
        
         ctrl_parameters['active'] = 0 # 0 if unactive, 1 if active (should only have one active phase controller)
 
-        ctrl_parameters['ref_pupil_FPM_out'] = N0
+        #ctrl_parameters['ref_pupil_FPM_out'] = N0 # <------- NOT INCLUDED! 
 
         ctrl_parameters['ref_pupil_FPM_in'] = I0
 
@@ -517,6 +524,8 @@ class phase_controller_1():
 
 
     def plot_SVD_modes(self, ZWFS, ctrl_label, save_path=None):
+
+        tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
         IM = self.ctrl_parameters[ctrl_label]['IM']
         M2C = self.config['M2C']
