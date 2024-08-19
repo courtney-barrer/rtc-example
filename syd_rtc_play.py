@@ -15,6 +15,12 @@ from pyBaldr import pupil_control
 
 
 """
+ethernet:
+heimdallr@10.66.100.141
+wifi: 
+heimdallr@10.17.6.140
+
+
 0. pull git 
 1. Turn on camera, DM . Ask adam to set things up so can move between on/off sources
 2. set up, get proper images with bias etc. Check SDK works ok
