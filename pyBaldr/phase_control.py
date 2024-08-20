@@ -24,7 +24,7 @@ class phase_controller_1():
             self.config = {}
             self.config['telescopes'] = ['AT1']
             self.config['fpm'] = 1  #0 for off, positive integer for on a particular phase dot
-            self.config['basis'] = 'Zernike' # either Zernike, Zonal, KL, or WFS_Eigenmodes
+            self.config['basis'] = 'Zernike' # either Zernike, Zonal, KL, fourier, or WFS_Eigenmodes
             self.config['number_of_controlled_modes'] = 70 # number of controlled modes
             self.config['source'] = 1
            
@@ -57,6 +57,10 @@ class phase_controller_1():
                            Nx_act_basis = self.config['dm_control_diameter'],\
                                act_offset= self.config['dm_control_center'], without_piston=True) # cmd = M2C @ mode_vector, i.e. mode to command matrix
            
+            # used for estimating MAP inverse of interaction matrix 
+            self.noise_cov = None # should be in pixel space of the filtered pupil 
+            self.phase_cov = None # should be in mode space
+
             self.config['M2C'] = M2C # 
                 #self.config[tel]['control_parameters'] = [] # empty list cause we have none
             self.config['active_actuator_filter'] = (abs(np.sum( self.config['M2C'], axis=1 )) > 0 ).astype(bool)
@@ -149,16 +153,17 @@ class phase_controller_1():
 
 
 
-    def build_control_model_2(self, ZWFS, poke_amp = -0.15, label='ctrl_1', method='single_sided_poke',  debug = True):
+    def build_control_model_2(self, ZWFS, poke_amp = -0.15, label='ctrl_1', poke_method='single_sided_poke', inverse_method='MAP', debug = True):
         # newer version without reliance on FPM out. (before sydney test)
     
         # DOES NOT MEASURE N0!!! we should include this when we can control motors from python 
-
+        ZWFS.dm.send_data( ZWFS.dm_shapes['flat_dm'] )
+        time.sleep(0.1)
         imgs_to_median = 10 
         I0_list = []
         for _ in range(imgs_to_median):
             time.sleep(0.1)
-            I0_list.append( ZWFS.get_image(  ) ) #REFERENCE INTENSITY WITH FPM IN
+            I0_list.append( ZWFS.get_image( apply_manual_reduction  = True ) ) #REFERENCE INTENSITY WITH FPM IN
         I0 = np.median( I0_list, axis = 0 )
 
         # === ADD ATTRIBUTES 
@@ -171,17 +176,18 @@ class phase_controller_1():
         modal_basis = self.config['M2C'].copy().T # more readable
         IM=[] # init our raw interaction matrix 
 
-        if method=='single_sided_poke': # just poke one side  
+        if poke_method=='single_sided_poke': # just poke one side  
             for i,m in enumerate(modal_basis):
                 print(f'executing cmd {i}/{len(modal_basis)}')           
                 ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] + poke_amp * m )  )
                 time.sleep(0.05)
                 img_list = []  # to take median of 
                 for _ in range(imgs_to_median):
-                    img_list.append( ZWFS.get_image( ).reshape(-1) )
+                    img_list.append( ZWFS.get_image(apply_manual_reduction  = True ).reshape(-1) )
                     time.sleep(0.01)
                 I = np.median( img_list, axis = 0) 
 
+                # IMPORTANT : we normalize by mean over total image region (post reduction) (NOT FILTERED )... 
                 I *= 1/np.mean( I ) # we normalize by mean over total region! 
                 
                 # then filter for getting error signal 
@@ -189,7 +195,7 @@ class phase_controller_1():
 
                 IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
 
-        elif method=='double_sided_poke':
+        elif poke_method=='double_sided_poke':
             for i,m in enumerate(modal_basis):
                 print(f'executing cmd {i}/{len(modal_basis)}')
                 # Trialling 
@@ -198,7 +204,7 @@ class phase_controller_1():
                     time.sleep(0.05)
                     img_list = []  # to take median of 
                     for _ in range(imgs_to_median):
-                        img_list.append( ZWFS.get_image( ).reshape(-1) )
+                        img_list.append( ZWFS.get_image(apply_manual_reduction  = True ).reshape(-1) )
                         time.sleep(0.01)
                     # normalize here 
                     if sign > 0:
@@ -216,8 +222,24 @@ class phase_controller_1():
 
         # intensity to mode matrix 
         print( np.array( IM ).shape ) ## delme 
-        I2M = np.linalg.pinv( IM )
 
+        if inverse_method = 'pinv':
+            I2M = np.linalg.pinv( IM )
+
+        elif inverse_method = 'MAP': # minimum variance of maximum posterior estimator 
+            if self.noise_cov == None:
+                noise_cov = np.eye( np.array(IM).shape[1] )
+            elif self.noise_cov!= None:
+                noise_cov = np.array( self.noise_cov )
+
+            if self.phase_cov== None:
+                phase_cov = np.eye( np.array(IM).shape[0] )
+            elif self.phase_cov!= None:
+                phase_cov = np.array( self.phase_cov )
+
+            #minimum variance of maximum posterior estimator 
+            I2M = (phase_cov @ IM @ np.linalg.inv(IM.T @ phase_cov @ IM + noise_cov) ).T #have to transpose to keep convention.. although should be other way round
+            
         #control matrix (note in zonal method M2C is just identity matrix)
         CM = self.config['M2C'] @ I2M.T
 
@@ -408,6 +430,28 @@ class phase_controller_1():
             plt.imshow( np.cov( self.ctrl_parameters[label]['IM'] ) )
             plt.colorbar()
             plt.show()
+
+
+    def estimate_noise_covariance( zwfs, number_of_frames = 1000, where = 'pupil' ):
+        
+        img_list = zwfs.get_some_frames( number_of_frames )
+
+        # looking at covariance of pixel noise 
+        #img_list  = np.array( img_list  )
+        if where == 'pupil':
+            img_list_filtered = np.array( [d.reshape(-1)[zwfs.pupil_pixel_filter] for d in img_list] )
+
+        elif where == 'whole_image':
+            img_list_filtered = np.array( [d.reshape(-1) for d in img_list] )
+
+        cov_matrix = np.cov( img_list_filtered ,ddof=1, rowvar = False ) # rowvar = False => rows are samples, cols variables 
+        return( cov_matrix )
+
+
+    def update_noise_model( zwfs, number_of_frames = 1000 ):
+        cov_matrix = estimate_noise_covariance( zwfs, number_of_frames = 1000, where = 'pupil' )
+        self.noise_cov = cov_matrix
+
 
     def update_b( self, ZWFS, I0_2D, N0_2D ):
         #I0 = reference image with FPM in (2D array - CANNOT be flatttened 1D array)
