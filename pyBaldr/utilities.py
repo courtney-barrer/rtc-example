@@ -120,14 +120,14 @@ def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 
     #elif basis == 'Sensor_Eigenmodes': this is done specifically in a phase_control.py function - as it needs a interaction matrix covariance first 
 
              
-    elif basis_modes == 'fourier':
+    elif basis == 'fourier':
         # NOT TESTED YET ON REAL DM!! 
         if without_piston:
-            N_controlled_modes += 1 # we add one more mode since we dont include piston 
+            number_of_modes += 1 # we add one more mode since we dont include piston 
 
-        # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY N_controlled_modes
-        control_basis_dict  = develop_Fourier_basis( int(np.ceil(N_controlled_modes**0.5)), int(np.ceil(N_controlled_modes**0.5)) ,P = 2 * dm.Nx_act, Nx = dm.Nx_act, Ny = dm.Nx_act)
-        raw_basis = np.array(list( control_basis_dict.values() ) ) #[:N_controlled_modes]
+        # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY number_of_modes
+        control_basis_dict  = develop_Fourier_basis( int(np.ceil(number_of_modes**0.5)), int(np.ceil(number_of_modes**0.5)) ,P = 2 * Nx_act_DM, Nx = Nx_act_DM, Ny = Nx_act_DM )
+        raw_basis = np.array(list( control_basis_dict.values() ) ) #[:number_of_modes]
         
         bmcdm_basis_list = []
         for i,B in enumerate(raw_basis):
@@ -149,6 +149,43 @@ def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 
     return(M2C)
 
 
+def fourier_vector(n, m, P = 2*12, Nx = 12, Ny = 12):
+    """
+    OR we can do it with complex exponetial, in-quadrature is real part, out of quadrature is imaginary 
+    Normalized <Bx|Bx>=1 , <By|By>=1
+
+    Parameters
+    ----------
+    n : TYPE
+        DESCRIPTION.
+    m : TYPE
+        DESCRIPTION.
+    P : TYPE, optional
+        DESCRIPTION. The default is 2*12.
+    Nx : TYPE, optional
+        DESCRIPTION. The default is 12.
+    Ny : TYPE, optional
+        DESCRIPTION. The default is 12.
+
+    Returns
+    -------
+    None.
+
+    """
+    x = np.linspace(-6,6,Nx)
+    y = np.linspace(-6,6,Ny)
+    X,Y = np.meshgrid(x,y)
+    
+    
+    Bx = np.exp( 1J * 2 * np.pi * n/P * X )
+    if np.sum( abs(Bx) ):
+        Bx *= 1/np.sum( abs(Bx)**2 )**0.5
+
+    By = np.exp( 1J * 2 * np.pi * m/P * Y )
+    if np.sum( abs(By) ):
+        By *= 1/np.sum( abs(By)**2 )**0.5
+    
+    return( Bx, By )
 
 def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
     """
@@ -188,8 +225,7 @@ def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
     basis_dict = {}
 
     for x_idx in range(0,n):
-        for y_idx in range(0,m):
-            
+        for y_idx in range(0,m):            
             #
             x_order = x_idx//2
             y_order = y_idx//2
@@ -218,6 +254,32 @@ def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
 
 
     return(basis_dict)
+
+
+def spiral_search_TT_coefficients( dr, dtheta, aoi_tp, aoi_tt, num_points, r0=0, theta0=0):
+    """
+    generate tip (tp) / tilt (tt) coefficients for a spiral search covering
+    "num_points" samples with angular increments dtheta, radial increments dr
+    aoi_tp, aoi_tilt are the anlge of incidence on the DM for tip and tilt. 
+
+    ALL angular units should be input as radians.
+    """
+
+    coefficients = []
+    theta = theta0 # initial angle
+    radius = r0 # initial radius
+    
+    for _ in range(num_points):
+        a_tp = radius * np.cos(theta) * np.cos( aoi_tp )
+        a_Tt = radius * np.sin(theta) * np.cos( aoi_tt )
+        coefficients.append((a_tp, a_Tt))
+        
+        # Increment radius and angle
+        radius += dr
+        theta += dtheta
+    
+    return coefficients
+
 
 def get_DM_command_in_2D(cmd,Nx_act=12):
     # function so we can easily plot the DM shape (since DM grid is not perfectly square raw cmds can not be plotted in 2D immediately )
@@ -455,7 +517,7 @@ def create_phase_screen_cmd_for_DM(scrn,  scaling_factor=0.1, drop_indicies = No
              
     if plot_cmd: #can be used as a check that the command looks right!
         fig,ax = plt.subplots(1,2,figsize=(12,6))
-        im0 = ax[0].imshow(scrn_on_DM.reshape([Nx_act,Nx_act]) )
+        im0 = ax[0].imshow( scrn_on_DM.reshape([Nx_act,Nx_act]) )
         ax[0].set_title('DM command (averaging offset)')
         im1 = ax[1].imshow(scrn.scrn)
         ax[1].set_title('original phase screen')
