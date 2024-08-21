@@ -365,6 +365,208 @@ ax[2].set_title('residual')
 
 
 
+#%% Using derivatives in reconstructor , does it improve resilience to detedctor noise? 
+
+
+
+from scipy.ndimage import sobel
+
+
+def compute_gradients(image):
+    """
+    Compute the x and y gradients of an image using the Sobel operator.
+    
+    Parameters:
+    image (numpy.ndarray): 2D array representing the image.
+
+    Returns:
+    grad_x (numpy.ndarray): Gradient of the image along the x-axis.
+    grad_y (numpy.ndarray): Gradient of the image along the y-axis.
+    """
+    # Compute gradients using the Sobel operator
+    grad_x = sobel(image, axis=1)  # Gradient in the x-direction
+    grad_y = sobel(image, axis=0)  # Gradient in the y-direction
+
+    return grad_x, grad_y
+
+def nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None):
+
+    n = len(im_list)
+    fs = fontsize
+    fig = plt.figure(figsize=(5*n, 5))
+
+    for a in range(n) :
+        ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
+        ax1.set_title(title_list[a] ,fontsize=fs)
+
+        if vlims!=None:
+            im1 = ax1.imshow(  im_list[a] , vmin = vlims[a][0], vmax = vlims[a][1])
+        else:
+            im1 = ax1.imshow(  im_list[a] )
+        ax1.set_title( title_list[a] ,fontsize=fs)
+        ax1.set_xlabel( xlabel_list[a] ,fontsize=fs) 
+        ax1.set_ylabel( ylabel_list[a] ,fontsize=fs) 
+        ax1.tick_params( labelsize=fs ) 
+
+        if axis_off:
+            ax1.axis('off')
+        divider = make_axes_locatable(ax1)
+        if cbar_orientation == 'bottom':
+            cax = divider.append_axes('bottom', size='5%', pad=0.05)
+            cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
+                
+        elif cbar_orientation == 'top':
+            cax = divider.append_axes('top', size='5%', pad=0.05)
+            cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
+                
+        else: # we put it on the right 
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            cbar = fig.colorbar( im1, cax=cax, orientation='vertical')  
+        
+   
+        cbar.set_label( cbar_label_list[a], rotation=0,fontsize=fs)
+        cbar.ax.tick_params(labelsize=fs)
+    if savefig!=None:
+        plt.savefig( savefig , bbox_inches='tight', dpi=300) 
+
+    plt.show() 
+
+
+
+# Build control matricies  (zwfs or zwfs_bmc)
+lab = 'test_zernike'
+z = copy.deepcopy( zwfs )
+z.dm.update_shape( np.zeros( z.dm.N_act ) )
+z.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=100, \
+                                  modal_basis='fourier', pokeAmp = 150e-9 , label=lab, replace_nan_with=0, without_piston=True)
+
+    
+calibration_field = baldrSim.init_a_field( Hmag=-3, mode=0, wvls=zwfs.wvls, \
+                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'])
+
+    
+    
+    
+pokeamp = z.control_variables[lab ]['pokeAmp']
+control_basis = np.array(z.control_variables[lab ]['control_basis'] )
+M2C =  pokeamp  *  control_basis.T 
+
+# reference intensities 
+z.dm.update_shape( np.zeros(control_basis.shape[1] ) )
+I0 = z.detection_chain( calibration_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+N0 = z.detection_chain( calibration_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+IM_new = []
+IM_base = []
+for b in control_basis :
+    cmd = pokeamp * b 
+    z.dm.update_shape( cmd - np.mean( cmd ) )
+
+    i = z.detection_chain( calibration_field, FPM_on=True, include_shotnoise=False, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    o = z.detection_chain( calibration_field, FPM_on=False, include_shotnoise=False, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+    
+    sig = i.signal / np.sum( o.signal) - I0.signal / np.sum( N0.signal )
+    #plt.figure(); plt.imshow( cmd.reshape(12,12)  ); plt.colorbar(); plt.savefig( 'data/delme.png')
+    #plt.figure(); plt.imshow( sig ); plt.colorbar(); #plt.savefig( 'data/delme.png')
+    
+    grad_x, grad_y = compute_gradients(sig)
+
+    IM_base.append( list(np.ravel( sig ) ) )
+    IM_new.append( list(np.ravel( [sig, grad_x, grad_y] )) )
+
+    
+I2M_new = np.linalg.pinv( IM_new )   
+I2M_base = np.linalg.pinv( IM_base )
+
+
+U,S,Vt = np.linalg.svd( IM_new )
+U_,S_,Vt_ = np.linalg.svd( I2M_base  )
+
+plt.plot( S/np.max(S)); plt.plot(S_/np.max(S_) , label='base'); plt.legend()
+
+# ok which one does better reconstruction 
+
+test_field = baldrSim.init_a_field( Hmag=2, mode='Kolmogorov', wvls=zwfs.wvls, \
+                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'],\
+                                           r0=0.1, L0=24, phase_scale_factor = 1)
+
+
+i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+
+noise = 0 * np.mean( i.signal ) * np.random.rand( *i.signal.shape)
+
+sig = (noise +  i.signal ) / np.sum( o.signal) - I0.signal / np.sum( N0.signal )
+
+grad_x, grad_y = compute_gradients(sig)
+
+
+#plt.figure(); plt.imshow( calibration_field.phase[zwfs.wvls[0]])
+
+cmd_base = -1 * M2C @ (I2M_base.T @ sig.reshape(-1) ) 
+cmd_new = -1 * M2C @ (I2M_new.T @ np.ravel( [sig.reshape(-1),grad_x.reshape(-1), grad_y.reshape(-1)] ) ) 
+
+#plt.figure() 
+#plt.imshow ( cmd.reshape(12,12)); plt.colorbar()
+
+
+
+for cmd in [cmd_base, cmd_new  ]:
+    
+    z.dm.update_shape( cmd - np.mean( cmd ) )
+    
+    post_dm_field = test_field.applyDM( z.dm )
+    
+    
+    wvl_i = 0 
+    if 'square' in z.dm.DM_model:
+        im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], sig, \
+                   1e9 * cmd.reshape(12,12),zwfs.pup * 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
+    elif z.dm.DM_model == 'BMC-multi3.5':
+        im_list = [ 1e9 * z.wvls[0]/(2*np.pi) * test_field.phase[z.wvls[0]], sig, \
+                   1e9 * baldrSim.get_BMCmulti35_DM_command_in_2D( cmd ), zwfs.pup * 1e9 * z.wvls[0]/(2*np.pi) * post_dm_field.phase[z.wvls[0]] ]
+    xlabel_list = ['' for _ in range(len(im_list))]
+    ylabel_list = ['' for _ in range(len(im_list))]
+    title_list = ['phase pre DM','detector signal', 'DM surface','phase post DM']
+    cbar_label_list = ['OPD [nm]', 'intensity [adu]', 'OPD [nm]', 'phase [nm]']
+    nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list,\
+                               fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+
+    print( 'strehl before = ',np.exp( -np.nanvar( test_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) )
+    print( 'strehl after = ', np.exp( -np.nanvar( post_dm_field.phase[zwfs.wvls[0]][zwfs.pup>0] ) ) ) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
