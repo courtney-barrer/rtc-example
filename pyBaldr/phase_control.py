@@ -221,7 +221,7 @@ class phase_controller_1():
             #U, S, Vt = np.linalg.svd( IM , full_matrices=True)
 
         # convert to array 
-        IM = np.array( IM )
+        IM = np.array( IM )  
 
         # intensity to mode matrix 
         if inverse_method == 'pinv':

@@ -80,7 +80,7 @@ class pupil_controller_1():
             #plt.savefig(figure_path + 'process_1.2_center_source_DM.png',dpi=300) 
             plt.show()
 
-        return( e_x, e_y )    
+        return( e_x, e_y )      
 
 
     def set_pupil_reference_pixels(self ):

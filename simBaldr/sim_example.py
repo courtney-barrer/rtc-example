@@ -366,7 +366,7 @@ CM_HO = (I - P) @ CM  # CM_HO is MxN
 # CM_TT and CM_HO are the desired matrices
 print("CM_TT:\n", CM_TT)
 print("CM_HO:\n", CM_HO)
-
+  
 # Now to test create put a tip mode + a HO mode on DM, get image and see if we can reconstruct them with 
 
 #1. create non-aberrated field field 

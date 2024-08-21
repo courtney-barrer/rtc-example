@@ -50,7 +50,7 @@ plt.figure(); plt.plot( [a[0] for a in TT_spiral_coefficients], [a[1] for a in T
 plt.figure(); plt.imshow( util.get_DM_command_in_2D(fourier_basis[:,0]) ); plt.savefig(fig_path+'delme.png')
 plt.figure(); plt.imshow( util.get_DM_command_in_2D(fourier_basis[:,5]) ); plt.savefig(fig_path+'delme.png')
 tip = fourier_basis[:,0]
-tilt = fourier_basis[:,5]
+tilt = fourier_basis[:,5]  
 
 # spiral the DM on tip/tilt in Fourier basis 
 for i, (a_tp, a_tt) in enumerate( TT_spiral_coefficients ):

@@ -389,7 +389,7 @@ class ZWFS():
             i+=1
             timeout_counter += 1
             
-        return( ref_img_list )
+        return( ref_img_list )  
 
 
     def estimate_noise_covariance( self, number_of_frames = 1000, where = 'pupil' ):

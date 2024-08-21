@@ -9,7 +9,7 @@ import rtc
 import sys
 import datetime
 sys.path.append('simBaldr/' )
-sys.path.append('pyBaldr/' )
+sys.path.append('pyBaldr/' )  
 from pyBaldr import utilities as util
 from pyBaldr import ZWFS
 from pyBaldr import phase_control
