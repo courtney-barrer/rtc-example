@@ -65,7 +65,16 @@ pupil_crop_region = [204,268,125, 187] #[None, None, None, None] #[0, 192, 0, 19
 zwfs = ZWFS.ZWFS(DM_serial_number=DM_serial_number, cameraIndex=0, DMshapes_path = 'DMShapes/', pupil_crop_region=pupil_crop_region ) 
 
 # the sydney BMC multi-3.5 calibrated flat seems shit! Try with just a 
+
+zwfs.set_camera_dit( 0.001 );time.sleep(0.2)
+zwfs.set_camera_fps( 200 );time.sleep(0.2)
+zwfs.set_sensitivity('high');time.sleep(0.2)
+zwfs.enable_frame_tag(tag = True);time.sleep(0.2)
+zwfs.bias_off();time.sleep(0.2)
+zwfs.flat_off();time.sleep(0.2)
+
 zwfs.dm_shapes['flat_dm'] = 0.5 * np.ones(140)
+
 zwfs.start_camera()
 
 # !!!! TAKE OUT SOURCE !!!! 
@@ -141,7 +150,7 @@ if pupil_report['pupil_quality_flag'] == 1:
 
     zwfs.update_reference_regions_in_img( pupil_report ) # 
 
-# build and update detector noise model once we have defined the pupil 
+# build and update detector noise model once we have defined the pupil  (we can do this with the light source on!)
 phase_ctrl.update_noise_model( zwfs, number_of_frames = 1000 )
 
 
@@ -171,6 +180,7 @@ phase_ctrl.plot_SVD_modes( zwfs, 'ctrl_1', save_path=fig_path)
 
 #ab_basis = util.construct_command_basis( basis='Zernike', number_of_modes = 50, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
 
+ctrl_method_label = 'ctrl_1'
 M2C = phase_ctrl.config['M2C'] # readability 
 
 I2M = phase_ctrl.ctrl_parameters[ctrl_method_label]['I2M']
@@ -178,6 +188,16 @@ I2M = phase_ctrl.ctrl_parameters[ctrl_method_label]['I2M']
 IM = phase_ctrl.ctrl_parameters[ctrl_method_label]['IM'] # readability 
 # unfiltered CM
 CM = phase_ctrl.ctrl_parameters[ctrl_method_label]['CM'] # readability 
+
+# get tip/tilt and higher order reconstructors (signal -> modal amplitude)
+tip = np.zeros( I2M.shape[1] )
+tip[0] = 1
+tilt = np.zeros( I2M.shape[1] )
+tilt[1] = 1    
+R_TT, R_HO = util.project_matrix( I2M.T , projection_vector_list = [tip, tilt] )
+#e.g.  R_TT @ signal should give us a vector dimension = number of modes with non-zero entries at tip/tilt mode indicies
+# TT reconstruction in DM space : M2C @ R_TT @ signal 
+# full reconstruction DM space : M2C @ I2M.T
 
 """ #FOR ZONAL BASIS
 # try filtering here
@@ -194,7 +214,7 @@ CM =  np.linalg.pinv( U @ Sigma @ Vt )
 amp = -0.15
 #mode_indx = 11
 
-for mode_indx in range( len(M2C) ) :  
+for mode_indx in range( len(M2C)-1 ) :  
 
     mode_aberration = M2C.T[mode_indx]
     #plt.imshow( util.get_DM_command_in_2D(amp*mode_aberration));plt.colorbar();plt.show()
@@ -230,7 +250,7 @@ for mode_indx in range( len(M2C) ) :
 
     _ = input('press when ready to see mode reconstruction')
     
-    cmd_res = 1/amp * M2C @ mode_res
+    cmd_res = M2C @ mode_res
     
     # WITH RESIDUALS 
     
