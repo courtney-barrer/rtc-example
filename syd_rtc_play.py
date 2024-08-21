@@ -78,6 +78,10 @@ bad_pixels = zwfs.get_bad_pixel_indicies( no_frames = 1000, std_threshold = 50 ,
 # update zwfs bad pixel mask and flattened pixel values 
 zwfs.build_bad_pixel_mask( bad_pixels , set_bad_pixels_to = 0)
 
+# test getting full detector covariance over 1000 frame sample
+#cov_test = zwfs.estimate_noise_covariance(  number_of_frames = 1000, where = 'whole_image' )
+
+
 #check them 
 plt.figure() ; plt.title('dark'); plt.imshow( zwfs.reduction_dict['dark'][0] ); plt.colorbar() ; plt.savefig(fig_path + 'delme.png' )
 
@@ -86,13 +90,29 @@ plt.figure() ;  plt.title('bad pixels'); plt.imshow( zwfs.bad_pixel_filter.resha
 
 # !!!! PUT IN SOURCE !!!! 
 # quick check that dark subtraction works
-a = zwfs.get_image( apply_manual_reduction  = True)
-plt.figure(); plt.title('test image \nwith dark subtraction \nand bad pixel mask'); plt.imshow( a )
+I0 = zwfs.get_image( apply_manual_reduction  = True)
+plt.figure(); plt.title('test image \nwith dark subtraction \nand bad pixel mask'); plt.imshow( I0 )
 plt.savefig( fig_path + 'delme.png')
+"""
+# build a quick fourier basis and define tip/tilt - check symmetry one probing each quadrant in tip/tilt
+fourier_basis = util.construct_command_basis( basis='fourier', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+tip = fourier_basis[:,0]
+tilt = fourier_basis[:,5]
 
+# try just the four quadrants 
+flatdm = zwfs.dm_shapes['flat_dm']
+cmd_dict = {'tip+' : flatdm + 0.4 * tip, 'tip-':flatdm - 0.4 * tip, 'tilt+':flatdm + 0.4 * tilt, 'tilt-':flatdm - 0.4 * tilt}
+img_dict = {}
+fig,ax = plt.subplots(2,2, figsize=(10,10))
+for axx, (lab, cmd) in zip(ax.reshape(-1), cmd_dict.items()):
+    zwfs.dm.send_data(cmd)
+    time.sleep(0.5)
+    img_dict[lab] = zwfs.get_image( apply_manual_reduction  = True)
+    axx.imshow( img_dict[lab] - I0 )
+    axx.set_title( lab )
+plt.savefig( fig_path + 'delme.png')"""
 
-
-
+zwfs.dm.send_data(zwfs.dm_shapes['flat_dm'])
 # --- testing reconstruction 
 
 
@@ -106,7 +126,7 @@ pupil_ctrl = pupil_control.pupil_controller_1(config_file = None)
 
 # --- linear ramps 
 # use baldr.
-recon_data = util.GET_BDR_RECON_DATA_INTERNAL(zwfs, number_amp_samples = 20, amp_max = 0.2, number_images_recorded_per_cmd = 4, save_fits = data_path+f'pokeramp_data_sydney_{tstamp}.fits') 
+recon_data = util.GET_BDR_RECON_DATA_INTERNAL(zwfs, number_amp_samples = 20, amp_max = 0.2, number_images_recorded_per_cmd = 4, save_fits = data_path+f'pokeramp_data_MASK_3_sydney_{tstamp}.fits') 
 #recon_data = fits.open( data_path+'recon_data_LARGE_SECONDARY_19-04-2024T12.19.22.fits' )
 
 # process recon data to get a bunch of fits, DM actuator to pupil registration etc
@@ -116,11 +136,13 @@ internal_cal_fits =  util.PROCESS_BDR_RECON_DATA_INTERNAL(recon_data , bad_pixel
 # 1.2) analyse pupil and decide if it is ok
 pupil_report = pupil_control.analyse_pupil_openloop( zwfs, debug = True, return_report = True)
 
-
 if pupil_report['pupil_quality_flag'] == 1: 
     # I think this needs to become attribute of ZWFS as the ZWFS object is always passed to pupil and phase control as an argunment to take pixtures and ctrl DM. The object controlling the camera should provide the info on where a controller object should look to apply control algorithm. otherwise pupil and phase controller would always need to talk to eachother. Also we will have 4 controllers in total
 
     zwfs.update_reference_regions_in_img( pupil_report ) # 
+
+# build and update detector noise model once we have defined the pupil 
+phase_ctrl.update_noise_model( zwfs, number_of_frames = 1000 )
 
 
 # 1.3) builds our control model with the zwfs
@@ -137,7 +159,7 @@ zwfs.dm.send_data( zwfs.dm_shapes['flat_dm'] )
 time.sleep( 0.1 )
 
 #phase_ctrl.change_control_basis_parameters(  number_of_controlled_modes=140, basis_name ='Zonal', dm_control_diameter=None, dm_control_center=None,controller_label=None)
-phase_ctrl.build_control_model_2(zwfs, poke_amp = -0.05, label='ctrl_1', method='single_sided_poke',  debug = True)
+phase_ctrl.build_control_model_2(zwfs, poke_amp = -0.2, label='ctrl_1', poke_method='single_sided_poke', inverse_method='MAP',  debug = True)
 #phase_ctrl.build_control_model( zwfs , poke_amp = -0.15, label='ctrl_1', debug = True)  
 
 phase_ctrl.plot_SVD_modes( zwfs, 'ctrl_1', save_path=fig_path)
@@ -169,7 +191,7 @@ CM =  np.linalg.pinv( U @ Sigma @ Vt )
 """
 
 # put a mode on DM and reconstruct it with our CM 
-amp = -0.05
+amp = -0.15
 #mode_indx = 11
 
 for mode_indx in range( len(M2C) ) :  
@@ -192,14 +214,23 @@ for mode_indx in range( len(M2C) ) :
 
     #mode_res_test : inject err_img from interaction matrix to I2M .. should result in perfect reconstruction  
     #plt.figure(); plt.plot( I2M.T @ IM[2] ); plt.savefig( fig_path + f'delme.png')
+    #plt.figure(); plt.plot( I2M.T @ IM[mode_indx]  ,label='reconstructed amplitude'); plt.axvline(mode_indx  , ls=':', color='k', label='mode applied') ; plt.xlabel('mode index'); plt.ylabel('mode amplitude'); plt.legend(); plt.savefig( fig_path + f'delme.png')
     mode_res =  I2M.T @ err_img 
 
 
-    plt.figure(); plt.plot( mode_res ); plt.savefig( fig_path + f'delme.png')
+    plt.figure(); plt.plot( mode_res ); plt.axvline(mode_indx  , ls=':', color='k') ; plt.savefig( fig_path + f'delme.png')
+    plt.figure(figsize=(8,5));
+    plt.plot( mode_res  ,label='reconstructed amplitude');
+    app_amp = np.zeros( len( mode_res ) ) 
+    app_amp[mode_indx] = amp
+    plt.plot( app_amp ,'x', label='applied amplitude');
+    plt.axvline(mode_indx  , ls=':', color='k', label='mode applied') ; plt.xlabel('mode index',fontsize=15); 
+    plt.ylabel('mode amplitude',fontsize=15); plt.gca().tick_params(labelsize=15) ; plt.legend();
+    plt.savefig( fig_path + f'delme.png')
 
     _ = input('press when ready to see mode reconstruction')
     
-    cmd_res = M2C @ mode_res
+    cmd_res = 1/amp * M2C @ mode_res
     
     # WITH RESIDUALS 
     
@@ -235,17 +266,109 @@ for mode_indx in range( len(M2C) ) :
         
 
      
+# 
+
+# ESTIMATING NOISE IN IMAGE, ADD IT TO IM SIGNAL 
+zwfs.enable_frame_tag( True )
+time.sleep(0.5)
+#zwfs.get_image_in_another_region([0,1,0,4])
+i=0
+no_frames = 1000
+dark_list = []
+ref_img_list = []
+while len( ref_img_list  ) < no_frames: # poll 1000 individual images
+    full_img = zwfs.get_image_in_another_region() # we can also specify region (#zwfs.get_image_in_another_region([0,1,0,4]))
+    current_frame_number = full_img[0][0] #previous_frame_number
+    if i==0:
+        previous_frame_number = current_frame_number
+    if current_frame_number > previous_frame_number:
+        if current_frame_number == 65535:
+            previous_frame_number = -1 #// catch overflow case for int16 where current=0, previous = 65535
+        else:
+            previous_frame_number = current_frame_number 
+            ref_img_list.append( zwfs.get_image( apply_manual_reduction  = True) - ref_img  )
+    i+=1
+
+ref_img = np.mean( ref_img_list )
+
+while len( dark_list ) < no_frames: # poll 1000 individual images
+    full_img = zwfs.get_image_in_another_region() # we can also specify region (#zwfs.get_image_in_another_region([0,1,0,4]))
+    current_frame_number = full_img[0][0] #previous_frame_number
+    if i==0:
+        previous_frame_number = current_frame_number
+    if current_frame_number > previous_frame_number:
+        if current_frame_number == 65535:
+            previous_frame_number = -1 #// catch overflow case for int16 where current=0, previous = 65535
+        else:
+            previous_frame_number = current_frame_number 
+            dark_list.append( zwfs.get_image( apply_manual_reduction  = True) - ref_img  )
+    i+=1
+dark_std = np.std( dark_list ,axis=0)
+dark_mean = np.mean( dark_list ,axis=0)
+
+im_list = [  dark_std ]
+xlabel_list = [None]
+ylabel_list = [None]
+title_list = ['FPM IN, SOURCE ON']
+cbar_label_list = [r'<$\sigma>/<\mu>_{pixels}$' ] 
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=fig_path+'delme.png')
+
+Std = np.mean(  dark_std.reshape(-1)[zwfs.pupil_pixel_filter]  )
+
+plt.figure(figsize=(8,5)); plt.plot( I2M.T @ ( IM[mode_indx] + Std * np.random.randn( len( IM[mode_indx] ) ) ) ,label='reconstructed amplitude');
+plt.axvline(mode_indx  , ls=':', color='k', label='mode applied') ; plt.xlabel('mode index',fontsize=15); 
+plt.ylabel('mode amplitude',fontsize=15); plt.gca().tick_params(labelsize=15) ; plt.legend(); plt.savefig( fig_path + f'delme.png')
 
 
+plt.figure(figsize=(8,5)); plt.plot( I2M.T @ ( IM[mode_indx] + Std * np.random.randn( len( IM[mode_indx] ) ) ) ,label='reconstructed amplitude');
+plt.axvline(mode_indx  , ls=':', color='k', label='mode applied') ; plt.xlabel('mode index',fontsize=15); 
+plt.ylabel('mode amplitude',fontsize=15); plt.gca().tick_params(labelsize=15) ; plt.legend(); plt.savefig( fig_path + f'delme.png')
+
+sigma_over_mu = np.mean(  dark_std.reshape(-1)[zwfs.pupil_pixel_filter]  ) / np.mean(  dark_mean.reshape(-1)[zwfs.pupil_pixel_filter]  )
+print( sigma_over_mu  )
 
 
+# looking at covariance of pixel noise 
+dark_list = np.array( dark_list )
+dark_list_filtered = np.array( [d.reshape(-1)[zwfs.pupil_pixel_filter] for d in dark_list])
+
+cov_pupil = np.cov( np.array(dark_list_filtered ) ,ddof=1, rowvar = False ) # rowvar = False => rows are samples, cols variables 
+plt.figure() ; plt.imshow( cov_pupil ) 
+plt.colorbar(); plt.savefig( fig_path + f'delme.png')
+
+#plt.figure() ; plt.imshow( np.cov( np.array( dark_list ).reshape(  1000, -1 ),ddof=1) );  plt.savefig( fig_path + f'delme.png')
+
+#plt.figure() ; plt.imshow( np.cov( np.array( dark_list_filtered.T ),ddof=1) ;  plt.savefig( fig_path + f'delme.png')
 
 
+IM = np.array( IM )
+I2M_new = IM @ np.linalg.inv(IM.T @ IM + cov_pupil)
 
 
+plt.figure(figsize=(8,5)); plt.plot( I2M_new @ ( IM[mode_indx] + 0 * np.random.randn( len( IM[mode_indx] ) ) ) ,label='reconstructed amplitude');
+plt.axvline(mode_indx  , ls=':', color='k', label='mode applied') ; plt.xlabel('mode index',fontsize=15); 
+plt.ylabel('mode amplitude',fontsize=15); plt.gca().tick_params(labelsize=15) ; plt.legend(); plt.savefig( fig_path + f'delme.png')
 
+mode_indx = 4
+ideal = np.zeros( len( IM ) )
+ideal[mode_indx] = 1
+map_rmse = []
+pinv_rmse = []
+for i in range( 50 ):
+    amps_MAP = I2M_new @ ( IM[mode_indx] + i * np.random.randn( len( IM[mode_indx] ) ) ) # minimum variance of maximum posterior estimator 
+    amps_pinv = I2M.T @ ( IM[mode_indx] + i * np.random.randn( len( IM[mode_indx] ) ) ) # psuedo inverse 
 
+    map_rmse.append( np.sqrt( np.mean( ( amps_MAP - ideal )**2 ) ) )
+    pinv_rmse.append( np.sqrt( np.mean( ( amps_pinv - ideal )**2 ) ) )
 
+plt.figure(figsize=(8,5)) 
+plt.plot(map_rmse, label='MAP')
+plt.plot(pinv_rmse, label='pinv')
+plt.xlabel(r'$\sigma_{ADU}$',fontsize=15)
+plt.ylabel('mode amplitude RMSE',fontsize=15)
+plt.legend(fontsize=15) 
+plt.gca().tick_params(labelsize=15)
+plt.savefig( fig_path + f'MAP_vs_PINV_{mode_indx}.png')
 
 
 

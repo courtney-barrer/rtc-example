@@ -220,21 +220,22 @@ class phase_controller_1():
             raise TypeError( ' no matching method for building control model. Try (for example) method="single_side_poke"')
             #U, S, Vt = np.linalg.svd( IM , full_matrices=True)
 
-        # intensity to mode matrix 
-        print( np.array( IM ).shape ) ## delme 
+        # convert to array 
+        IM = np.array( IM )
 
-        if inverse_method = 'pinv':
+        # intensity to mode matrix 
+        if inverse_method == 'pinv':
             I2M = np.linalg.pinv( IM )
 
-        elif inverse_method = 'MAP': # minimum variance of maximum posterior estimator 
-            if self.noise_cov == None:
-                noise_cov = np.eye( np.array(IM).shape[1] )
-            elif self.noise_cov!= None:
+        elif inverse_method == 'MAP': # minimum variance of maximum posterior estimator 
+            if not hasattr(self.noise_cov, '__len__'): 
+                noise_cov = np.eye( np.array(IM).shape[1] ) #built along IM cols which correspond to pupil fitered pixels
+            else:
                 noise_cov = np.array( self.noise_cov )
 
-            if self.phase_cov== None:
+            if not hasattr(self.phase_cov, '__len__'): 
                 phase_cov = np.eye( np.array(IM).shape[0] )
-            elif self.phase_cov!= None:
+            else: 
                 phase_cov = np.array( self.phase_cov )
 
             #minimum variance of maximum posterior estimator 
@@ -432,24 +433,10 @@ class phase_controller_1():
             plt.show()
 
 
-    def estimate_noise_covariance( zwfs, number_of_frames = 1000, where = 'pupil' ):
-        
-        img_list = zwfs.get_some_frames( number_of_frames )
-
-        # looking at covariance of pixel noise 
-        #img_list  = np.array( img_list  )
-        if where == 'pupil':
-            img_list_filtered = np.array( [d.reshape(-1)[zwfs.pupil_pixel_filter] for d in img_list] )
-
-        elif where == 'whole_image':
-            img_list_filtered = np.array( [d.reshape(-1) for d in img_list] )
-
-        cov_matrix = np.cov( img_list_filtered ,ddof=1, rowvar = False ) # rowvar = False => rows are samples, cols variables 
-        return( cov_matrix )
 
 
-    def update_noise_model( zwfs, number_of_frames = 1000 ):
-        cov_matrix = estimate_noise_covariance( zwfs, number_of_frames = 1000, where = 'pupil' )
+    def update_noise_model( self, zwfs, number_of_frames = 1000 ):
+        cov_matrix = zwfs.estimate_noise_covariance( number_of_frames = 1000, where = 'pupil' )
         self.noise_cov = cov_matrix
 
 

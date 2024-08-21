@@ -361,6 +361,53 @@ class ZWFS():
             raise TypeError('ZWFS.pixelation_factor has to be of type None or int')
         return(cropped_img)    
 
+
+    def get_some_frames(self, number_of_frames = 100, apply_manual_reduction=True, timeout_limit = 20000 ):
+        """
+        poll sequential frames (no repeats) and store in list  
+        """
+        ref_img_list = []
+        i=0
+        timeout_counter = 0 
+        timeout_flag = 0
+        while (len( ref_img_list  ) < number_of_frames) and not timeout_flag: # poll  individual images
+            if timeout_counter > timeout_limit: # we have done timeout_limit iterations without a frame update
+                timeout_flag = 1 
+                raise TypeError('timeout! timeout_counter > 10000')
+
+            full_img = self.get_image_in_another_region() # we can also specify region (#zwfs.get_image_in_another_region([0,1,0,4]))
+            current_frame_number = full_img[0][0] #previous_frame_number
+            if i==0:
+                previous_frame_number = current_frame_number
+            if current_frame_number > previous_frame_number:
+                timeout_counter = 0 # reset timeout counter
+                if current_frame_number == 65535:
+                    previous_frame_number = -1 #// catch overflow case for int16 where current=0, previous = 65535
+                else:
+                    previous_frame_number = current_frame_number 
+                    ref_img_list.append( self.get_image( apply_manual_reduction  = apply_manual_reduction) )
+            i+=1
+            timeout_counter += 1
+            
+        return( ref_img_list )
+
+
+    def estimate_noise_covariance( self, number_of_frames = 1000, where = 'pupil' ):
+        
+        img_list = self.get_some_frames( number_of_frames )
+
+        # looking at covariance of pixel noise 
+        #img_list  = np.array( img_list  )
+        if where == 'pupil':
+            img_list_filtered = np.array( [d.reshape(-1)[self.pupil_pixel_filter] for d in img_list] )
+
+        elif where == 'whole_image':
+            img_list_filtered = np.array( [d.reshape(-1) for d in img_list] )
+
+
+        cov_matrix = np.cov( img_list_filtered ,ddof=1, rowvar = False ) # rowvar = False => rows are samples, cols variables 
+        return( cov_matrix )
+
     def get_processed_image(self):
         FliSdk_V2.GetProcessedImage(self.camera, -1)
 
