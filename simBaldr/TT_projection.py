@@ -22,7 +22,54 @@ import baldr_simulation_functions as baldrSim
 import data_structure_functions as config
 
 
+def project_matrix( CM , projection_vector_list ):
+    """
+    create two new matrices CM_TT, and CM_HO from CM, 
+    where CM_TT projects any "Img" onto the column space of vectors in 
+    projection_vector_list  vectors, 
+    and CM_HO which projects any "Img" to the null space of CM_TT that is within CM.
+    
+    Typical use is to seperate control matrix to tip/tilt reconstructor (CM_TT) and
+    higher order reconstructor (CM_HO)
 
+    Note vectors in projection_vector_list  must be 
+    
+    Parameters
+    ----------
+    CM : TYPE matrix
+        DESCRIPTION. 
+    projection_vector_list : list of vectors that are in col space of CM
+        DESCRIPTION.
+
+    Returns
+    -------
+    CM_TT , CM_HO
+
+    """
+
+    # Step 1: Create the matrix T from projection_vector_list (e.g. tip and tilt vectors )
+    projection_vector_list
+    T = np.column_stack( projection_vector_list )  # T is Mx2
+    
+    # Step 2: Calculate the projection matrix P
+    #P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM <- also works like this 
+    # Step 2: Compute SVD of T
+    U, S, Vt = np.linalg.svd(T, full_matrices=False)
+    
+    # Step 2.1: Compute the projection matrix P using SVD
+    P = U @ U.T  # U @ U.T gives the projection matrix onto the column space of T
+    
+    # Step 3: Compute CM_TT (projection onto tip and tilt space)
+    CM_TT = P @ CM  # CM_TT is MxN
+    
+    # Step 4: Compute the null space projection matrix and CM_HO
+    I = np.eye(T.shape[0])  # Identity matrix of size MxM
+    CM_HO = (I - P) @ CM  # CM_HO is MxN
+
+    return( CM_TT , CM_HO )
+    
+#%%
+#
 # setting up the hardware and software modes of our ZWFS
 tel_config =  config.init_telescope_config_dict(use_default_values = True)
 phasemask_config = config.init_phasemask_config_dict(use_default_values = True) 
@@ -119,14 +166,23 @@ tip = np.zeros(len(M2C.T) )  # Replace with your tip vector (size M)
 tip[0] = 1
 tilt = np.zeros(len(M2C.T) ) # Replace with your tilt vector (size M)
 tilt[1] = 1
+#other = np.zeros(len(M2C.T) ) # Replace with your tilt vector (size M)
+#other[8] = 1
 CM = I2M #np.array([...])  # Replace with your CM matrix (size MxN)
 
-
-# Step 1: Create the matrix T from tip and tilt vectors
+projection_vector_list = [tip, tilt] #, other] 
+CM_TT, CM_HO = project_matrix( CM , projection_vector_list )
+"""# Step 1: Create the matrix T from tip and tilt vectors
 T = np.column_stack((tip, tilt))  # T is Mx2
 
 # Step 2: Calculate the projection matrix P
-P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM
+#P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM
+
+U, S, Vt = np.linalg.svd(T, full_matrices=False)
+
+# Step 3: Compute the projection matrix P using SVD
+P = U @ U.T  # U @ U.T gives the projection matrix onto the column space of T
+
 
 # Step 3: Compute CM_TT (projection onto tip and tilt space)
 CM_TT = P @ CM  # CM_TT is MxN
@@ -145,7 +201,7 @@ print("CM_HO:\n", CM_HO)
   
 # Now to test create put a tip mode + some HO modes on DM, get image and see if we can reconstruct them with 
 # CM_TT and CM_HO
-
+"""
 
 a_tt = 1
 i_tt = 1
@@ -202,12 +258,17 @@ plt.legend(fontsize=15)
 
 #%% Ok now test in DM command space 
 
+#Try with Fourier basis 
+#fbasis =  baldrSim.create_control_basis(z.dm, N_controlled_modes=20, basis_modes='fourier')
+#tip = fbasis[0]  # Replace with your tip vector (size M)
+#tilt =  fbasis[3] # Replace with your tilt vector (size M)
 
 # if we consider modal basis tip = [1,0,0,....0], tilt = [0,1,0,...,0]
 # if we consider DM space then we have the actual commands
 # tests modal space first 
 tip = control_basis[0]  # Replace with your tip vector (size M)
-tilt = control_basis[1] # Replace with your tilt vector (size M)
+tilt =  control_basis[1] # Replace with your tilt vector (size M)
+
 
 CM = M2C @ I2M #np.array([...])  # Replace with your CM matrix (size MxN)
 
@@ -215,7 +276,13 @@ CM = M2C @ I2M #np.array([...])  # Replace with your CM matrix (size MxN)
 T = np.column_stack((tip, tilt))  # T is Mx2
 
 # Step 2: Calculate the projection matrix P
-P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM
+#P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM <- also works like this 
+# Step 2: Compute SVD of T
+U, S, Vt = np.linalg.svd(T, full_matrices=False)
+
+# Step 2.1: Compute the projection matrix P using SVD
+P = U @ U.T  # U @ U.T gives the projection matrix onto the column space of T
+
 
 # Step 3: Compute CM_TT (projection onto tip and tilt space)
 CM_TT = P @ CM  # CM_TT is MxN

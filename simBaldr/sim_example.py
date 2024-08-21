@@ -239,9 +239,9 @@ setpoint = np.zeros( len(M2C.T) )
 pid = baldrSim.PIDController(kp, ki, kd, upper_limit, lower_limit, setpoint)
 
 
-test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=zwfs.wvls, \
-                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
-                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
+test_field = baldrSim.init_a_field( Hmag=0, mode='Kolmogorov', wvls=z.wvls, \
+                                   pup_geometry='disk', D_pix=z.mode['telescope']['pupil_nx_pixels'],\
+                                       dx=z.mode['telescope']['telescope_diameter']/z.mode['telescope']['pupil_nx_pixels'], \
                                            r0=0.1, L0 = 25, phase_scale_factor=1.)
 
 
@@ -255,20 +255,20 @@ c_list = []
 strehl_list = []
 residual_list = []
 
-wvl_ref = zwfs.wvls[0] # where to calculate Strehl ratio etc
+wvl_ref = z.wvls[0] # where to calculate Strehl ratio etc
 pid.reset() 
 
 # construct the same basis in the field space so we can estimate the TRUE
 # aberrations vs estimated aberrations 
 field_basis = baldrSim.create_control_basis(None, N_controlled_modes=20, basis_modes=lab.split('_')[-2],\
-                                    without_piston=True, not_associated_with_DM=zwfs.pup.shape[0])
+                                    without_piston=True, not_associated_with_DM=z.pup.shape[0])
 
 ###  FOURIER BASIS DIVERGES! ZERNIKE CONVERGES.. CIRCULAR PUPIL? SOLN: INCLUDING MORE MODES?
 
 for _ in range(40):
     
 
-    strehl = np.exp( -np.nanvar( test_field.phase[wvl_ref][zwfs.pup>0] ) )
+    strehl = np.exp( -np.nanvar( test_field.phase[wvl_ref][z.pup>0] ) )
     strehl_list.append( strehl )
     
     i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
@@ -316,98 +316,6 @@ plt.savefig( 'data/delme.png' )
 
 
  
-
-
-
-#%% TESTING TIP/TILT PROJECTION 
-
-lab = 'test_zernike'
-z = copy.deepcopy( zwfs )
-zwfs.dm.update_shape( np.zeros( zwfs.dm.N_act ) )
-z.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=20, \
-                                  modal_basis='zernike', pokeAmp = 150e-9 , label=lab, replace_nan_with=0, without_piston=True)
-
-M2C =  z.control_variables[lab ]['pokeAmp'] * np.array( z.control_variables[lab ]['control_basis']).T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
-I2M =  np.array( z.control_variables[lab ]['I2M'] ).T
-IM = np.array(z.control_variables[lab ]['IM'] )
-I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
-N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
-#CM = M2C @ I2M
-
-#plt.figure(); plt.imshow( M2C[:,0].reshape(12,12) ); plt.colorbar(); plt.savefig( 'data/delme.png')
-
-# if we consider modal basis tip = [1,0,0,....0], tilt = [0,1,0,...,0]
-# if we consider DM space then we have the actual commands
-# tests modal space first 
-tip = np.zeros(len(M2C.T) )  # Replace with your tip vector (size M)
-tip[0] = 1
-tilt = np.zeros(len(M2C.T) ) # Replace with your tilt vector (size M)
-tilt[1] = 1
-CM = I2M #np.array([...])  # Replace with your CM matrix (size MxN)
-
-
-# Step 1: Create the matrix T from tip and tilt vectors
-T = np.column_stack((tip, tilt))  # T is Mx2
-
-# Step 2: Calculate the projection matrix P
-P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM
-
-# Step 3: Compute CM_TT (projection onto tip and tilt space)
-CM_TT = P @ CM  # CM_TT is MxN
-
-# Step 4: Compute the null space projection matrix and CM_HO
-I = np.eye(T.shape[0])  # Identity matrix of size MxM
-CM_HO = (I - P) @ CM  # CM_HO is MxN
-
-# note this ends up giving same result as CM_HO = CM - (( CM.T @ T ) @ np.linalg.pinv(T )).T 
-# which is the expression used in 
-
-
-# CM_TT and CM_HO are the desired matrices
-print("CM_TT:\n", CM_TT)
-print("CM_HO:\n", CM_HO)
-  
-# Now to test create put a tip mode + a HO mode on DM, get image and see if we can reconstruct them with 
-
-#1. create non-aberrated field field 
-test_field = baldrSim.init_a_field( Hmag=-3, mode=0, wvls=zwfs.wvls, \
-                                   pup_geometry='disk', D_pix=zwfs.mode['telescope']['pupil_nx_pixels'],\
-                                       dx=zwfs.mode['telescope']['telescope_diameter']/zwfs.mode['telescope']['pupil_nx_pixels'], \
-                                           r0=0.1, L0 = 25, phase_scale_factor=1.)
-
-a_tt = 1
-a_ho1 = 0.
-i_tt = 0
-i_ho1 = 5
-app_mode = np.zeros( len(M2C.T) ) 
-app_mode[i_tt] = a_tt
-app_mode[i_ho1] = a_ho1
-cmd =  2 * M2C[:,0] #a_tt * M2C[:,i_tt] + a_ho1 * M2C[:,i_ho1] #note that M2C was scaled by poke amplitude - so coefficients are relative to this
-#plt.figure(); plt.imshow( cmd.reshape(12,12) ); plt.colorbar(); plt.savefig( 'data/delme.png')
-zwfs.dm.update_shape( cmd )
-
-i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
-o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
-
-sig = i.signal / np.sum( o.signal) - I0 / np.sum( N0 )
-#plt.figure(); plt.imshow( cmd.reshape(12,12)  ); plt.colorbar(); plt.savefig( 'data/delme.png')
-plt.figure(); plt.imshow( sig ); plt.colorbar(); plt.savefig( 'data/delme.png')
-
-# reconstruct mode amplitudes 
-mode_reco_HO = CM_HO @ sig.reshape(-1) * 1/z.control_variables[lab ]['pokeAmp'] 
-mode_reco_TT = CM_TT @ sig.reshape(-1) * 1/z.control_variables[lab ]['pokeAmp'] 
-mode_reco_full = CM @ sig.reshape(-1) * 1/z.control_variables[lab ]['pokeAmp'] 
-
-plt.figure(figsize=(8,5))
-plt.plot( mode_reco_HO, 'x', label='HO reconstruction')
-plt.plot( mode_reco_TT, 'x',label='TT reconstruction')
-plt.plot( mode_reco_full, 'x', label='full reconstruction')
-plt.plot( app_mode, label='input mode amplitudes')
-plt.legend()
-plt.savefig( 'data/delme.png',dpi=300, bbox_inches='tight')
-
-
-
 
 
 

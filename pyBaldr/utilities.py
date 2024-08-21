@@ -604,6 +604,54 @@ def nice_DM_plot( data, savefig=None ): #for a 140 actuator BMC 3.5 DM
         plt.savefig( savefig , bbox_inches='tight', dpi=300) 
 
 
+
+
+def project_matrix( CM , projection_vector_list ):
+    """
+    create two new matrices CM_TT, and CM_HO from CM, 
+    where CM_TT projects any "signal" onto the column space of vectors in 
+    projection_vector_list vectors, 
+    and CM_HO which projects any "signal" to the null space of CM_TT that is within CM.
+    
+    Typical use is to seperate control matrix to tip/tilt reconstructor (CM_TT) and
+    higher order reconstructor (CM_HO)
+
+    Note vectors in projection_vector_list  must be 
+    
+    Parameters
+    ----------
+    CM : TYPE matrix
+        DESCRIPTION. 
+    projection_vector_list : list of vectors that are in col space of CM
+        DESCRIPTION.
+
+    Returns
+    -------
+    CM_TT , CM_HO
+
+    """
+    
+    # Create the matrix T from projection_vector_list (e.g. tip and tilt vectors )
+    projection_vector_list
+    T = np.column_stack( projection_vector_list )  # T is Mx2
+    
+    # Calculate the projection matrix P
+    #P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM <- also works like this 
+    # Compute SVD of T (this way is more numerically stable)
+    U, S, Vt = np.linalg.svd(T, full_matrices=False)
+    
+    #  Compute the projection matrix P using SVD
+    P = U @ U.T  # U @ U.T gives the projection matrix onto the column space of T
+    
+    #  Compute CM_TT (projection onto tip and tilt space)
+    CM_TT = P @ CM  # CM_TT is MxN
+    
+    #  Compute the null space projection matrix and CM_HO
+    I = np.eye(T.shape[0])  # Identity matrix of size MxM
+    CM_HO = (I - P) @ CM  # CM_HO is MxN
+
+    return( CM_TT , CM_HO )
+
 # ==========
 
 def test_controller_in_cmd_space( zwfs, phase_controller, Vw =None , D=None , AO_lag=None  ):
@@ -1360,6 +1408,45 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
         output_fits.writeto( savefits )  #data_path + 'ZWFS_internal_calibration.fits'
 
     return( output_fits ) 
+
+
+
+def _compute_weighted_frequency(vector):
+    # Step 1: Compute the Fourier Transform of the vector
+    fft_values = np.fft.fft(vector)
+    
+    # Step 2: Compute the Power Spectral Density (PSD)
+    psd = np.abs(fft_values)**2
+    
+    # Step 3: Compute the frequencies associated with the PSD
+    freqs = np.fft.fftfreq(len(vector))
+    
+    # Only consider the positive frequencies
+    positive_freq_indices = np.where(freqs >= 0)
+    freqs = freqs[positive_freq_indices]
+    psd = psd[positive_freq_indices]
+    
+    # Step 4: Compute the weighted frequency
+    weighted_freq = np.sum(freqs * psd) / np.sum(psd)
+    
+    return weighted_freq
+
+def sort_vectors_by_weighted_frequency(vectors):
+    """
+    sort list of vectors based on the power spectral density weighted 
+    frequency of the vectors ordered from vectors having most power at 
+    lower frequencies to vectors having most power at higher frequencies. 
+    
+    Useful for sorting DM basis cmds that may seem un-ordered
+    """
+    
+    # Step 5: Compute the weighted frequency for each vector
+    weighted_frequencies = [_compute_weighted_frequency(v) for v in vectors]
+    
+    # Step 6: Sort the vectors based on the weighted frequency
+    sorted_vectors = [v for _, v in sorted(zip(weighted_frequencies, vectors))]
+    
+    return sorted_vectors
 
 
 

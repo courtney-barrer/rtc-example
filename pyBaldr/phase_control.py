@@ -57,7 +57,8 @@ class phase_controller_1():
                            Nx_act_basis = self.config['dm_control_diameter'],\
                                act_offset= self.config['dm_control_center'], without_piston=True) # cmd = M2C @ mode_vector, i.e. mode to command matrix
            
-            # used for estimating MAP inverse of interaction matrix 
+                
+            # used for estimating MAP inverse of interaction matrix  (minimum variance esti.)
             self.noise_cov = None # should be in pixel space of the filtered pupil 
             self.phase_cov = None # should be in mode space
 
@@ -241,7 +242,20 @@ class phase_controller_1():
             #minimum variance of maximum posterior estimator 
             I2M = (phase_cov @ IM @ np.linalg.inv(IM.T @ phase_cov @ IM + noise_cov) ).T #have to transpose to keep convention.. although should be other way round
             
-        #control matrix (note in zonal method M2C is just identity matrix)
+        """ 
+        # get tip/tilt reconstructors from I2M matrix (IN MODAL SPACE!)
+        # NOTE: This ASSUMES that index 0, 1 correspond to tip/tilt
+        tip = np.zeros( I2M.shape[0] )
+        tip[0] = 1
+        tilt = np.zeros( I2M.shape[0] )
+        tilt[1] = 1
+        #if self.config['basis']=='zernike':
+            
+        R_TT, R_HO = util.project_matrix( I2M.T , projection_vector_list = [tip, tilt] )"""
+        
+        #elif self.config['basis']=='fourier':
+            
+        #unfiltered control matrix (note in zonal method M2C is just identity matrix)
         CM = self.config['M2C'] @ I2M.T
 
         # class specific controller parameters
@@ -264,7 +278,14 @@ class phase_controller_1():
         ctrl_parameters['IM'] = IM # interaction matrix
        
         ctrl_parameters['I2M'] = I2M # intensity to mode matrix 
-
+        
+        ### ASSUMES INDEX 0, 1 IN BASIS CORRESPOND TO TIP/TILT <- This is not the case for Fourier basis!! 
+        #ctrl_parameters['R_TT'] = R_TT # projection of signal to tip / tilt mode amplitudes
+        
+        #ctrl_parameters['R_HO'] = R_TT # projection of signal to higher order mode amplitudes
+        # e.g. cmd_TT ~ M2C @ R_TT @ signal
+        ### 
+        
         ctrl_parameters['CM'] = CM # control matrix (intensity to DM cmd)
        
         ctrl_parameters['P2C'] = None # pixel to cmd registration (i.e. what region)
