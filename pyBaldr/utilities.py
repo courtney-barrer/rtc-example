@@ -295,7 +295,7 @@ def get_DM_command_in_2D(cmd,Nx_act=12):
 def circle(radius, size, circle_centre=(0, 0), origin="middle"):
     
     """
-    Adopted from AO tools with edit that we can use size as a tuple of row_size, col_size to include rectangles 
+    Adapted from AO tools with edit that we can use size as a tuple of row_size, col_size to include rectangles 
     
     Create a 2-D array: elements equal 1 within a circle and 0 outside.
 
