@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import rtc
 import sys
 import datetime
+import importlib #e.g. to reload after change importlib.reload(phase_control) 
 sys.path.append('simBaldr/' )
 sys.path.append('pyBaldr/' )  
 from pyBaldr import utilities as util
@@ -79,6 +80,8 @@ zwfs.start_camera()
 
 # !!!! TAKE OUT SOURCE !!!! 
 # at sydney move 01 X-LSM150A-SE03 to 133.07mm
+
+
 zwfs.build_manual_dark()
 
 # get our bad pixels 
@@ -168,7 +171,9 @@ zwfs.dm.send_data( zwfs.dm_shapes['flat_dm'] )
 time.sleep( 0.1 )
 
 #phase_ctrl.change_control_basis_parameters(  number_of_controlled_modes=140, basis_name ='Zonal', dm_control_diameter=None, dm_control_center=None,controller_label=None)
-phase_ctrl.build_control_model_2(zwfs, poke_amp = -0.2, label='ctrl_1', poke_method='single_sided_poke', inverse_method='MAP',  debug = True)
+pokeamp = -0.2 
+phase_ctrl.build_control_model_2(zwfs, poke_amp = pokeamp, label='ctrl_1', poke_method='single_sided_poke',\
+ inverse_method='pinv',  debug = True) # inverse_method='pinv' or 'MAP'
 #phase_ctrl.build_control_model( zwfs , poke_amp = -0.15, label='ctrl_1', debug = True)  
 
 phase_ctrl.plot_SVD_modes( zwfs, 'ctrl_1', save_path=fig_path)
@@ -181,13 +186,20 @@ phase_ctrl.plot_SVD_modes( zwfs, 'ctrl_1', save_path=fig_path)
 #ab_basis = util.construct_command_basis( basis='Zernike', number_of_modes = 50, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
 
 ctrl_method_label = 'ctrl_1'
-M2C = phase_ctrl.config['M2C'] # readability 
+mode_basis = phase_ctrl.config['M2C'] 
+M2C = phase_ctrl.ctrl_parameters[ctrl_method_label]['M2C_4reco'] # readability  # phase_ctrl.ctrl_parameters[ctrl_method_label]['M2C_4reco']#
 
 I2M = phase_ctrl.ctrl_parameters[ctrl_method_label]['I2M']
 
 IM = phase_ctrl.ctrl_parameters[ctrl_method_label]['IM'] # readability 
 # unfiltered CM
 CM = phase_ctrl.ctrl_parameters[ctrl_method_label]['CM'] # readability 
+
+I0 = phase_ctrl.ctrl_parameters[ctrl_method_label]['ref_pupil_FPM_in']
+
+poke_amp = phase_ctrl.ctrl_parameters[ctrl_method_label]['poke_amp']
+# plt.figure(); plt.plot(I2M.T @ IM[1]); plt.savefig('data/delme.png')
+# This needs to be perfect if pinv.. not necessarily in MAP !! 
 
 # get tip/tilt and higher order reconstructors (signal -> modal amplitude)
 tip = np.zeros( I2M.shape[1] )
@@ -216,7 +228,7 @@ amp = -0.15
 
 for mode_indx in range( len(M2C)-1 ) :  
 
-    mode_aberration = M2C.T[mode_indx]
+    mode_aberration = mode_basis.T[mode_indx]#   M2C.T[mode_indx]
     #plt.imshow( util.get_DM_command_in_2D(amp*mode_aberration));plt.colorbar();plt.show()
     
     dm_cmd_aber = zwfs.dm_shapes['flat_dm'] + amp * mode_aberration 
@@ -242,7 +254,9 @@ for mode_indx in range( len(M2C)-1 ) :
     plt.figure(figsize=(8,5));
     plt.plot( mode_res  ,label='reconstructed amplitude');
     app_amp = np.zeros( len( mode_res ) ) 
-    app_amp[mode_indx] = amp
+
+    app_amp[mode_indx] = amp / poke_amp
+
     plt.plot( app_amp ,'x', label='applied amplitude');
     plt.axvline(mode_indx  , ls=':', color='k', label='mode applied') ; plt.xlabel('mode index',fontsize=15); 
     plt.ylabel('mode amplitude',fontsize=15); plt.gca().tick_params(labelsize=15) ; plt.legend();
@@ -250,15 +264,15 @@ for mode_indx in range( len(M2C)-1 ) :
 
     _ = input('press when ready to see mode reconstruction')
     
-    cmd_res = M2C @ mode_res
+    cmd_res = 1/poke_amp * M2C @ mode_res
     
     # WITH RESIDUALS 
     
-    im_list = [util.get_DM_command_in_2D( mode_aberration ), util.get_DM_command_in_2D( cmd_res ) ,util.get_DM_command_in_2D( mode_aberration - cmd_res ) ]
-    xlabel_list = [None, None, None]
-    ylabel_list = [None, None, None]
-    title_list = ['Aberration on DM', 'reconstructed DM cmd', 'residual']
-    cbar_label_list = ['DM command', 'DM command' , 'DM command' ] 
+    im_list = [util.get_DM_command_in_2D( mode_aberration ),1/np.mean(raw_img) * raw_img - I0/np.mean(I0),  util.get_DM_command_in_2D( cmd_res ) ,util.get_DM_command_in_2D( mode_aberration - cmd_res ) ]
+    xlabel_list = [None, None, None, None]
+    ylabel_list = [None, None, None, None]
+    title_list = ['Aberration on DM', 'ZWFS signal', 'reconstructed DM cmd', 'residual']
+    cbar_label_list = ['DM command', 'ADU (Normalized)', 'DM command' , 'DM command' ] 
     savefig = fig_path + 'delme.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
 
     util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)

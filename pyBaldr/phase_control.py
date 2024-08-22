@@ -194,7 +194,7 @@ class phase_controller_1():
                 # then filter for getting error signal 
                 errsig =  self.get_img_err( I[np.array( ZWFS.pupil_pixels )] )
 
-                IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
+                IM.append( list(  errsig.reshape(-1) ) ) #toook out 1/poke_amp *
 
         elif poke_method=='double_sided_poke':
             for i,m in enumerate(modal_basis):
@@ -215,7 +215,7 @@ class phase_controller_1():
                         I_minus = np.median( img_list, axis = 0) 
                         I_minus *= 1/np.mean( I_minus )
                 errsig = (I_plus - I_minus)[np.array( ZWFS.pupil_pixels )]
-                IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
+                IM.append( list(  errsig.reshape(-1) ) ) #toook out 1/poke_amp *
 
         else:
             raise TypeError( ' no matching method for building control model. Try (for example) method="single_side_poke"')
@@ -255,16 +255,18 @@ class phase_controller_1():
         
         #elif self.config['basis']=='fourier':
             
-        #unfiltered control matrix (note in zonal method M2C is just identity matrix)
-        CM = self.config['M2C'] @ I2M.T
+
 
         # class specific controller parameters
         ctrl_parameters = {}
+
        
         ctrl_parameters['active'] = 0 # 0 if unactive, 1 if active (should only have one active phase controller)
 
         #ctrl_parameters['ref_pupil_FPM_out'] = N0 # <------- NOT INCLUDED! 
 
+        ctrl_parameters['poke_amp'] = poke_amp # amplitude used for IM reconstruction
+        
         ctrl_parameters['ref_pupil_FPM_in'] = I0
 
         ctrl_parameters['pupil_pixels'] = ZWFS.pupil_pixels
@@ -274,6 +276,8 @@ class phase_controller_1():
         ctrl_parameters['outside_pupil_pixels'] = ZWFS.outside_pixels
 
         ctrl_parameters['dm_center_ref_pixels'] = ZWFS.dm_center_ref_pixels
+
+        ctrl_parameters['M2C_4reco'] = poke_amp * self.config['M2C']  # mode to command matrix normalized to IM poke amps
 
         ctrl_parameters['IM'] = IM # interaction matrix
        
@@ -286,11 +290,15 @@ class phase_controller_1():
         # e.g. cmd_TT ~ M2C @ R_TT @ signal
         ### 
         
+        #unfiltered control matrix (note in zonal method M2C is just identity matrix)
+        CM = ctrl_parameters['M2C_4reco'] @ I2M.T
+
         ctrl_parameters['CM'] = CM # control matrix (intensity to DM cmd)
        
         ctrl_parameters['P2C'] = None # pixel to cmd registration (i.e. what region)
 
         ZWFS.states['busy'] = 0
+       
        
         self.ctrl_parameters[label] = ctrl_parameters
        
@@ -378,7 +386,7 @@ class phase_controller_1():
                 raise TypeError(" reference intensity shapes do not match shape of current measured intensity. Check phase_controller.I0 and/or phase_controller.N0 attributes. Workaround would be to retake these. ")
             
             #D delta_c = delta_I => D *poke_amp * I = delta_I -> D = 1/poke_amp * delta_I
-            IM.append( list( 1/poke_amp * errsig.reshape(-1) ) )
+            IM.append( list( 1/poke_amp * errsig.reshape(-1) ) ) # toook out 1/poke_amp *
 
         # FLAT DM WHEN DONE
         ZWFS.dm.send_data( list( ZWFS.dm_shapes['flat_dm'] ) )
@@ -415,7 +423,7 @@ class phase_controller_1():
         I2M = np.linalg.pinv( U @ Sigma @ Vt ) # C = A @ M #1/abs(poke_amp)
         
         #control matrix (note in zonal method M2C is just identity matrix)
-        CM = self.config['M2C'] @ I2M.T
+        CM = self.config['M2C'] @ I2M.T # < - To check with normalization of modes
 
         # class specific controller parameters
         ctrl_parameters = {}
@@ -437,6 +445,8 @@ class phase_controller_1():
         ctrl_parameters['IM'] = IM # interaction matrix
        
         ctrl_parameters['I2M'] = I2M # intensity to mode matrix 
+
+        ctrl_parameters['M2C_4reco'] = poke_amp * self.config['M2C']  # mode to command matrix normalized to IM poke amps
 
         ctrl_parameters['CM'] = CM # control matrix (intensity to DM cmd)
        
