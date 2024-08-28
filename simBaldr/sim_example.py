@@ -18,11 +18,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import sys
 sys.path.append('simBaldr/' )
 sys.path.append('pyBaldr/' )
-from pyBaldr import utilities as util
+#from pyBaldr import utilities as util
 import baldr_simulation_functions as baldrSim
 import data_structure_functions as config
 
-# sys.path.append('/Users/bencb/Documents/rtc-example/simBaldr/' )
+#sys.path.append('/Users/bencb/Documents/rtc-example/simBaldr/' )
 # dont import pyBaldr since dont have locally FLI / BMC 
 
 
@@ -128,7 +128,10 @@ phasemask_config = config.init_phasemask_config_dict(use_default_values = True)
 phasemask_config['on-axis phasemask depth'] = 4.210526315789474e-05
 phasemask_config['off-axis phasemask depth'] = 4.122526315789484e-05
 
-phasemask_config['phasemask_diameter'] = 1.5 * (phasemask_config['fratio'] * 1.65e-6)
+phasemask_config['phasemask_diameter'] = 1.3 * (phasemask_config['fratio'] * 1.65e-6)
+
+# trying to understand I0 measured in sydney 
+phasemask_config['on-axis_transparency'] = 0.1 
 
 #---------------------
 
@@ -157,13 +160,13 @@ zwfs_bmc = baldrSim.ZWFS(mode_dict_bmc)
 
 # -------- trialling this 
 
-# Cold stops have to be updated for both FPM and FPM_off!!!!!!!
+"""# Cold stops have to be updated for both FPM and FPM_off!!!!!!!
 zwfs.FPM.update_cold_stop_parameters( None )
 zwfs.FPM_off.update_cold_stop_parameters( None )
 
 zwfs_bmc.FPM.update_cold_stop_parameters( None )
 zwfs_bmc.FPM_off.update_cold_stop_parameters( None )
-
+"""
 
 #---------------------
 # define an internal calibration source 
@@ -224,6 +227,10 @@ I2M = np.array( z.control_variables[lab ]['I2M'] ).T
 IM = np.array(z.control_variables[lab ]['IM'] )
 I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
 N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
+
+plt.imshow( I0 )
+
+#%%
 
 pupil_pixels = np.arange( len( I0.reshape(-1))).astype(int) 
 
