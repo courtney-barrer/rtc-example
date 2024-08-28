@@ -126,8 +126,19 @@ def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 
             number_of_modes += 1 # we add one more mode since we dont include piston 
 
         # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY number_of_modes
-        control_basis_dict  = develop_Fourier_basis( int(np.ceil(number_of_modes**0.5)), int(np.ceil(number_of_modes**0.5)) ,P = 2 * Nx_act_DM, Nx = Nx_act_DM, Ny = Nx_act_DM )
-        raw_basis = np.array(list( control_basis_dict.values() ) ) #[:number_of_modes]
+        n = round( number_of_modes**0.5 ) + 1 # number of modes = (n-1)*(m-1) , n=m => (n-1)**2 
+        control_basis_dict  = develop_Fourier_basis( n, n ,P = 2 * Nx_act_DM, Nx = Nx_act_DM, Ny = Nx_act_DM )
+        
+        # create raw basis as ordered list from our dictionary
+        raw_basis = []
+        for i in range( n-1 ):
+            for j in np.arange( i , n-1 ):
+                if i==j:
+                    raw_basis.append( control_basis_dict[i,i] )
+                else:
+                    raw_basis.append( control_basis_dict[i,j] ) # get either side of diagonal 
+                    raw_basis.append( control_basis_dict[j,i] )
+                    
         
         bmcdm_basis_list = []
         for i,B in enumerate(raw_basis):
@@ -256,6 +267,50 @@ def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
     return(basis_dict)
 
 
+
+def pin_outer_actuators_to_inner_diameter(inner_command):
+    """
+    input a basis defined on 10x10 grid and this will convert it to a
+    12x12 grid without corners (BMC multi3.5 DM geometry) with the outer
+    perimeter actuators pinned to the inner perimeter value
+    """
+    if len(inner_command) != 100:
+        raise ValueError("Input command must be of length 100")
+
+    inner_command = np.array(inner_command).reshape(10, 10)
+    
+    # Initialize a 12x12 grid with zeros
+    command_140 = np.zeros((12, 12))
+
+    # Map the inner 10x10 command to the corresponding position in the 12x12 grid
+    command_140[1:11, 1:11] = inner_command
+
+    # Set the perimeter actuators equal to the inner adjacent values
+    # Top and bottom rows
+    command_140[0, 1:11] = command_140[1, 1:11]
+    command_140[11, 1:11] = command_140[10, 1:11]
+
+    # Left and right columns
+    command_140[1:11, 0] = command_140[1:11, 1]
+    command_140[1:11, 11] = command_140[1:11, 10]
+
+    # Corners (set these to zero since they are missing actuators)
+    corners = [(0, 0), (0, 11), (11, 0), (11, 11)]
+    for corner in corners:
+        command_140[corner] = 0
+
+    # Flatten the 12x12 grid to get the final 140-length command
+    command_140_flat = command_140.flatten()
+
+    # Remove the corner actuators (i.e., elements 0, 11, 132, 143)
+    indices_to_remove = [0, 11, 132, 143]
+    command_140_flat = np.delete(command_140_flat, indices_to_remove)
+
+    return command_140_flat.tolist()
+
+
+
+
 def spiral_search_TT_coefficients( dr, dtheta, aoi_tp, aoi_tt, num_points, r0=0, theta0=0):
     """
     generate tip (tp) / tilt (tt) coefficients for a spiral search covering
@@ -295,7 +350,7 @@ def get_DM_command_in_2D(cmd,Nx_act=12):
 def circle(radius, size, circle_centre=(0, 0), origin="middle"):
     
     """
-    Adapted from AO tools with edit that we can use size as a tuple of row_size, col_size to include rectangles 
+    Adopted from AO tools with edit that we can use size as a tuple of row_size, col_size to include rectangles 
     
     Create a 2-D array: elements equal 1 within a circle and 0 outside.
 
@@ -433,16 +488,90 @@ def line_intersection(line1, line2):
     return( x, y )
 
 
-def move_fpm( tel, pos = 0):
-    # in real life this will command a motor - but for now i do this manually
+
+def get_reference_images(zwfs, phasemask, theta_degrees=11.8, number_of_frames=256, compass = True, compass_origin=None, savefig='tmp/delme.png' ):
     """
-    # SETS FOCAL PLANE MASK - TO IMPLIMENT ONCE WE HAVE FPM MOTORS
-    if pos == 0:    
-        print( 'move FPM to position X')
-    elif pos == 1:  
-        print( 'move FPM to position Y') #etc
+    see document in Asgard/03 modules/Baldr/Baldr_detector_reference_coordinates_calibration.docx 
+    for description of x,y coordinate conventions in DM plance etc.
+    +x is right facing DM, +y up facing DM. 
+    measured to be 11.8 degrees in DM plane - this is default
     """
-    return(None)
+
+    dx, dy = 200, 200  #offsets to apply to phasemask
+
+    I0 =  np.mean(zwfs.get_some_frames(number_of_frames = number_of_frames, apply_manual_reduction = True ) , axis=0 )
+
+    if compass_origin==None:
+        x_pos, y_pos = 0.85 * I0.shape[0], 0.15 * I0.shape[0] #  origin of compass default
+    phasemask.move_relative( [dx,dy] ) # move out 
+    time.sleep(0.1)
+
+    N0 = np.mean(zwfs.get_some_frames(number_of_frames = 256, apply_manual_reduction = True ) , axis=0 )
+    
+    phasemask.move_relative( [-dx,-dy] ) # move back in
+    time.sleep(0.1)
+
+    im_list = [I0/np.max(N0) , N0/np.max(N0) ]
+    xlabel_list = [None, None]
+    ylabel_list = [None, None]
+    title_list = [r'$I_0$', r'$N_0$']
+    cbar_label_list = ['Intensity (Normalized)', 'Intensity (Normalized)'] 
+    #fig_path + 'delme.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+
+    n = len(im_list)
+    fs = 15
+    fig = plt.figure(figsize=(5*n, 5))
+
+    for a in range(n) :
+        ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
+        im1 = ax1.imshow(  im_list[a] , vmin = np.min(im_list[-1]), vmax = np.max(im_list[-1]))
+
+
+        ax1.set_title( title_list[a] ,fontsize=fs)
+        ax1.set_xlabel( xlabel_list[a] ,fontsize=fs) 
+        ax1.set_ylabel( ylabel_list[a] ,fontsize=fs) 
+        ax1.tick_params( labelsize=fs ) 
+
+        
+
+        divider = make_axes_locatable(ax1)
+        cax = divider.append_axes('bottom', size='5%', pad=0.05)
+        cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
+        cbar.set_label( cbar_label_list[a], rotation=0,fontsize=fs)
+        cbar.ax.tick_params(labelsize=fs)
+
+        if (a==0) & compass:
+            # Convert theta from degrees to radians
+            theta = np.radians(theta_degrees)
+            
+            # Define the base vectors (unit vectors along y and x axis)
+            y_vector = 0.2 * im_list[a].shape[0] * np.array([0, 1])
+            x_vector = -0.2 * im_list[a].shape[0] * np.array([1, 0])
+            
+            # Create the rotation matrix
+            rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                                        [np.sin(theta),  np.cos(theta)]])
+            
+            # Rotate the vectors
+            rotated_y_vector = rotation_matrix @ y_vector
+            rotated_x_vector = rotation_matrix @ x_vector
+            
+            # Plot the arrows at the specified coordinates
+
+            ax1.quiver(x_pos, y_pos, rotated_y_vector[0], rotated_y_vector[1], angles='xy', scale_units='xy', scale=1, color='r', label='y')
+            ax1.quiver(x_pos, y_pos, rotated_x_vector[0], rotated_x_vector[1], angles='xy', scale_units='xy', scale=1, color='r', label='x')
+            
+            # Add labels at the end of the arrows
+            ax1.text(x_pos + 1.2*rotated_y_vector[0], y_pos + 1.2*rotated_y_vector[1], r'$x$', fontsize=12, ha='right',color='r')
+            ax1.text(x_pos + 1.2*rotated_x_vector[0], y_pos + 1.2*rotated_x_vector[1], r'$y$', fontsize=12, ha='right',color='r')
+        
+        ax1.xaxis.tick_top()
+
+    if savefig!=None: 
+        plt.savefig( savefig , bbox_inches='tight', dpi=300)
+
+    return(I0, N0)
+        
 
 
 def watch_camera(zwfs, frames_to_watch = 10, time_between_frames=0.01,cropping_corners=None) :
@@ -711,7 +840,7 @@ def test_controller_in_cmd_space( zwfs, phase_controller, Vw =None , D=None , AO
 
 
 
-def apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_images_recorded_per_cmd = 1, take_median_of_images=False, save_dm_cmds = True, calibration_dict=None, additional_header_labels=None, sleeptime_between_commands=0.01, cropping_corners=None, save_fits = None):
+def apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_images_recorded_per_cmd = 5, take_mean_of_images=False, save_dm_cmds = True, calibration_dict=None, additional_header_labels=None, sleeptime_between_commands=0.01, cropping_corners=None, save_fits = None):
     """
     
 
@@ -729,7 +858,7 @@ def apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_ima
         Na is number actuators on DM (columns).   
     number_images_recorded_per_cmd : TYPE, optional
         DESCRIPTION. The default is 1. puting a value >= 0 means no images are recorded.
-    take_median_of_images: TYPE, optional
+    take_mean_of_images: TYPE, optional
         DESCRIPTION. The default is False. if True we take the median image of number_images_recorded_per_cmd such that there is only one image per command (that is the aggregated image)
     calibration_dict: TYPE, optional
         DESCRIPTION. The default is None meaning saved images don't get flat fielded. 
@@ -776,10 +905,10 @@ def apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_ima
         time.sleep(sleeptime_between_commands)
 
         if should_we_record_images: 
-            if take_median_of_images:
-                ims_tmp = [np.median([zwfs.get_image() for _ in range(number_images_recorded_per_cmd)] , axis=0)] #keep as list so it is the same type as when take_median_of_images=False
+            if take_mean_of_images:
+                ims_tmp = [ np.mean( zwfs.get_some_frames(number_of_frames = number_images_recorded_per_cmd, apply_manual_reduction = True ) ,axis=0) ] #[np.median([zwfs.get_image() for _ in range(number_images_recorded_per_cmd)] , axis=0)] #keep as list so it is the same type as when take_mean_of_images=False
             else:
-                ims_tmp = zwfs.get_image() #get_raw_images(camera, number_images_recorded_per_cmd, cropping_corners) 
+                ims_tmp = [ zwfs.get_image() ] #get_raw_images(camera, number_images_recorded_per_cmd, cropping_corners) 
             image_list.append( ims_tmp )
 
     
@@ -799,7 +928,7 @@ def apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_ima
         for k,v in camera_info_dict.items():
             cam_fits.header.set(k,v)
         cam_fits.header.set('#images per DM command', number_images_recorded_per_cmd )
-        cam_fits.header.set('take_median_of_images', take_median_of_images )
+        cam_fits.header.set('take_mean_of_images', take_mean_of_images )
         
         cam_fits.header.set('cropping_corners_r1', zwfs.pupil_crop_region[0] )
         cam_fits.header.set('cropping_corners_r2', zwfs.pupil_crop_region[1] )
@@ -943,8 +1072,10 @@ def scan_detector_framerates(zwfs, frame_rates, number_images_recorded_per_cmd =
 
 
 
-def GET_BDR_RECON_DATA_INTERNAL(zwfs, number_amp_samples = 18, amp_max = 0.2, number_images_recorded_per_cmd = 2, save_fits = None) :
-
+def GET_BDR_RECON_DATA_INTERNAL(zwfs,  number_amp_samples = 18, amp_max = 0.2, number_images_recorded_per_cmd = 10, source_selector = None,save_fits = None) :
+    """
+    source_selector is motor to move light source for bias frame, if None we ask to manually move it
+    """
     flat_dm_cmd = zwfs.dm_shapes['flat_dm']
 
     modal_basis = np.eye(len(flat_dm_cmd))
@@ -955,37 +1086,57 @@ def GET_BDR_RECON_DATA_INTERNAL(zwfs, number_amp_samples = 18, amp_max = 0.2, nu
     # ======== reference image with FPM OUT
 
     zwfs.dm.send_data(flat_dm_cmd) 
-    _ = input('MANUALLY MOVE PHASE MASK OUT OF BEAM, PRESS ENTER TO BEGIN' )
-    watch_camera(zwfs, frames_to_watch = 70, time_between_frames=0.05)
+    #_ = input('MANUALLY MOVE PHASE MASK OUT OF BEAM, PRESS ENTER TO BEGIN' )
+    #watch_camera(zwfs, frames_to_watch = 70, time_between_frames=0.05)
 
-    N0_list = []
-    for _ in range(number_images_recorded_per_cmd):
-        N0_list.append( zwfs.get_image( ) ) #REFERENCE INTENSITY WITH FPM IN
-    N0 = np.median( N0_list, axis = 0 ) 
+    # fourier tip to go off phase mask 
+    fourier_basis = construct_command_basis( basis='fourier', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+    tip = fourier_basis[:,0]
+    print( 'applying 2*tip cmd in Fourier basis to go off phase mask')
+    zwfs.dm.send_data( 0.5 + 2*tip ) 
+    time.sleep(0.1)
+    N0_list = zwfs.get_some_frames(number_of_frames = number_images_recorded_per_cmd, apply_manual_reduction = True )
+    #for _ in range(number_images_recorded_per_cmd):
+    #    N0_list.append( zwfs.get_image( ) ) #REFERENCE INTENSITY WITH FPM IN
+    N0 = np.mean( N0_list, axis = 0 ) 
 
     #make_fits
 
     # ======== reference image with FPM IN
-    _ = input('MANUALLY MOVE PHASE MASK BACK IN, PRESS ENTER TO BEGIN' )
-    watch_camera(zwfs, frames_to_watch = 70, time_between_frames=0.05)
-
-    I0_list = []
-    for _ in range(number_images_recorded_per_cmd):
-        I0_list.append( zwfs.get_image(  ) ) #REFERENCE INTENSITY WITH FPM IN
-    I0 = np.median( I0_list, axis = 0 ) 
+    #_ = input('MANUALLY MOVE PHASE MASK BACK IN, PRESS ENTER TO BEGIN' )
+    #watch_camera(zwfs, frames_to_watch = 70, time_between_frames=0.05)
+    print( 'going back to DM flat to put beam ON phase mask')
+    zwfs.dm.send_data(flat_dm_cmd) 
+    time.sleep(0.1)
+    I0_list = zwfs.get_some_frames(number_of_frames = number_images_recorded_per_cmd, apply_manual_reduction = True ) 
+    #for _ in range(number_images_recorded_per_cmd):
+    #    I0_list.append( zwfs.get_image(  ) ) #REFERENCE INTENSITY WITH FPM IN
+    I0 = np.mean( I0_list, axis = 0 ) 
 
     # ======== BIAS FRAME
-    _ = input('COVER THE DETECTOR FOR A BIAS FRAME' )
-
-
-    watch_camera(zwfs, frames_to_watch = 50, time_between_frames=0.05)
+    if source_selector == None:
+        _ = input('COVER THE DETECTOR FOR A BIAS FRAME OR TURN OFF SOURCE, PRESS ENTER ONCE READ' )
+    else: # we assume you gave us the sourcemotor object for moving the source.
+        # get the name of the source currently used:
+        current_source_name = source_selector.current_position
+        # move this source out to none
+        source_selector.set_source(  'none' ) 
+        print('Moving source out to get bias frame...')
+    #watch_camera(zwfs, frames_to_watch = 50, time_between_frames=0.05)
 
     BIAS_list = []
     for _ in range(100):
         time.sleep(0.05)
-        BIAS_list.append( zwfs.get_image(  ) ) #REFERENCE INTENSITY WITH FPM IN
+        BIAS_list.append( np.mean(zwfs.get_some_frames(number_of_frames = number_images_recorded_per_cmd, apply_manual_reduction = True ),axis=0 ) ) #REFERENCE INTENSITY WITH FPM IN
     #I0 = np.median( I0_list, axis = 0 ) 
 
+    if source_selector == None:    
+        _ = input('PUT SOURCE BACK ON CAMERA, PRESS ENTER ONCE DONE' )
+    else:
+        source_selector.set_source( current_source_name )
+        print('moving source back in')
+
+    
     #====== make references fits files
     I0_fits = fits.PrimaryHDU( I0 )
     N0_fits = fits.PrimaryHDU( N0 )
@@ -1012,7 +1163,7 @@ def GET_BDR_RECON_DATA_INTERNAL(zwfs, number_amp_samples = 18, amp_max = 0.2, nu
     additional_labels = [('cp_x1',cp_x1),('cp_x2',cp_x2),('cp_y1',cp_y1),('cp_y2',cp_y2),('in-poke max amp', np.max(ramp_values)),('out-poke max amp', np.min(ramp_values)),('#ramp steps',number_amp_samples), ('seq0','flatdm'), ('reshape',f'{number_amp_samples}-{modal_basis.shape[0]}-{modal_basis.shape[1]}'),('Nmodes_poked',len(modal_basis)),('Nact',140)]
 
     # --- poke DM in and out and record data. Extension 0 corresponds to images, extension 1 corresponds to DM commands
-    raw_recon_data = apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_images_recorded_per_cmd = number_images_recorded_per_cmd, take_median_of_images=True, save_dm_cmds = True, calibration_dict=None, additional_header_labels = additional_labels,sleeptime_between_commands=0.03, cropping_corners=None,  save_fits = None ) # None
+    raw_recon_data = apply_sequence_to_DM_and_record_images(zwfs, DM_command_sequence, number_images_recorded_per_cmd = number_images_recorded_per_cmd, take_mean_of_images=True, save_dm_cmds = True, calibration_dict=None, additional_header_labels = additional_labels,sleeptime_between_commands=0.03, cropping_corners=None,  save_fits = None ) # None
 
     zwfs.dm.send_data(flat_dm_cmd) 
 
@@ -1036,7 +1187,7 @@ def Ic_model_constrained(x, A, B, F, mu):
     penalty = 0
     if (F < 0) or (mu < 0): # F and mu can be correlated so constrain the quadrants 
         penalty = 1e3
-    I = A + 2 * B * np.cos(F * x + mu) + penalty
+    I = A + B * np.cos(F * x + mu) + penalty
     return I 
 
 def Ic_model_constrained_3param(x, A,  F, mu): 
@@ -1049,7 +1200,7 @@ def Ic_model_constrained_3param(x, A,  F, mu):
 
 
 # should this be free standing or a method? ZWFS? controller? - output a report / fits file
-def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_actuator_filter=None, debug=True, savefits=None) :
+def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_actuator_filter=None, debug=True, fig_path = 'tmp/', savefits=None) :
     """
     # calibration of our ZWFS: 
     # this will fit M0, b0, mu, F which can be appended to a phase_controller,
@@ -1071,6 +1222,7 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
 
     # ========================== !! 0 !! =====================
     # -- prelims of reading in and labelling data 
+    tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
     # poke values used in linear ramp
     No_ramps = int(recon_data['SEQUENCE_IMGS'].header['#ramp steps'])
@@ -1154,6 +1306,7 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
            plt.imshow( get_DM_command_in_2D( dm_pupil_filt ) )
            plt.title('influence region on DM where we will fit intensity models per actuator')
            plt.show()
+           plt.savefig(  fig_path + f'process_fits_0_{tstamp}.png', bbox_inches='tight', dpi=300)
 
 
       
@@ -1195,9 +1348,11 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
             act_img_mask_1x1[act_idx] = mask_1x1 
             #act_flag[act_idx] = 0 
     if debug:
+        plt.figure()
         plt.title('masked regions of influence per actuator')
         plt.imshow( np.sum( list(act_img_mask_3x3.values()), axis = 0 ) )
-        plt.show()
+        #plt.show()
+        plt.savefig(  fig_path + f'process_fits_1_{tstamp}.png', bbox_inches='tight', dpi=300)
 
     # turn our dictionary to a big pixel to command matrix 
     P2C_1x1 = np.array([list(act_img_mask_1x1[act_idx].reshape(-1)) for act_idx in range(Nact)])
@@ -1206,7 +1361,6 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
     # we can look at filtering a particular actuator in image P2C_3x3[i].reshape(zwfs.get_image().shape)
     # we can also interpolate signals in 3x3 grid to if DM actuator not perfectly registered to center of pixel. 
     
-
 
     if debug: 
         im_list = [(I0 - N0) / N0 ]
@@ -1225,6 +1379,8 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
         ax.grid(True, which='minor',axis='both', linestyle='-', color='k' ,lw=3)
         ax.set_xticks( np.arange(12) - 0.5 , minor=True)
         ax.set_yticks( np.arange(12) - 0.5 , minor=True)
+
+        plt.savefig(  fig_path + f'process_fits_2_{tstamp}.png', bbox_inches='tight', dpi=300)
         #plt.savefig( fig_path + f'active_DM_region_{tstamp}.png' , bbox_inches='tight', dpi=300) 
         # check the well registered DM region : 
         fig,ax = plt.subplots(1,1)
@@ -1233,6 +1389,8 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
         ax.grid(True, which='minor',axis='both', linestyle='-', color='k',lw=2 )
         ax.set_xticks( np.arange(12) - 0.5 , minor=True)
         ax.set_yticks( np.arange(12) - 0.5 , minor=True)
+
+        plt.savefig(  fig_path + f'process_fits_3_{tstamp}.png', bbox_inches='tight', dpi=300)
   
         #plt.savefig( fig_path + f'poorly_registered_actuators_{tstamp}.png' , bbox_inches='tight', dpi=300) 
 
@@ -1244,7 +1402,7 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
         ax.set_xticks( np.arange(12) - 0.5 , minor=True)
         ax.set_yticks( np.arange(12) - 0.5 , minor=True)
 
-        #plt.savefig( fig_path + f'poorly_registered_actuators_{tstamp}.png', bbox_inches='tight', dpi=300)
+        plt.savefig(  fig_path + f'process_fits_4_{tstamp}.png', bbox_inches='tight', dpi=300)
 
         plt.show() 
 
@@ -1323,16 +1481,16 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
                     j+=1
             except:
                 print(f'\n!!!!!!!!!!!!\nfit failed for actuator {act_idx}\n!!!!!!!!!!!!\nanalyse plot to try understand why')
-                nofit_list.append( act_idx ) 
+                """nofit_list.append( act_idx ) 
                 fig1, ax1 = plt.subplots(1,1)
                 ax1.plot( ramp_values, S )
-                ax1.set_title('could not fit this!') 
+                ax1.set_title('could not fit this!') """
                  
        
 
     if debug:
-        #plt.savefig( fig_path + f'cosine_interation_model_fits_ALL_{tstamp}.png' , bbox_inches='tight', dpi=300) 
-        plt.show() 
+        plt.savefig( fig_path + f'process_fits_5_{tstamp}.png' , bbox_inches='tight', dpi=300) 
+        #plt.show() 
 
     if debug:
         """ used to buff things out (adding new 0 normal noise variance to samples) 
@@ -1351,8 +1509,9 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
         buffcorners = np.array([np.array(Qlst).ravel(),np.array(Wlst).ravel(), np.array(Flst).ravel(),np.array(mulst).ravel()]).T
         corner.corner( buffcorners , quantiles=[0.16,0.5,0.84], show_titles=True, labels = ['Q [adu]', 'W [adu/cos(rad)]', 'F [rad/cmd]', r'$\mu$ [rad]'] ) 
         """
-        corner.corner( np.array(list( param_dict.values() )), quantiles=[0.16,0.5,0.84], show_titles=True, labels = ['Q', 'W', 'F', r'$\mu$'] , range = [(0,2*np.mean(y_data)),(0, 10*(np.max(y_data)-np.min(y_data)) ) , (5,20), (0,6) ] ) #, range = [(2*np.min(S), 102*np.max(S)), (0, 2*(np.max(S) - np.min(S)) ), (5, 20), (-3,3)] ) #['Q [adu]', 'W [adu/cos(rad)]', 'F [rad/cmd]', r'$\mu$ [rad]']
-        #plt.savefig( fig_path + f'fitted_Ic_model_parameters_corner_plot_{tstamp}.png', bbox_inches='tight', dpi=300)
+        #labels = ['Q', 'W', 'F', r'$\mu$']
+        corner.corner( np.array(list( param_dict.values() )), quantiles=[0.16,0.5,0.84], show_titles=True, labels = ['A', 'B', 'F', r'$\mu$'] , range = [(0,2*np.mean(y_data)),(0, 10*(np.max(y_data)-np.min(y_data)) ) , (5,20), (0,6) ] ) #, range = [(2*np.min(S), 102*np.max(S)), (0, 2*(np.max(S) - np.min(S)) ), (5, 20), (-3,3)] ) #['Q [adu]', 'W [adu/cos(rad)]', 'F [rad/cmd]', r'$\mu$ [rad]']
+        plt.savefig( fig_path + f'process_fits_6_{tstamp}.png', bbox_inches='tight', dpi=300)
         plt.show()
         
     output_fits = fits.HDUList( [] )
@@ -1376,11 +1535,14 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
     #fitted parameters
     param_fits = fits.PrimaryHDU( np.array(list( param_dict.values() )) )
     param_fits.header.set('EXTNAME','FITTED_PARAMS')
-    param_fits.header.set('COL0','Q [adu]')
+    """param_fits.header.set('COL0','Q [adu]')
     param_fits.header.set('COL1','W [adu/cos(rad)]')
     param_fits.header.set('COL2','F [rad/cmd]')
+    param_fits.header.set('COL4','mu [rad]')"""
+    param_fits.header.set('COL0','A [adu]')
+    param_fits.header.set('COL1','B [adu]')
+    param_fits.header.set('COL2','F [rad/cmd]')
     param_fits.header.set('COL4','mu [rad]')
-    
     if len(nofit_list)!=0:
         for i, act_idx in enumerate(nofit_list):
             param_fits.header.set(f'{i}_fit_fail_act', act_idx)
@@ -1405,7 +1567,7 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
 
     if savefits!=None:
            
-        output_fits.writeto( savefits )  #data_path + 'ZWFS_internal_calibration.fits'
+        output_fits.writeto( savefits, overwrite=True )  #data_path + 'ZWFS_internal_calibration.fits'
 
     return( output_fits ) 
 

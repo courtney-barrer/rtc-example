@@ -21,6 +21,7 @@
 #include <string_view>
 #include <vector>
 #include <fstream>
+#include <unordered_set>
 
 #include <omp.h>
 
@@ -202,18 +203,18 @@ public:
 
 
 // gets value at indicies for a input vector (span)
-template<typename DestType, typename T>
-std::vector<DestType> getValuesAtIndices(std::span<T> data_span, std::span<const int> indices_span) {
-    std::vector<DestType> values;
-    values.reserve(indices_span.size());
+// template<typename DestType, typename T>
+// std::vector<DestType> getValuesAtIndices(std::span<T> data_span, std::span<const int> indices_span) {
+//     std::vector<DestType> values;
+//     values.reserve(indices_span.size());
 
-    for (size_t index : indices_span) {
-        assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
-        values.push_back(static_cast<DestType>(data_span[index]));
-    }
+//     for (size_t index : indices_span) {
+//         assert(index < data_span.size() && "Index out of bounds!"); // Ensure index is within bounds
+//         values.push_back(static_cast<DestType>(data_span[index]));
+//     }
 
-    return values;
-}
+//     return values;
+// }
 
 // Gets value at indices for an input vector
 template<typename DestType, typename T>
@@ -386,10 +387,21 @@ struct camera_settings_struct {
     uint16_t image_height = 640; // i.e. rows in image
     uint16_t image_width = 512;// i.e. cols in image
     uint32_t full_image_length = 327680; //640*512;
+    
+    std::vector<uint16_t> dark;
+    std::vector<uint16_t> bad_pixels; // hold bad pixels
+
+
 
     // Default constructor
-    camera_settings_struct() noexcept = default; // Using defaulted constructor
+    //camera_settings_struct() noexcept = default; // Using defaulted constructor
+    camera_settings_struct() noexcept
+        : dark(full_image_length, 0),  // Initialize dark with zeros
+          bad_pixels()                 // Initialize bad_pixels as an empty vector
+    {}
 };
+
+
 
 
 
@@ -584,6 +596,7 @@ struct RTC {
     //(signed 32 int since at uint16 overflow the previous frame number needs to go to -1)
 
     // main variables in image->dm command pipeline (all things that would be good in telemetry)
+    std::vector<int32_t> image_vector;
     std::vector<float> image_in_pupil; // image intensities filtered within active pupil  
     std::vector<float> image_setpoint; // reference image filtered within active pupil  
     std::vector<float> image_err_signal; // processed image error signal (normalized)
@@ -640,13 +653,9 @@ struct RTC {
         // note: I tried using fakecamera from
         // /opt/FirstLightImaging/FliSdk/Examples/API_C++/FliFakeCamera
         // but failed to get this to run properly
-<<<<<<< HEAD
 
         //FliSdk* fli = new FliSdk();
         this->fli = new FliSdk();
-=======
-        this->fli = new FliSdk(); //FliSdk* fli = new FliSdk(); // this->fli = new FliSdk();
->>>>>>> ebcb198b61353925d5194db419b1082549946db8
         
         std::cout << "Detection of grabbers..." << std::endl;
         vector<string> listOfGrabbers = fli->detectGrabbers();
@@ -797,16 +806,32 @@ struct RTC {
         return rawImage;
     }
 
-    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it.
-    /// this also checks if the DM is in simulation within the RTC struct.
-    /// @return a pointer to the uint16_t image
-    void send_dm_cmd(std::span<double> cmd) {
-        if (not rtc_state.dm_simulation_mode) {
-                    // get cmd pointer
-            double *cmd_ptr = cmd.data();
-            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+
+    void reduce_image(const uint16_t* raw_image,  std::vector<int32_t>& result) {
+        // Ensure that the dark frame has the same size as the image
+        assert(camera_settings.dark.size() == camera_settings.full_image_length);
+        
+        // Ensure the result vector is preallocated with the correct size
+        assert(result.size() == camera_settings.full_image_length);
+
+        // Convert bad_pixels vector to an unordered_set for O(1) lookup times (this should be done outside of this function!)
+        std::unordered_set<size_t> bad_pixel_set(camera_settings.bad_pixels.begin(), camera_settings.bad_pixels.end());
+
+        // Process each pixel: subtract dark frame, set to zero if it's a bad pixel
+        for (size_t i = 0; i < camera_settings.full_image_length; ++i) {
+            // Subtract dark frame and store result as int32_t
+            int32_t processed_value = static_cast<int32_t>(raw_image[i]) - static_cast<int32_t>(camera_settings.dark[i]);
+
+            // Check if the pixel is in the set of bad pixels
+            if (bad_pixel_set.find(i) != bad_pixel_set.end()) {
+                processed_value = 0;  // Set bad pixels to zero
+            }
+            
+            result[i] = processed_value;
         }
+        
     }
+
 
     void process_image(std::span<const float> im, std::span<const float> im_setpoint, std::vector<float>& signal)
     {
@@ -831,15 +856,42 @@ struct RTC {
 
     }
 
+    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it.
+    /// this also checks if the DM is in simulation within the RTC struct.
+    /// @return a pointer to the uint16_t image
+    void send_dm_cmd(std::span<double> cmd) {
+        if (not rtc_state.dm_simulation_mode) {
+                    // get cmd pointer
+            double *cmd_ptr = cmd.data();
+            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+        }
+    }
+
     // ------------- FUNCTIONS TO TEST THINGS ---------------------
-    std::vector<uint16_t>  im2vec_test(){
+    std::vector<uint32_t>  im2vec_test(){
         // to test things 
 
         // get image
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
-        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        return(image_vector);
+
+    }
+
+    std::vector<int32_t>  reduceImg_test(){
+        // to test things 
+
+        // get image
+        uint16_t* raw_image = poll_last_image();
+
+        //std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        std::vector<int32_t> image_vector(camera_settings.full_image_length);
+
+        reduce_image(raw_image,  image_vector);
+        // convert to vector
+        
         return(image_vector);
 
     }
@@ -856,7 +908,7 @@ struct RTC {
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
-        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
         //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
@@ -881,7 +933,7 @@ struct RTC {
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
-        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
         //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
@@ -907,7 +959,7 @@ struct RTC {
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
-        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
         //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
@@ -941,7 +993,7 @@ struct RTC {
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
-        std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
         //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
@@ -1144,7 +1196,7 @@ struct RTC {
             }
             
             // convert to vector
-            std::vector<uint16_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+            std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
             // size of filtered signal may change while RTC is running
             size_t signal_size = regions.pupil_pixels.current().size();
@@ -1391,6 +1443,7 @@ NB_MODULE(_rtc, m) {
 
         // for testing individually 
         .def("im2vec_test", &RTC::im2vec_test)
+        .def("reduceImg_test", &RTC::reduceImg_test)
         .def("im2filtered_im_test", &RTC::im2filtered_im_test)
         .def("poll_last_image", &RTC::poll_last_image)
         .def("im2filteredref_im_test", &RTC::im2filteredref_im_test)
@@ -1469,7 +1522,9 @@ NB_MODULE(_rtc, m) {
         .def_rw("det_cropping_cols", &camera_settings_struct::det_cropping_cols)
         .def_rw("image_height", &camera_settings_struct::image_height)
         .def_rw("image_width", &camera_settings_struct::image_width)
-        .def_rw("full_image_length", &camera_settings_struct::full_image_length);
+        .def_rw("full_image_length", &camera_settings_struct::full_image_length)
+        .def_rw("dark", &camera_settings_struct::dark)
+        .def_rw("bad_pixels", &camera_settings_struct::bad_pixels);
 
     nb::class_<phase_reconstuctor_struct>(m, "phase_reconstuctor_struct")
         .def(nb::init<>())

@@ -582,12 +582,14 @@ class ZWFS():
             axx.set_title(l)
         plt.show()
     
-    def write_reco_fits( self, phase_controller, ctrl_label, save_path):
+    def write_reco_fits( self, phase_controller, ctrl_label, save_path, save_label=None):
         """
         phase_controller object from phase_control module
         ctrl_label is a string indicating the label used 
         when calibrating the phase_controller. see phase_control 
         module for details. 
+
+        save_label can be used to add a user description to the file
 
         """
         # timestamp
@@ -624,6 +626,7 @@ class ZWFS():
         #info_fits.header.set('dm_control_center', phase_controller.config['dm_control_center'] )
 
         info_fits.header.set('CM_build_method', 'FILL ME' ) # how did we build the CM 
+        info_fits.header.set('poke_amplitude', phase_controller.ctrl_parameters[ctrl_label]['poke_amp'] ) # how did we build the CM 
         # push, pull, push-pull ? 
 
         # INTERACTION MATRIX 
@@ -694,11 +697,11 @@ class ZWFS():
         dm_pixel_center_fits .header.set('EXTNAME','dm_center_ref')
 
         # TO DO... Depends on modal basis used 
-        RTT_fits = fits.PrimaryHDU( np.zeros( phase_controller.ctrl_parameters[ctrl_label]['CM'].shape) )
+        RTT_fits = fits.PrimaryHDU( np.zeros( phase_controller.ctrl_parameters[ctrl_label]['R_TT'].shape) )
         RTT_fits.header.set('what is?','tip-tilt reconstructor')
         RTT_fits.header.set('EXTNAME','R_TT')
 
-        RHO_fits = fits.PrimaryHDU(  np.zeros(phase_controller.ctrl_parameters[ctrl_label]['CM'].shape) )
+        RHO_fits = fits.PrimaryHDU(  np.zeros(phase_controller.ctrl_parameters[ctrl_label]['R_HO'].shape) )
         RHO_fits.header.set('what is?','higher-oder reconstructor')
         RHO_fits.header.set('EXTNAME','R_HO')
 
@@ -711,4 +714,7 @@ class ZWFS():
         for f in fits_list:
             reconstructor_fits.append( f )
 
-        reconstructor_fits.writeto( save_path + f'RECONSTRUCTORS_DIT-{round(float(info_fits.header["camera_tint"]),6)}_gain_{info_fits.header["camera_gain"]}_{tstamp}.fits',overwrite=True )  
+        if save_label!=None:
+            reconstructor_fits.writeto( save_path + f'RECONSTRUCTORS_{save_label}_DIT-{round(float(info_fits.header["camera_tint"]),6)}_gain_{info_fits.header["camera_gain"]}_{tstamp}.fits',overwrite=True )  
+        else:
+            reconstructor_fits.writeto( save_path + f'RECONSTRUCTORS_DIT-{round(float(info_fits.header["camera_tint"]),6)}_gain_{info_fits.header["camera_gain"]}_{tstamp}.fits',overwrite=True )  

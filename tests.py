@@ -52,6 +52,7 @@ cam_settings_tmp = rtc.camera_settings_struct()
 reconstructors_tmp = rtc.phase_reconstuctor_struct()
 pupil_regions_tmp = rtc.pupil_regions_struct()
 
+conig_file_name = None
 if conig_file_name==None:
     # get most recent 
     list_of_recon_files = glob.glob('data/' + 'RECONS*')
@@ -63,11 +64,11 @@ if conig_file_name==None:
 config_fits = fits.open( conig_file_name  ) 
 
 # camera settings used to build reconstructor 
-det_fps = float(config_fits['info'].header['camera_fps']) # frames per sec (Hz) 
+det_fps = float( config_fits['info'].header['camera_fps'] ) # frames per sec (Hz) 
 
 det_dit = float( config_fits['info'].header['camera_tint'] )  # integration time (seconds)
 
-det_gain = str(config_fits['info'].header['camera_gain']) # camera gain 
+det_gain = str( config_fits['info'].header['camera_gain'] ) # camera gain 
 
 det_cropping_rows = str( config_fits['info'].header['cropping_rows'] ).split('rows: ')[1]
 
@@ -195,6 +196,15 @@ if(len(test1) == r.camera_settings.full_image_length):
     print( ' passed im2vec_test')
 else:
     print( ' FAILED --- im2vec_test')
+
+# polling and reducing using the camera settings dark and bad pixels 
+
+test1 = r.reduceImg_test()
+if(len(test1) == r.camera_settings.full_image_length):
+    print( ' passed reduceImg test')
+else:
+    print( ' FAILED --- reduceImg test')
+
 
 # polling image and convert to vector and filter for pupil pixels 
 test2 = r.im2filtered_im_test()
@@ -475,6 +485,8 @@ elif not signal_on_mode :
     print( f'--\nfailed mode reconstruction test  WITH TELEMETRY DATA : signal on mode {mode_num} injection not close to 1' )
 elif not nosignal_outside_mode:
     print( f'--\nfailed mode reconstruction test  WITH TELEMETRY DATA : signal on mode other modes !={mode_num} (mode injected) not close to 0' )
+
+
 
 
 
