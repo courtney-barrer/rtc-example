@@ -34,13 +34,19 @@ tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
 flat_dm_array = pd.read_csv(f'DMShapes/{dm_serial_number}_FLAT_MAP_COMMANDS.csv', header=None)[0].values
 
-pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
+#pupil_classification_filename = 'pupil_classification_10-07-2024T22.21.55.pickle' #"pupil_classification_31-05-2024T15.26.52.pickle"
 # get most recent 
 # /home/heimdallr/Documents/asgard-alignment/tmp/28-08-2024/RECONSTRUCTORS_set_latency_test_fps1500.12294_dit0.000501065_DIT-0.000501_gain_high_28-08-2024T16.16.02.fits
-list_of_recon_files = glob.glob(data_path + 'RECONS*')
-reco_filename = max(list_of_recon_files, key=os.path.getctime) #'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
+
+#list_of_recon_files = glob.glob(data_path + 'RECONS*')
+#reco_filename = max(list_of_recon_files, key=os.path.getctime) #'RECONSTRUCTORS_debugging_DIT-0.002005_gain_medium_10-07-2024T22.21.55.fits'#"RECONSTRUCTORS_TEST_RTC_DIT-0.002005_gain_medium_10-07-2024T19.51.53.fits" #"RECONSTRUCTORS_test_DIT-0.002004_gain_high_05-07-2024T10.09.47.fits"#"RECONSTRUCTORS_try2_DIT-0.002003_gain_medium_04-06-2024T12.40.05.fits"
+
 #/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data
-reco_filename = reco_filename #ata_path + "RECONSTRUCTORS_Zernike70_DIT-0.002005_gain_medium_15-07-2024T14.47.50.fits"
+#reco_filename = reco_filename #ata_path + "RECONSTRUCTORS_Zernike70_DIT-0.002005_gain_medium_15-07-2024T14.47.50.fits"
+
+reco_filename = '/home/heimdallr/Documents/asgard-alignment/tmp/28-08-2024/RECONSTRUCTORS_set_latency_test_fps2000.0_dit0.000199967_DIT-0.0002_gain_high_28-08-2024T18.56.07.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/28-08-2024/RECONSTRUCTORS_set_latency_test_fps1500.12294_dit0.000501065_DIT-0.000501_gain_high_28-08-2024T16.16.02.fits'
+
 """
 set up camera and DM settings based on reconstruction fits file
 """
@@ -51,7 +57,258 @@ set up camera and DM settings based on reconstruction fits file
 #    pup_classification = pickle.load(handle)
 
 # ============== READ IN PUPIL PHASE RECONSTRUCTOR DATA
-reco_fits = fits.open( reco_filename  ) 
+config_fits = fits.open( reco_filename  ) 
+
+print( [reco.header['EXTNAME'] for reco in config_fits])
+
+
+r = rtc.RTC()
+
+
+cam_settings_tmp = rtc.camera_settings_struct()
+reconstructors_tmp = rtc.phase_reconstuctor_struct()
+pupil_regions_tmp = rtc.pupil_regions_struct()
+
+
+# camera settings used to build reconstructor 
+det_fps = float( config_fits['info'].header['camera_fps'] ) # frames per sec (Hz) 
+
+det_dit = float( config_fits['info'].header['camera_tint'] )  # integration time (seconds)
+
+det_gain = str( config_fits['info'].header['camera_gain'] ) # camera gain 
+
+det_cropping_rows = str( config_fits['info'].header['cropping_rows'] ).split('rows: ')[1]
+
+det_cropping_cols = str( config_fits['info'].header['cropping_columns'] ).split('columns: ')[1]
+
+darkss = config_fits['DARK'].data
+dark = darkss[0] # chose which one
+bad_pixels = config_fits['BAD_PIXELS'].data
+if 0 in config_fits['BAD_PIXELS'].data:
+    bad_pixels = bad_pixels[2:] # first frame is tag for frame count - make sure it is not masked 
+
+
+cam_settings_tmp.det_fps = det_fps
+cam_settings_tmp.det_dit = det_dit
+cam_settings_tmp.det_gain = det_gain
+cam_settings_tmp.det_cropping_rows = det_cropping_rows
+cam_settings_tmp.det_cropping_cols = det_cropping_cols 
+cam_settings_tmp.dark = dark.reshape(-1) 
+cam_settings_tmp.bad_pixels = bad_pixels
+cam_settings_tmp.det_tag_enabled = True
+cam_settings_tmp.det_crop_enabled = True
+
+
+# reconstructor data 
+R_TT = config_fits['R_TT'].data.astype(np.float32) #tip-tilt reconstructor
+
+R_HO = config_fits['R_HO'].data.astype(np.float32) #higher-oder reconstructor
+
+IM = config_fits['IM'].data.astype(np.float32) # interaction matrix (unfiltered)
+
+M2C = config_fits['M2C'].data.astype(np.float32) # mode to command matrix 
+
+I2M = np.transpose( config_fits['I2M'].data).astype(np.float32) # intensity (signal) to mode matrix  
+# (# transposed so we can multiply directly I2M @ signal)
+    
+CM = config_fits['CM'].data.astype(np.float32)  # full control matrix 
+
+I0 = config_fits['I0'].data.astype(np.float32) # calibration source reference intensity (FPM IN)
+
+N0 = config_fits['N0'].data.astype(np.float32) # calibration source reference intensity (FPM OUT)
+
+
+# pupil region classification data 
+pupil_pixels = np.array( config_fits['pupil_pixels'].data, dtype=np.int32)
+
+secondary_pixels = np.array( config_fits['secondary_pixels'].data, dtype=np.int32)
+
+outside_pixels = np.array( config_fits['outside_pixels'].data, dtype=np.int32)
+
+
+reconstructors_tmp.IM.update(IM.reshape(-1))
+reconstructors_tmp.CM.update(CM.reshape(-1))
+reconstructors_tmp.R_TT.update(R_TT.reshape(-1))
+reconstructors_tmp.R_HO.update(R_HO.reshape(-1))
+reconstructors_tmp.M2C.update(M2C.reshape(-1))
+reconstructors_tmp.I2M.update(I2M.reshape(-1))
+reconstructors_tmp.I0.update(I0.reshape(-1)/np.mean( I0.reshape(-1)[pupil_pixels] )) #normalized
+reconstructors_tmp.N0.update(N0.reshape(-1)/np.mean( I0.reshape(-1)[pupil_pixels] )) #normalized
+reconstructors_tmp.flux_norm.update(np.mean( I0.reshape(-1)[pupil_pixels] ))   #normalized
+
+# COMMIT IT ALL 
+reconstructors_tmp.commit_all()
+# -----------------------------
+
+pupil_regions_tmp.pupil_pixels.update( pupil_pixels )
+pupil_regions_tmp.secondary_pixels.update( secondary_pixels ) 
+pupil_regions_tmp.outside_pixels.update( outside_pixels )
+#filter(lambda a: not a.startswith('__'), dir(pupil_regions_tmp))
+
+# COMMIT IT ALL 
+pupil_regions_tmp.commit_all()
+# -----------------------------
+
+
+r.regions = pupil_regions_tmp
+r.reco = reconstructors_tmp
+r.camera_settings = cam_settings_tmp
+# do we return it or is it static?
+#return(_RTC)
+
+
+# check it updated correcetly 
+#print('current CM for r:', r.reco.CM.current )
+#print('current pupil_pixels for r:', r.regions.pupil_pixels.current )
+
+r.apply_camera_settings()
+
+
+# check 
+print( np.array( r.im2vec_test() ).shape)
+
+
+
+
+"""r.enable_telemetry(100)
+for _ in range(1000):
+    r.latency_test() 
+
+
+
+t = rtc.get_telemetry()
+tel_img = np.array([tt.image_in_pupil for tt in t] )
+tel_imgErr = np.array([tt.image_err_signal for tt in t])
+tel_modeErr = np.array([tt.mode_err for tt in t])
+tel_dmErr = np.array([tt.dm_cmd_err for tt in t])
+"""
+
+r.enable_telemetry(1000)
+# start a runner that calls latency function 
+runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+runner.start()
+
+runner.pause()
+runner.stop()
+
+
+t = rtc.get_telemetry()
+tel_rawimg = np.array([tt.image_in_pupil for tt in t] )
+#tel_imgErr = np.array([tt.image_err_signal for tt in t])
+#tel_modeErr = np.array([tt.mode_err for tt in t])
+tel_reco = np.array([tt.dm_cmd_err for tt in t])
+
+
+
+print(tel_img.shape, tel_dmErr.shape )
+
+np.unravel_index( np.argmax( np.std( tel_rawimg ,axis =0 ).reshape(I0.shape)[38:60,20:40] ) + 1, I0.shape)
+
+# see which pixels poke corresponded too
+plt.figure() ; plt.imshow( np.std( tel_rawimg,axis=0).reshape(I0.shape)[5:,:] ); plt.savefig(fig_path + 'delme.png')
+
+i=0
+pixel_int = [np.mean( tel_rawimg[i].reshape(I0.shape)[39:47,29:33] ) for i in range(tel_rawimg.shape[0])] #[np.max( abs(tel_rawimg[i][5:].astype(float) - tel_rawimg[0][5:].astype(float)) )/1050 for i in range(tel_rawimg.shape[0])]
+i0,i1 = 100,200
+plt.figure() 
+plt.plot( pixel_int[i0:i1]/np.max( pixel_int[i0:i1] ) ,'.',label=f'DIT = {round(float(1e3*det_dit),2)}ms, FPS = {round(float(det_fps),1)}Hz')
+plt.plot( tel_reco.ravel()[i0:i1] ,label='DM poke state')
+#plt.title(f'DIT = {round(float(1e3*det_dit),3)}ms, fps = {det_fps}Hz ')
+plt.xlabel('Frames',fontsize=15)
+plt.ylabel('Normalized intensity',fontsize=15)
+plt.gca().tick_params(labelsize=15)
+plt.legend()
+
+plt.savefig(fig_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}.png',dpi=300)
+#plt.show() 
+
+
+
+
+det_dit = r.camera_settings.det_dit
+det_gain = r.camera_settings.det_gain
+det_fps = r.camera_settings.det_fps
+h = r.camera_settings.image_height
+w = r.camera_settings.image_width
+
+tele_img_fits = fits.PrimaryHDU( tel_rawimg )
+tele_dm_fits = fits.PrimaryHDU( tel_reco.ravel() )
+tele_ref_fits = fits.PrimaryHDU( I0 ) # reference intensity
+tele_ref_fits.header.set('EXTNAME','ref')
+tele_ref_fits.header.set('what is?','reference intensity')
+
+
+tele_img_fits.header.set('what is?','images')
+tele_img_fits.header.set('rows',h)
+tele_img_fits.header.set('columns',w)
+tele_img_fits.header.set('dit',det_dit)
+tele_img_fits.header.set('fps',det_fps)
+tele_img_fits.header.set('EXTNAME','images')
+
+tele_dm_fits.header.set('EXTNAME','DM_CMD')
+tele_dm_fits.header.set('what is?','DM command')
+
+latency_fits = fits.HDUList( [] )
+latency_fits.append( tele_img_fits )
+latency_fits.append( tele_dm_fits  )
+latency_fits.append( tele_ref_fits  )
+latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}.fits',overwrite=True )  
+
+rtc.clear_telemetry()
+
+
+
+
+
+
+
+
+
+
+
+# =================================
+# =========== INIT RTC
+# set up camera/DM with same settings as reconstructor file 
+r = rtc.RTC()
+
+
+#states_tmp = rtc.rtc_state_struct() 
+#sim_signals = rtc.simulated_signals_struct()
+cam_settings_tmp = rtc.camera_settings_struct()
+reconstructors_tmp = rtc.phase_reconstuctor_struct()
+pupil_regions_tmp = rtc.pupil_regions_struct()
+
+
+
+r.regions = pupil_regions_tmp
+r.reco = reconstructors_tmp
+r.camera_settings = cam_settings_tmp
+# do we return it or is it static?
+
+r.apply_camera_settings()
+
+
+# ============ 
+# i have to wait for this set up otherwise below code screws up
+
+# -- update camera settings 
+r.set_det_dit( det_dit )
+r.set_det_fps( det_fps )
+r.set_det_gain( det_gain )
+r.set_det_tag_enabled( True ) # we want this on to count frames 
+r.set_det_crop_enabled( True )
+r.set_det_cropping_rows( det_cropping_rows ) 
+r.set_det_cropping_cols( det_cropping_cols ) 
+
+r.commit_camera_settings()
+
+r.update_camera_settings()
+
+
+
+
+
+
 
 # reconstructor data 
 R_TT = reco_fits['R_TT'].data.astype(np.float32) #tip-tilt reconstructor
@@ -97,6 +354,7 @@ pupil_pixels = np.array( reco_fits['pupil_pixels'].data, dtype=np.int32)
 if len( pupil_pixels ) != CM.shape[1]:
     raise TypeError("number of pupil pixels (for control) does not match\
     control matrix size!!! CHeck why, did you input correct files?")
+
 
 
 

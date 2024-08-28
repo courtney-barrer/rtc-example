@@ -893,7 +893,6 @@ struct RTC {
         // convert to vector
         
         return(image_vector);
-
     }
 
     std::vector<float> im2filtered_im_test(){
@@ -1167,6 +1166,89 @@ struct RTC {
         //return dm_cmd_err ; <<- return in switch cases uniquely
     }
 
+
+    void latency_test(){
+        //before starting should set DM array to zero or flat position. 
+        
+        // just switch between actuator pokes based on modulus of j and switch on
+        static int k =0; // for counting if poke in or out.
+
+        //if (k=0){
+        //    BMCSetArray(&hdm, zerod_dm, map_lut.data());
+        //    //init to flat DM 
+        //}
+
+        if (telemetry_cnt > 0){
+
+            //uint16_t* raw_image = poll_last_image(); //(uint16_t*)fli->getRawImage(); // Retrieve raw image data
+            //std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
+            //std::vector<int32_t>
+            image_vector = reduceImg_test();
+
+            std::vector<float> result(image_vector.size());
+
+            // Iterate through the input_vector and cast each element to float
+            for (size_t i = 0; i <image_vector.size(); ++i) {
+                result[i] = static_cast<float>(image_vector[i]);
+            }
+
+            static int j = image_vector[0]; // Static count variable, only intialize once
+            //static std::vector<double> dm_flag(1,0); // hold DM state flag  
+            std::vector<double> dm_flag( 1, 0 );
+            //std::span<float> dm_span_flag( dm_flag ) ;
+
+            //uint16_t frame_ct = image_span[0];
+            // do we record an image in telemetry? 
+            // only record the frame if it is new ( dont repeat old frames )
+           
+            //cout << image_vector[0] << endl;
+            if (j < image_vector[0]) {
+
+                j = image_vector[0];
+                telem_entry entry;
+                //dm_span_flag[0] = (double)(k % 2) ;
+                dm_flag[0] = (double)(k % 2) ;
+                entry.image_in_pupil = std::move(result); // the corresponding image 
+                entry.dm_cmd_err = std::move(dm_flag); // if DM is push or flat 
+                //cout << dm_flag[0] << endl;
+
+                append_telemetry(std::move(entry));
+
+                --telemetry_cnt;
+                
+                cout << "telemetry_cnt=" << telemetry_cnt << endl;
+                //if there is a new frame append it to 
+                }
+            
+            //std::cout << "ok" << std::endl;
+            
+            
+            // do we move the every 10 frames?
+            if ((telemetry_cnt % 20)==0) {
+                // we use telemetry_cnt here instead of j beacuase of tendancy to skip frames
+                // (so modules on j skips the mark sometimes)
+                // check to poke in or out
+                if ((k % 2)==0){
+                    
+                    cout << "in"<< endl;
+                    BMCSetSingle(&hdm, 65, 0.2);
+                    
+                        }else{
+                    BMCSetSingle(&hdm, 65, 0);
+                    cout << "out"<< endl;
+                    }
+                ++k;
+                
+            
+            }
+            //j++;
+            cout << "j = " << j << endl;
+            
+            
+        }
+        
+    }
+    
     /**
      * @brief Performs computation using the current RTC values.
      * @param os The output stream to log some informations.
@@ -1175,73 +1257,75 @@ struct RTC {
     {
         os << "computing with " << (*this) << '\n';
 
+        latency_test() ;
 
-        // get image
-        uint16_t* raw_image = poll_last_image();
-        // get current frame number
-        // current_frame_number = ads[0] 
+
+        // // get image
+        // uint16_t* raw_image = poll_last_image();
+        // // get current frame number
+        // // current_frame_number = ads[0] 
         
-        if (current_frame_number > previous_frame_number){
-            // Do some computation here...
+        // if (current_frame_number > previous_frame_number){
+        //     // Do some computation here...
 
-            // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
-            // so need to catch case of overflow (current=0, previous = 65535)
-            // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
-            // must match raw_image type unsigned int16.
-            // update frame number
-            if (current_frame_number == 65535){
-                previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
-            }else{
-                previous_frame_number = current_frame_number;
-            }
+        //     // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
+        //     // so need to catch case of overflow (current=0, previous = 65535)
+        //     // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
+        //     // must match raw_image type unsigned int16.
+        //     // update frame number
+        //     if (current_frame_number == 65535){
+        //         previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
+        //     }else{
+        //         previous_frame_number = current_frame_number;
+        //     }
             
-            // convert to vector
-            std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        //     // convert to vector
+        //     std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
-            // size of filtered signal may change while RTC is running
-            size_t signal_size = regions.pupil_pixels.current().size();
+        //     // size of filtered signal may change while RTC is running
+        //     size_t signal_size = regions.pupil_pixels.current().size();
 
-            // have to define here to keep in scope of telemetry
-            static std::vector<float> image_err_signal(signal_size); // <- should this be static
+        //     // have to define here to keep in scope of telemetry
+        //     static std::vector<float> image_err_signal(signal_size); // <- should this be static
 
-            //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+        //     //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
-            //std::vector<float> image_in_pupil;//<- init at top struct
-            getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
+        //     //std::vector<float> image_in_pupil;//<- init at top struct
+        //     getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
 
-            //std::vector<float> image_setpoint;//<- init at top struct
-            getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+        //     //std::vector<float> image_setpoint;//<- init at top struct
+        //     getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
 
-            process_image( image_in_pupil, image_setpoint, image_err_signal);
+        //     process_image( image_in_pupil, image_setpoint, image_err_signal);
 
-            /* TO DO: 
-            define TT_cmd_err, HO_cmd_err at beginning of struct
-            test addition onto flat command
+        //     /* TO DO: 
+        //     define TT_cmd_err, HO_cmd_err at beginning of struct
+        //     test addition onto flat command
             
-            */ 
-            //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err )
-            //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), HO_cmd_err )
+        //     */ 
+        //     //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), TT_cmd_err )
+        //     //matrix_vector_multiply( image_err_signal, reco.R_TT.current(), HO_cmd_err )
 
-            // PID and leaky to TT_cmd_err and HO_cmd_err (in cmd space)
-            pid.process(  TT_cmd_err   ) ;// use PID for tip/tilt
-            leakyInt.process( HO_cmd_err  ) ;//use leaky integrator for HO 
+        //     // PID and leaky to TT_cmd_err and HO_cmd_err (in cmd space)
+        //     pid.process(  TT_cmd_err   ) ;// use PID for tip/tilt
+        //     leakyInt.process( HO_cmd_err  ) ;//use leaky integrator for HO 
 
-            /*
-            //cmd =  flat_cmd + TT_cmd_err + HO_cmd_err
-            //Perform element-wise addition
-            for (size_t i = 0; i < dm_size; ++i) {
-            //     //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
+        //     /*
+        //     //cmd =  flat_cmd + TT_cmd_err + HO_cmd_err
+        //     //Perform element-wise addition
+        //     for (size_t i = 0; i < dm_size; ++i) {
+        //     //     //cout << flat_dm_array[i] << delta_cmd[i]<< endl ;
 
-                dm_cmd[i] = flat_dm_array[i] + LeakyInt.output[i] + pid.output[i]; // just roughly offset to center
-             }
+        //         dm_cmd[i] = flat_dm_array[i] + LeakyInt.output[i] + pid.output[i]; // just roughly offset to center
+        //      }
 
-            // send DM cmd 
-            // get cmd pointer 
-            double *cmd_ptr = dm_cmd.data();
+        //     // send DM cmd 
+        //     // get cmd pointer 
+        //     double *cmd_ptr = dm_cmd.data();
 
-            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
-            */
-        }
+        //     BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+        //     */
+        //}
         
         // When computation is done, check if a commit is requested.
         if (commit_asked) {
@@ -1448,7 +1532,7 @@ NB_MODULE(_rtc, m) {
         .def("poll_last_image", &RTC::poll_last_image)
         .def("im2filteredref_im_test", &RTC::im2filteredref_im_test)
         .def("process_im_test", &RTC::process_im_test)
-
+        .def("latency_test",&RTC::latency_test)
 
         .def("compute", &RTC::compute)
         //.def("set_slope_offsets", &RTC::set_slope_offsets)

@@ -487,6 +487,16 @@ elif not nosignal_outside_mode:
     print( f'--\nfailed mode reconstruction test  WITH TELEMETRY DATA : signal on mode other modes !={mode_num} (mode injected) not close to 0' )
 
 
+r.enable_telemetry(30)
+for _ in range(31):
+    r.latency_test()
+    print( 'telemetry_cnt = ', r.telemetry_cnt)
+
+t = rtc.get_telemetry()
+tel_img = np.array([tt.image_in_pupil for tt in t] )
+tel_imgErr = np.array([tt.image_err_signal for tt in t])
+tel_modeErr = np.array([tt.mode_err for tt in t])
+tel_dmErr = np.array([tt.dm_cmd_err for tt in t])
 
 
-
+print( 'tel_img.shape = ', tel_img.shape )

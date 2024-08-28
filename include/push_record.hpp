@@ -7,6 +7,7 @@
 #include <iostream>
 
 struct telem_entry {
+    std::vector<uint32_t> image_raw;
     std::vector<float> image_in_pupil; //std::span<const uint16_t> image_raw;
     std::vector<float> image_err_signal; //std::vector<float> image_proc; // processed signal 
     std::vector<double> mode_err; //std::vector<double> reco_dm_err; // product CM * signal
