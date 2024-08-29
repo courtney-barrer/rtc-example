@@ -11,7 +11,6 @@
 #include <nanobind/stl/chrono.h>
 #include <nanobind/stl/vector.h>
 
-#include <span>
 #include <thread>
 #include <chrono>
 #include <iostream>
@@ -218,7 +217,7 @@ public:
 
 // Gets value at indices for an input vector
 template<typename DestType, typename T>
-void getValuesAtIndices(std::vector<DestType>& values, const T & data, std::span<const int> indices) {
+void getValuesAtIndices(std::vector<DestType>& values, const T & data, std::span<int> indices) { // std::span<const int> indices
     values.resize(indices.size());
 
     size_t i = 0;
@@ -463,11 +462,12 @@ struct pupil_regions_struct {
     updatable<std::vector<int>> pupil_pixels; /**< pixels inside the active pupil. */
     updatable<std::vector<int>> secondary_pixels; /**< pixels inside secondary obstruction   */
     updatable<std::vector<int>> outside_pixels; /**< pixels outside the active pupil obstruction (but not in secondary obstruction) */
-
+    updatable<std::vector<int>> local_region_pixels; /* defining the local region used to build reconstructor */
     void commit_all(){
         pupil_pixels.commit();
         secondary_pixels.commit();
         outside_pixels.commit();
+        local_region_pixels.commit(); 
     }
 
     // Templated method to update a member by name (for simplicity when nanobinding so dont have to spell out each function)
@@ -608,7 +608,7 @@ struct RTC {
     std::vector<double> HO_cmd_err; // holds the DM Higher Order command offset (error) from the reference flat DM surface
     std::vector<double> mode_err; // holds mode error from matrix multiplication of I2M with processed signal 
     std::vector<double> dm_cmd; // final DM command 
-
+    std::vector<double> dm_flat; // calibrated DM flat 
     //std::vector<double> pid_setpoint // set-point of PID controller
 
 
@@ -622,7 +622,12 @@ struct RTC {
      */
     RTC() //= default;
     {
-
+        // any DM commands to length 140 
+        std::vector<double> dm_cmd_err(140, 0.0); // holds the DM command offset (error) from the reference flat DM surface
+        std::vector<double> TT_cmd_err(140, 0.0); // holds the DM Tip-Tilt command offset (error) from the reference flat DM surface
+        std::vector<double> HO_cmd_err(140, 0.0); // holds the DM Higher Order command offset (error) from the reference flat DM surface
+        std::vector<double> dm_cmd(140, 0.0); // final DM command 
+        
         /* open BMC DM */
         //---------------------
         BMCRC	rv = NO_ERR;
@@ -833,7 +838,7 @@ struct RTC {
     }
 
 
-    void process_image(std::span<const float> im, std::span<const float> im_setpoint, std::vector<float>& signal)
+    void process_image(std::vector<float> im,  std::vector<float> im_setpoint , std::vector<float> signal) //std::span<const float> im, std::span<const float> im_setpoint, std::vector<float>& signal)
     {
         if (not rtc_state.signal_simulation_mode){
             //std::vector<float> signal(signal_size);
@@ -958,8 +963,11 @@ struct RTC {
         uint16_t* raw_image = poll_last_image();
 
         // convert to vector
-        std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
+        //std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
 
+        std::vector<int32_t> image_vector(camera_settings.full_image_length);
+
+        reduce_image(raw_image,  image_vector);
         //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
 
         //std::vector<float> image_in_pupil;//<- init at top struct
@@ -1257,27 +1265,88 @@ struct RTC {
     {
         os << "computing with " << (*this) << '\n';
 
-        latency_test() ;
+        //latency_test() ;
 
 
-        // // get image
-        // uint16_t* raw_image = poll_last_image();
-        // // get current frame number
-        // // current_frame_number = ads[0] 
+        // get image
+        uint16_t* raw_image = poll_last_image();
+        // get current frame number and static init previous 
+        int32_t current_frame_number = static_cast<int32_t>(raw_image[0]);
+        static int32_t previous_frame_number = current_frame_number;
+
+        if (current_frame_number > previous_frame_number){
+            // Do some computation here...
+            cout << current_frame_number << endl;
+            // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
+            // so need to catch case of overflow (current=0, previous = 65535)
+            // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
+            // must match raw_image type unsigned int16.
+            // update frame number
+            if (current_frame_number == 65535){
+                previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
+            }else{
+                previous_frame_number = current_frame_number;
+            }
+
+            // size of filtered signal may change while RTC is running
+            size_t signal_size = regions.pupil_pixels.current().size();
+
+            // have to define here since size may change while rtc running 
+            static std::vector<float> image_err_signal(signal_size); // <- should this be static
+
+            std::vector<int32_t> image_vector(camera_settings.full_image_length); //should init outside here
+            reduce_image(raw_image,  image_vector);
+            //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+
+            //std::vector<float> image_in_pupil;//<- init at top struct
+            getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
+
+            //std::vector<float> image_setpoint;//<- init at top struct
+            getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+
+            process_image( image_in_pupil, image_setpoint , image_err_signal);
+
+            // //tip/tilt ######## HERERE!
+            matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+            pid.process( mode_err ) ;
+            // // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+            matrix_vector_multiply_double( pid.output, reco.M2C.current(), TT_cmd_err ) ;
+            
+            // Higher order 
+            matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+            leakyInt.process( mode_err ) ;
+            // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+            matrix_vector_multiply_double( leakyInt.output, reco.M2C.current(), HO_cmd_err ) ;
+
+            //cout << HO_cmd_err[0] <<endl;
+            std::vector<double> dm_cmd(140, 0); // should init somewhere else  
+            for (size_t i = 0; i < TT_cmd_err.size(); ++i) {
+                //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
+                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] ; //+ HO_cmd_err[i]; 
+            }
+            //cout << dm_cmd << endl; 
+            // get cmd pointer 
+            double *cmd_ptr = dm_cmd.data();
+
+            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
         
-        // if (current_frame_number > previous_frame_number){
-        //     // Do some computation here...
 
-        //     // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
-        //     // so need to catch case of overflow (current=0, previous = 65535)
-        //     // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
-        //     // must match raw_image type unsigned int16.
-        //     // update frame number
-        //     if (current_frame_number == 65535){
-        //         previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
-        //     }else{
-        //         previous_frame_number = current_frame_number;
-        //     }
+            if (telemetry_cnt > 0){
+                telem_entry entry;
+
+                entry.image_in_pupil = std::move(image_in_pupil); // im);
+    
+                //entry.image_err_signal = std::move(image_err_signal);// <- doesn't like this one! 
+                entry.mode_err = std::move(mode_err ); // reconstructed DM command
+                entry.dm_cmd_err = std::move( dm_cmd); // final command sent
+
+                append_telemetry(std::move(entry));
+
+                --telemetry_cnt;
+                }
+            
+        }
+        
             
         //     // convert to vector
         //     std::vector<uint32_t> image_vector(raw_image, raw_image + camera_settings.full_image_length);
@@ -1285,7 +1354,7 @@ struct RTC {
         //     // size of filtered signal may change while RTC is running
         //     size_t signal_size = regions.pupil_pixels.current().size();
 
-        //     // have to define here to keep in scope of telemetry
+        //     // have to define here to keep in scope of teletry
         //     static std::vector<float> image_err_signal(signal_size); // <- should this be static
 
         //     //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
@@ -1358,6 +1427,7 @@ struct RTC {
         regions.pupil_pixels.commit();
         regions.secondary_pixels.commit();
         regions.outside_pixels.commit();
+        regions.local_region_pixels.commit();
 
         std::cout << "commit done\n";
     }
@@ -1518,7 +1588,7 @@ NB_MODULE(_rtc, m) {
         .def_rw("HO_cmd_err" , &RTC::HO_cmd_err)
         .def_rw("mode_err" , &RTC::mode_err)
         .def_rw("dm_cmd" , &RTC::dm_cmd)
-
+        .def_rw("dm_flat", &RTC::dm_flat)
 
         // controllers
         //.def("PID", &RTC.pid)
@@ -1630,7 +1700,8 @@ NB_MODULE(_rtc, m) {
 
         .def_rw("pupil_pixels", &pupil_regions_struct::pupil_pixels)
         .def_rw("secondary_pixels", &pupil_regions_struct::secondary_pixels)
-        .def_rw("outside_pixels", &pupil_regions_struct::outside_pixels);
+        .def_rw("outside_pixels", &pupil_regions_struct::outside_pixels)
+        .def_rw("local_region_pixels", &pupil_regions_struct::local_region_pixels);
 
     
     nb::class_<PIDController>(m, "PIDController")
