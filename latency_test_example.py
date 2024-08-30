@@ -185,7 +185,7 @@ tel_dmErr = np.array([tt.dm_cmd_err for tt in t])
 
 r.enable_telemetry(1000)
 # start a runner that calls latency function 
-runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+runner = rtc.AsyncRunner(r, period = timedelta(microseconds=50))
 runner.start()
 
 runner.pause()
