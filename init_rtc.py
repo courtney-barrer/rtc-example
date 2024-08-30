@@ -48,12 +48,17 @@ def convert_local_to_global_coordinates(relative_pixels_flat, row1, col1, n, m, 
 
     return global_pixels
 
+
+
+
+
 # TO DO 
-# - add pid and leakys on init , see test 
+# 
 
-data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
+data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
 
-reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
+reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
+
 
 #def init_rtc( reco_fits_file ):
 if 1: 
@@ -99,17 +104,26 @@ if 1:
     pupil_pixels_local = np.array( config_fits['pupil_pixels'].data, dtype=np.int32)
     secondary_pixels_local = np.array( config_fits['secondary_pixels'].data, dtype=np.int32)
     outside_pixels_local = np.array( config_fits['outside_pixels'].data, dtype=np.int32)
+    #local_region_pixels_local = np.arange(0, len(config_fits['DARK'].data[0].reshape(-1)) )  #np.array( config_fits['outside_pixels'].data, dtype=np.int32)
 
     # converting back to the global image (in the reconstructor we likely (to reduce data size) looked at only a sub-region and referenced pixels from there)
     pupil_pixels = convert_local_to_global_coordinates(pupil_pixels_local, r1_subregion, \
         c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
     secondary_pixels = convert_local_to_global_coordinates(secondary_pixels_local, r1_subregion, \
         c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
-    outside_pixels = convert_local_to_global_coordinates(outside_pixels_local, r1_subregion, \
-        c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+    #outside_pixels_0 = convert_local_to_global_coordinates(outside_pixels_local, r1_subregion, \
+    #    c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+    #local_region_pixels = convert_local_to_global_coordinates(local_region_pixels_local, r1_subregion, \
+    #    c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+
+    # outside_pixels_0 is only outside in local region, defauls to 0 outside of this region so to correct this
+    all_pixels = np.arange(0, img_height * img_width )
+    outside_pixels = np.array( list( set( all_pixels ) - set( pupil_pixels ) ) ) 
+
     # to define the total local region used when developing reconstructor
     # this is important for consistent flux normalization!
-    local_region_pixels = list(outside_pixels) + list(pupil_pixels) # could also 
+    local_region_pixels = np.array( list(outside_pixels) + list(pupil_pixels)  )# could also do what we commented out above
+    
     # reduction data used in reconstructor
     darkss = config_fits['DARK'].data 
     dark = darkss[0] # chose which one
@@ -149,8 +163,9 @@ if 1:
     N0 = config_fits['N0'].data.astype(np.float32) # calibration source reference intensity (FPM OUT)
 
     #############
-    dm_flat =  0.5*np.ones(140 ) ################ config_fits['DM_FLAT'].data.astype(np.float)
+    dm_flat =  config_fits['FLAT_DM'].data.astype(np.float32)
     ##########
+
     reconstructors_tmp.IM.update(IM.reshape(-1))
     reconstructors_tmp.CM.update(CM.reshape(-1))
     reconstructors_tmp.R_TT.update(R_TT.reshape(-1))
@@ -168,7 +183,7 @@ if 1:
     pupil_regions_tmp.pupil_pixels.update( pupil_pixels )
     pupil_regions_tmp.secondary_pixels.update( secondary_pixels ) 
     pupil_regions_tmp.outside_pixels.update( outside_pixels )
-
+    pupil_regions_tmp.local_region_pixels.update( local_region_pixels )
 
     #filter(lambda a: not a.startswith('__'), dir(pupil_regions_tmp))
 
@@ -180,7 +195,7 @@ if 1:
     # pid and leaky integator
 
     Nmodes = I2M.shape[0] #M2C.shape[1]
-    kp = np.zeros(Nmodes)
+    kp = np.zeros(Nmodes) # init all to zero to start 
     ki = np.zeros(Nmodes)
     kd = np.zeros(Nmodes)
     lower_limit = -100 * np.ones(Nmodes)
@@ -204,23 +219,115 @@ if 1:
 
 
 
+# update for testing 
+
+# for iterations below using: 
+#data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
+#reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
+
+# it 5 : with ki[0] =0.1, kp[0]=1
+# it 6 : same but longer , telemetry doesnlt seem to clear or change 
+# it 7 : adding kp[1] = 1 , worked out need to exit / enter every session 
+# it 8 : ki[1] = 0.1
+# it 9 : increasing ki = 0.5 for both 
+# it 10 : starting 1 of the higher order modes with leaky int, ki_leak[2] = 0.1
+# it 11 : realised HO terms commented out in RTC. Includde them and reset ki_leak = 0 to check 
+# it 12 : ok now try ki_leaky[2] = 0.1 again 
+it = 12
+
+max_mode = 3
+
+Nmodes = I2M.shape[0] #M2C.shape[1]
+kp = np.zeros(Nmodes)
+ki = np.zeros(Nmodes)
+ki_leak = np.zeros(Nmodes)
+kd = np.zeros(Nmodes)
+
+################
+# tip 
+kp[0] = 1
+ki[0] = 0.5
+# tilt 
+kp[1] = 1
+ki[1] = 0.5
+
+# lets try leaky on a higher order mode 
+for i in range(2,max_mode):
+    ki_leak[i] = 0.1
+################
+
+lower_limit = -100 * np.ones(Nmodes)
+upper_limit = 100 * np.ones(Nmodes)
+pid_setpoint =  np.zeros(Nmodes)
+
+pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit , pid_setpoint)
+leaky_tmp = rtc.LeakyIntegrator( ki_leak, lower_limit, upper_limit ) 
+
+# Append all classes and structures to our rtc object to put them in C
+r.pid = pid_tmp
+r.LeakyInt = leaky_tmp
+
+
+
 # start it 
-r.enable_telemetry(1000)
+r.enable_telemetry(10000)
 # start a runner that calls latency function 
 runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
 runner.start()
-time.sleep(1)
+time.sleep(10)
 runner.pause()
 runner.stop()
 
 
-# read out the telemetry 
 
+# read out the telemetry 
 t = rtc.get_telemetry()
 tel_rawimg = np.array([tt.image_in_pupil for tt in t] )
 #tel_imgErr = np.array([tt.image_err_signal for tt in t])
 tel_modeErr = np.array([tt.mode_err for tt in t])
 tel_reco = np.array([tt.dm_cmd_err for tt in t])
+
+#rtc.clear_telemetry() 
+
+
+# save telemetry 
+telemetry_fits = fits.HDUList( [] )
+for tel, lab in zip ( [tel_rawimg, tel_modeErr, tel_reco, r.pid.kp, r.pid.ki, r.LeakyInt.rho], ['reduced_img_pupil', 'mode_err', 'dm_cmd',  'r.pid.kp', 'r.pid.ki', 'r.LeakyInt.rho']):
+
+    frame_fits = fits.PrimaryHDU( tel ) 
+    frame_fits.header.set('EXTNAME',f'{lab}')
+    
+    telemetry_fits.append( frame_fits )
+telemetry_fits.writeto( data_path + f'telemetry_it{it}.fits' ) # don't by default, overwrite = True)
+
+
+plt.figure()
+for m in range(2):
+    plt.plot( tel_modeErr.T[m], label=f'mode {m}' )
+plt.xlabel('iterations')
+plt.ylabel('mode error amplitude')
+plt.legend()
+savefig = data_path + f'rtc_TT_ONLY_test_mode_err_it{it}.png'
+plt.savefig( savefig , bbox_inches ='tight')
+
+
+plt.figure()
+for m in range(max_mode):
+    plt.plot( tel_modeErr.T[m], alpha=0.3, label=f'mode {m}' )
+plt.xlabel('iterations')
+plt.ylabel('mode error amplitude')
+plt.legend()
+savefig = data_path + f'rtc_HO_test_mode_err_it{it}.png'
+plt.savefig( savefig , bbox_inches ='tight')
+
+
+im_list = [ util.get_DM_command_in_2D(tel_reco[0]-dm_flat), util.get_DM_command_in_2D(tel_reco[-1]-dm_flat)]
+title_list = ['initial','final']
+xlabel_list = [None, None]
+ylabel_list = [None, None]
+cbar_label_list = ['DM units', 'DM units' ] 
+savefig = data_path + f'rtc_TT_test_cmds_inital-final_it{it}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
 
 
 
@@ -233,6 +340,27 @@ tel_reco = np.array([tt.dm_cmd_err for tt in t])
 
 
 #---- TESTS 
+
+# coerrect mapping to global pixels works correctly (saves output in data input folder)
+# get a full frame and reshape it 
+
+
+for lab, reg in zip(['pupil_pixels', 'outside_pixels'],[pupil_pixels, outside_pixels]):
+    pupil_reg_test = np.zeros(np.array( r.im2vec_test()).shape )
+    #outside_reg_test = np.zeros(np.array( r.im2vec_test()).shape )
+    pupil_reg_test[reg] = 1
+
+    plt.figure() ; plt.imshow( pupil_reg_test.reshape(r.camera_settings.image_height, r.camera_settings.image_width)) ; plt.savefig(data_path+f'full_frame_{lab}_registration.png')
+
+
+# checking reduced image 
+img = np.array(r.reduceImg_test()).reshape( 512, 640 )
+pupimg = pupil_reg_test.reshape(r.camera_settings.image_height, r.camera_settings.image_width)
+fig,ax = plt.subplots(1,2) 
+ax[0].imshow( img[ 100:300, 100:300] ) ; plt.savefig(data_path + 'delme.png')
+ax[1].imshow( pupimg[ 100:300, 100:300] ) 
+plt.savefig(data_path+f'full_frame_{lab}_registration_with_image_in_rtc.png')
+
 
 # polling image and convert to vector 
 test1 = r.im2vec_test()
@@ -274,92 +402,3 @@ else:
 
 
 
-
-
-# Example usage:
-
-# Assume the cropped region is of size n x m
-n, m = 4, 4  # Example values for the cropped region size
-
-# Assume the cropped region starts at (row1, col1) in the original image
-row1, col1 = 2, 3
-
-# Example flattened relative pixel indices within the cropped region
-relative_pixels_flat = [0, 5, 10]  # These correspond to [(0,0), (1,1), (2,2)] in 2D within the cropped region
-
-# Convert to global coordinates
-global_pixels = convert_to_global_coordinates_flattened(relative_pixels_flat, row1, col1, n, m)
-
-# Print the results
-print("Global Pixel Coordinates:", global_pixels)
-
-
-
-# with array 
-def convert_to_global_coordinates_flattened(relative_pixels_flat, boolean_array_flat, row1, col1, n, m, N, M):
-    """
-    Convert relative pixel coordinates and a flattened boolean array from the cropped region
-    to global coordinates in the original image.
-    
-    Parameters:
-    - relative_pixels_flat: 1D list or array of indices in the flattened cropped array.
-    - boolean_array_flat: 1D flattened boolean array indicating true values in the cropped region.
-    - row1: The starting row index of the cropped region in the global image.
-    - col1: The starting column index of the cropped region in the global image.
-    - n: The number of rows in the cropped region.
-    - m: The number of columns in the cropped region.
-    - N: The number of rows in the original global image.
-    - M: The number of columns in the original global image.
-    
-    Returns:
-    - global_pixels: List of tuples [(row_global1, col_global1), (row_global2, col_global2), ...]
-                     containing the global coordinates in the original image.
-    - global_boolean_array: 2D numpy array of the same size as the original image with true values where the original
-                            boolean array indicated in the cropped region.
-    """
-    
-    # Convert flattened relative pixel indices to 2D coordinates within the cropped region
-    relative_coords = [(index // m, index % m) for index in relative_pixels_flat]
-    
-    # Convert relative 2D coordinates to global 2D coordinates
-    global_pixels = [(row + row1, col + col1) for (row, col) in relative_coords]
-    
-    # Initialize the global boolean array with False
-    global_boolean_array = np.zeros((N, M), dtype=bool)
-    
-    # Ensure boolean_array_flat is of size n * m
-    if len(boolean_array_flat) != n * m:
-        raise ValueError(f"Size of boolean_array_flat ({len(boolean_array_flat)}) does not match n * m ({n * m}).")
-    
-    # Convert flattened boolean array to 2D boolean array of size n x m
-    boolean_array_2d = np.reshape(boolean_array_flat, (n, m))
-    
-    # Place the cropped boolean array into the corresponding location in the global boolean array
-    global_boolean_array[row1:row1 + n, col1:col1 + m] = boolean_array_2d
-    
-    return global_pixels, global_boolean_array
-
-# Example usage:
-
-# Assume we have an original image of size N x M
-N, M = 10, 12
-
-# Cropped region is from row 2 to row 5 and column 3 to column 6
-row1, row2, col1, col2 = 2, 5, 3, 6
-
-# Assume the cropped region is of size n x m
-n, m = row2 - row1 + 1, col2 - col1 + 1  # n = 4, m = 4
-
-# Example flattened relative pixel indices within the cropped region
-relative_pixels_flat = [0, 5, 10]  # These correspond to [(0,0), (1,1), (2,2)] in 2D within the cropped region
-
-# Example flattened boolean array within the cropped region
-boolean_array_flat = np.array([True, False, False, False, False, True, False, False, False, False, True, False, False, False, False, True])
-
-# Convert to global coordinates
-global_pixels, global_boolean_array = convert_to_global_coordinates_flattened(relative_pixels_flat, boolean_array_flat, row1, col1, n, m, N, M)
-
-# Print the results
-print("Global Pixel Coordinates:", global_pixels)
-print("Global Boolean Array:")
-print(global_boolean_array)

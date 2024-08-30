@@ -794,8 +794,28 @@ struct RTC {
         }
     }
 
+    int close_all( ){
+
+        BMCClose(&hdm);
+
+        fli->stop();
+
+        delete fli;
+
+        return 0;
+    }
 
 
+    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it.
+    /// this also checks if the DM is in simulation within the RTC struct.
+    /// @return a pointer to the uint16_t image
+    void send_dm_cmd(std::vector<double> cmd) {
+        if (not rtc_state.dm_simulation_mode) {
+                    // get cmd pointer
+            double *cmd_ptr = cmd.data();
+            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+        }
+    }
 
     /// @brief standard way to get the last frame from the camera within RTC scope - this gets if we are in simulation mode
     /// @return a pointer to the uint16_t image
@@ -837,8 +857,8 @@ struct RTC {
         
     }
 
-
-    void process_image(std::vector<float> im,  std::vector<float> im_setpoint , std::vector<float> signal) //std::span<const float> im, std::span<const float> im_setpoint, std::vector<float>& signal)
+    // changed to pass as reference 
+    void process_image(std::vector<float>& im,  std::vector<float>& im_setpoint , std::vector<float>& signal) //std::span<const float> im, std::span<const float> im_setpoint, std::vector<float>& signal)
     {
         if (not rtc_state.signal_simulation_mode){
             //std::vector<float> signal(signal_size);
@@ -861,16 +881,7 @@ struct RTC {
 
     }
 
-    /// @brief standard way to send a command to the DM in the context of the RTC. cmds should be vectors and here we convert to a pointer before sending it.
-    /// this also checks if the DM is in simulation within the RTC struct.
-    /// @return a pointer to the uint16_t image
-    void send_dm_cmd(std::span<double> cmd) {
-        if (not rtc_state.dm_simulation_mode) {
-                    // get cmd pointer
-            double *cmd_ptr = cmd.data();
-            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
-        }
-    }
+
 
     // ------------- FUNCTIONS TO TEST THINGS ---------------------
     std::vector<uint32_t>  im2vec_test(){
@@ -1191,7 +1202,7 @@ struct RTC {
             //uint16_t* raw_image = poll_last_image(); //(uint16_t*)fli->getRawImage(); // Retrieve raw image data
             //std::span<const uint16_t> image_span(raw_image, full_image_length);//rows * cols); // Create a span from the raw image data
             //std::vector<int32_t>
-            image_vector = reduceImg_test();
+            image_vector = reduceImg_test(); // THIS MAY NOTE WORK NOW USING FULL FRAME DARKS.. CHECK 
 
             std::vector<float> result(image_vector.size());
 
@@ -1322,7 +1333,7 @@ struct RTC {
             std::vector<double> dm_cmd(140, 0); // should init somewhere else  
             for (size_t i = 0; i < TT_cmd_err.size(); ++i) {
                 //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
-                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] ; //+ HO_cmd_err[i]; 
+                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i];  // comment out HO_cmd_err if desired
             }
             //cout << dm_cmd << endl; 
             // get cmd pointer 
@@ -1338,11 +1349,12 @@ struct RTC {
     
                 //entry.image_err_signal = std::move(image_err_signal);// <- doesn't like this one! 
                 entry.mode_err = std::move(mode_err ); // reconstructed DM command
-                entry.dm_cmd_err = std::move( dm_cmd); // final command sent
+                entry.dm_cmd_err = std::move( dm_cmd ); // final command sent
 
                 append_telemetry(std::move(entry));
 
                 --telemetry_cnt;
+                cout << telemetry_cnt << endl;
                 }
             
         }
@@ -1596,6 +1608,8 @@ NB_MODULE(_rtc, m) {
         .def_rw("LeakyInt", &RTC::leakyInt, "Leaky Integrator")
 
         // for testing individually 
+        .def("close_all", &RTC::close_all) 
+        .def("send_dm_cmd",&RTC::send_dm_cmd)
         .def("im2vec_test", &RTC::im2vec_test)
         .def("reduceImg_test", &RTC::reduceImg_test)
         .def("im2filtered_im_test", &RTC::im2filtered_im_test)
