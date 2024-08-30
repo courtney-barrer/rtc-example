@@ -1289,7 +1289,7 @@ struct RTC {
 
         if (current_frame_number > previous_frame_number){
             // Do some computation here...
-            cout << current_frame_number << endl;
+            //cout << current_frame_number << endl;
             // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
             // so need to catch case of overflow (current=0, previous = 65535)
             // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
@@ -1301,63 +1301,89 @@ struct RTC {
                 previous_frame_number = current_frame_number;
             }
 
-            // size of filtered signal may change while RTC is running
-            size_t signal_size = regions.pupil_pixels.current().size();
-
-            // have to define here since size may change while rtc running 
-            static std::vector<float> image_err_signal(signal_size); // <- should this be static
-
-            std::vector<int32_t> image_vector(camera_settings.full_image_length); //should init outside here
-            reduce_image(raw_image,  image_vector);
-            //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
-
-            //std::vector<float> image_in_pupil;//<- init at top struct
-            getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
-
-            //std::vector<float> image_setpoint;//<- init at top struct
-            getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
-
-            process_image( image_in_pupil, image_setpoint , image_err_signal);
-
-            // //tip/tilt 
-            matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
-            pid.process( mode_err ) ;
-            // // note - using DOUBLE matrix_vector_multiply here that also has parallel component
-            matrix_vector_multiply_double( pid.output, reco.M2C.current(), TT_cmd_err ) ;
-            
-            // Higher order 
-            matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
-            leakyInt.process( mode_err ) ;
-            // note - using DOUBLE matrix_vector_multiply here that also has parallel component
-            matrix_vector_multiply_double( leakyInt.output, reco.M2C.current(), HO_cmd_err ) ;
-
-            //cout << HO_cmd_err[0] <<endl;
-            std::vector<double> dm_cmd(140, 0); // should init somewhere else  
-            for (size_t i = 0; i < TT_cmd_err.size(); ++i) {
-                //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
-                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i] + dm_disturb[i];  // comment out HO_cmd_err if desired
+            std::vector<float> image_vector(camera_settings.full_image_length);
+            for (size_t i = 0; i < camera_settings.full_image_length; ++i) {
+               image_vector[i] = static_cast<float>(raw_image[i]);
             }
-            //cout << dm_cmd << endl; 
-            // get cmd pointer 
-            double *cmd_ptr = dm_cmd.data();
 
+            //send command to DM 
+            double *cmd_ptr = dm_flat.data();
             BMCSetArray(&hdm, cmd_ptr, map_lut.data());
-        
 
+            // add telemetry
             if (telemetry_cnt > 0){
+               
                 telem_entry entry;
 
-                entry.image_in_pupil = std::move(image_in_pupil); // im);
-    
-                //entry.image_err_signal = std::move(image_err_signal);// <- doesn't like this one! 
-                entry.mode_err = std::move(mode_err ); // reconstructed DM command
-                entry.dm_cmd_err = std::move( dm_cmd ); // final command sent
+                entry.image_in_pupil = std::move(image_vector); 
 
                 append_telemetry(std::move(entry));
 
                 --telemetry_cnt;
                 cout << telemetry_cnt << endl;
-                }
+            }
+    
+
+            // Don't delete below
+            // size of filtered signal may change while RTC is running
+            //size_t signal_size = regions.pupil_pixels.current().size();
+
+            // have to define here since size may change while rtc running 
+            //static std::vector<float> image_err_signal(signal_size); // <- should this be static
+
+            //std::vector<int32_t> image_vector(camera_settings.full_image_length); //should init outside here
+            //reduce_image(raw_image,  image_vector);
+            
+            
+            // //static uint16_t frame_cnt = image_vector[0]; // to check if we are on a new frame
+
+            // //std::vector<float> image_in_pupil;//<- init at top struct
+            // getValuesAtIndices(image_in_pupil, image_vector, regions.pupil_pixels.current()  ) ; // image
+
+            // //std::vector<float> image_setpoint;//<- init at top struct
+            // getValuesAtIndices(image_setpoint, reco.I0.current(),  regions.pupil_pixels.current()  ); // set point intensity
+
+            // process_image( image_in_pupil, image_setpoint , image_err_signal);
+
+            // // //tip/tilt 
+            // matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+            // pid.process( mode_err ) ;
+            // // // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+            // matrix_vector_multiply_double( pid.output, reco.M2C.current(), TT_cmd_err ) ;
+            
+            // // Higher order 
+            // matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
+            // leakyInt.process( mode_err ) ;
+            // // note - using DOUBLE matrix_vector_multiply here that also has parallel component
+            // matrix_vector_multiply_double( leakyInt.output, reco.M2C.current(), HO_cmd_err ) ;
+
+            // //cout << HO_cmd_err[0] <<endl;
+            // std::vector<double> dm_cmd(140, 0); // should init somewhere else  
+            // for (size_t i = 0; i < TT_cmd_err.size(); ++i) {
+            //     //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
+            //     dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i] + dm_disturb[i];  // comment out HO_cmd_err if desired
+            // }
+            // //cout << dm_cmd << endl; 
+            // // get cmd pointer 
+            // double *cmd_ptr = dm_cmd.data();
+
+            // BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+        
+
+            // if (telemetry_cnt > 0){
+            //     telem_entry entry;
+
+            //     entry.image_in_pupil = std::move(image_in_pupil); // im);
+    
+            //     //entry.image_err_signal = std::move(image_err_signal);// <- doesn't like this one! 
+            //     entry.mode_err = std::move(mode_err ); // reconstructed DM command
+            //     entry.dm_cmd_err = std::move( dm_cmd ); // final command sent
+
+            //     append_telemetry(std::move(entry));
+
+            //     --telemetry_cnt;
+            //     cout << telemetry_cnt << endl;
+            //     }
             
         }
         
