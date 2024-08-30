@@ -55,9 +55,9 @@ def convert_local_to_global_coordinates(relative_pixels_flat, row1, col1, n, m, 
 # TO DO 
 # 
 
-data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
+data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_4_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
 
-reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
+reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T13.32.11.fits'#'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
 
 
 #def init_rtc( reco_fits_file ):
@@ -211,6 +211,8 @@ if 1:
     r.regions = pupil_regions_tmp
     r.reco = reconstructors_tmp
     r.camera_settings = cam_settings_tmp
+
+    r.dm_disturb = np.zeros( 140 ) # no disturbance 
     r.dm_flat = dm_flat 
     # now set up the camera as required 
     r.apply_camera_settings()
@@ -221,6 +223,7 @@ if 1:
 
 # update for testing 
 
+# 30
 # for iterations below using: 
 #data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
 #reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
@@ -233,7 +236,21 @@ if 1:
 # it 10 : starting 1 of the higher order modes with leaky int, ki_leak[2] = 0.1
 # it 11 : realised HO terms commented out in RTC. Includde them and reset ki_leak = 0 to check 
 # it 12 : ok now try ki_leaky[2] = 0.1 again 
-it = 12
+# it 13: semi worked but unstable . added send_dm_cmd and close all. So build basis and add static offset on DM (need to add distubance in rtc to keep it there)
+#    also for reference merged utilities from asgard alignment project 
+# it 14: added dm_distrub vector (nanobinded) default to zero. So we can add DM disturbance. Also prior send_dm_cmd and close_all seem to work fine  
+# it 15 . adding TT disturbance 
+# it 16 . Add change disturbance after 100 telemetry entries
+# it 17 : make disturb bigger! 
+# it 18 ; fresh reco calibrator
+it = 18
+
+# basis to add aberrations 
+basis =  util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+# flatten DM first 
+r.send_dm_cmd( dm_flat ) 
+
+r.dm_disturb = 0 * 0.3 * basis.T[0]  # add a tip disturb 
 
 max_mode = 3
 
@@ -242,6 +259,9 @@ kp = np.zeros(Nmodes)
 ki = np.zeros(Nmodes)
 ki_leak = np.zeros(Nmodes)
 kd = np.zeros(Nmodes)
+
+
+
 
 ################
 # tip 
@@ -270,35 +290,75 @@ r.LeakyInt = leaky_tmp
 
 
 # start it 
-r.enable_telemetry(10000)
+no_tele = 1000
+disturb_after = 100
+r.enable_telemetry(1000)
 # start a runner that calls latency function 
 runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
 runner.start()
-time.sleep(10)
-runner.pause()
-runner.stop()
 
+while r.telemetry_cnt > 900: #no_tele-distub_after:
+    print(r.telemetry_cnt)
+runner.pause()
+
+r.dm_disturb = 0.5 * basis.T[0]  # add a tip disturb 
+
+time.sleep(0.2)
+runner.resume()
+while r.telemetry_cnt > 0:
+    print(r.telemetry_cnt)
+
+runner.pause()
+# now add a disturbance
+runner.stop()
 
 
 # read out the telemetry 
 t = rtc.get_telemetry()
-tel_rawimg = np.array([tt.image_in_pupil for tt in t] )
+tel_rawimg = np.array([tt.image_in_pupil for tt in t] ) # reduced image filtered in pupil (not signal)
 #tel_imgErr = np.array([tt.image_err_signal for tt in t])
 tel_modeErr = np.array([tt.mode_err for tt in t])
 tel_reco = np.array([tt.dm_cmd_err for tt in t])
 
+
+#runner.flush # not writing anything here yet, but could 
 #rtc.clear_telemetry() 
+
+# reconstruct 2D image from pupil filtered img
+
+pupil_img_2D = []
+for img_tmp in tel_rawimg:
+    tmp = np.zeros( I0.shape )
+    tmp.reshape(-1)[pupil_pixels_local] =  img_tmp 
+    pupil_img_2D.append( tmp )
+
+
+im_list = [] #[ pupil_img_2D]
+title_list = [] #['initial','final']
+xlabel_list = [] #[None, None]
+ylabel_list = []# [None, None]
+cbar_label_list = []#['DM units', 'DM units' ] 
+
+look_at_it =[0] + [disturb_after-i for i in np.arange(-4,8,2)[::-1] ] + [-10,-1]
+for i in look_at_it:
+    im_list.append( pupil_img_2D[i] )
+    title_list.append( f'iteration {i}' ) 
+    xlabel_list.append( None ) 
+    ylabel_list.append( None )
+    cbar_label_list.append( 'DM units' ) 
+savefig = data_path + f'rtc_RED_IMGS_it{it}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
 
 
 # save telemetry 
 telemetry_fits = fits.HDUList( [] )
-for tel, lab in zip ( [tel_rawimg, tel_modeErr, tel_reco, r.pid.kp, r.pid.ki, r.LeakyInt.rho], ['reduced_img_pupil', 'mode_err', 'dm_cmd',  'r.pid.kp', 'r.pid.ki', 'r.LeakyInt.rho']):
+for tel, lab in zip ( [tel_rawimg, pupil_img_2D, tel_modeErr, tel_reco, r.pid.kp, r.pid.ki, r.LeakyInt.rho, r.dm_disturb], ['reduced_img_pupil', 'reduced_img_pupil_2D','mode_err', 'dm_cmd',  'r.pid.kp', 'r.pid.ki', 'r.LeakyInt.rho','r.dm_disturb']):
 
     frame_fits = fits.PrimaryHDU( tel ) 
     frame_fits.header.set('EXTNAME',f'{lab}')
     
     telemetry_fits.append( frame_fits )
-telemetry_fits.writeto( data_path + f'telemetry_it{it}.fits' ) # don't by default, overwrite = True)
+telemetry_fits.writeto( data_path + f'telemetry_it{it}.fits' ) #, overwrite = True) # don't by default, overwrite = True)
 
 
 plt.figure()
@@ -333,7 +393,7 @@ util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar
 
 
 
-
+# r.close_all() # to close/disconnect DM and camera safely  
 
 
 

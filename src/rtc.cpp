@@ -608,6 +608,8 @@ struct RTC {
     std::vector<double> HO_cmd_err; // holds the DM Higher Order command offset (error) from the reference flat DM surface
     std::vector<double> mode_err; // holds mode error from matrix multiplication of I2M with processed signal 
     std::vector<double> dm_cmd; // final DM command 
+
+    std::vector<double> dm_disturb; // a disturbance that we can add to the DM 
     std::vector<double> dm_flat; // calibrated DM flat 
     //std::vector<double> pid_setpoint // set-point of PID controller
 
@@ -627,7 +629,7 @@ struct RTC {
         std::vector<double> TT_cmd_err(140, 0.0); // holds the DM Tip-Tilt command offset (error) from the reference flat DM surface
         std::vector<double> HO_cmd_err(140, 0.0); // holds the DM Higher Order command offset (error) from the reference flat DM surface
         std::vector<double> dm_cmd(140, 0.0); // final DM command 
-        
+        std::vector<double> dm_disturb(140,0); // disturbance we can put on DM 
         /* open BMC DM */
         //---------------------
         BMCRC	rv = NO_ERR;
@@ -1317,7 +1319,7 @@ struct RTC {
 
             process_image( image_in_pupil, image_setpoint , image_err_signal);
 
-            // //tip/tilt ######## HERERE!
+            // //tip/tilt 
             matrix_vector_multiply( image_err_signal, reco.I2M.current(), mode_err ) ;
             pid.process( mode_err ) ;
             // // note - using DOUBLE matrix_vector_multiply here that also has parallel component
@@ -1333,7 +1335,7 @@ struct RTC {
             std::vector<double> dm_cmd(140, 0); // should init somewhere else  
             for (size_t i = 0; i < TT_cmd_err.size(); ++i) {
                 //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
-                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i];  // comment out HO_cmd_err if desired
+                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i] + dm_disturb[i];  // comment out HO_cmd_err if desired
             }
             //cout << dm_cmd << endl; 
             // get cmd pointer 
@@ -1600,6 +1602,7 @@ NB_MODULE(_rtc, m) {
         .def_rw("HO_cmd_err" , &RTC::HO_cmd_err)
         .def_rw("mode_err" , &RTC::mode_err)
         .def_rw("dm_cmd" , &RTC::dm_cmd)
+        .def_rw("dm_disturb", &RTC::dm_disturb)
         .def_rw("dm_flat", &RTC::dm_flat)
 
         // controllers
