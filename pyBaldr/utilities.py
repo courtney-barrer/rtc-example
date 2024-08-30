@@ -9,6 +9,7 @@ from astropy.io import fits
 from scipy import ndimage
 from scipy import signal
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import distance_transform_edt
 from scipy.optimize import curve_fit
 import itertools
 import corner
@@ -28,7 +29,7 @@ import bmc
 data_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
 
 
-def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True):
+def construct_command_basis( basis='Zernike_pinned_edges', number_of_modes = 20, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True):
     """
     returns a change of basis matrix M2C to go from modes to DM commands, where columns are the DM command for a given modal basis. e.g. M2C @ [0,1,0,...] would return the DM command for tip on a Zernike basis. Modes are normalized on command space such that <M>=0, <M|M>=1. Therefore these should be added to a flat DM reference if being applied.    
 
@@ -82,6 +83,132 @@ def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 
             M2C = np.array( bmcdm_basis_list ).T # take transpose to make columns the modes in command space.
 
 
+    elif basis == 'Zernike_pinned_edges':
+        """
+        designed for BMC multi 3.5 DM, define zernike basis on 10x10 central grid and 
+        interpolate outside of this grid, pinning the value of perimeter actuators to the
+        inner perimeter value. 
+        """
+        nact_len = 12 # must be 12
+        # alway construct with piston cause we use as a filter, we delete piston later if specified by user
+        b0 = construct_command_basis( basis='Zernike', number_of_modes = number_of_modes, Nx_act_DM = nact_len, Nx_act_basis = nact_len, act_offset=(0,0), without_piston=False)
+
+        # put values outside pupil to nan 
+        btmp = np.array( [get_DM_command_in_2D( bb ) for bb in b0.T])
+
+        # interpolate
+        nan_mask = btmp[0] #util.get_DM_command_in_2D( b0.T[0] != 0 )
+        nan_mask[nan_mask==0] = np.nan
+
+        #nan_mask = np.isnan(nan_mask)
+        nearest_index = distance_transform_edt(np.isnan(nan_mask), return_distances=False, return_indices=True)
+
+        # Use the indices to replace NaNs with the nearest non-NaN values
+
+        with_corners = np.array( [ (nan_mask * bb)[tuple(nearest_index)] for bb in btmp[:]] ).T
+        #filled_data = get_DM_command_in_2D( new_flat )[tuple(nearest_index)]
+
+
+        # Define the indices of the corners to be removed
+        corners = [(0, 0), (0, nact_len-1), (nact_len-1, 0), (nact_len-1, nact_len-1)]
+        # Convert 2D corner indices to 1D
+        corner_indices = [i * 12 + j for i, j in corners]
+
+        # Flatten the array
+        bmcdm_basis_list = []
+        for w in with_corners.T:
+            flattened_array = w.flatten()
+            filtered_array = np.delete(flattened_array, corner_indices)
+
+            bmcdm_basis_list.append( filtered_array )
+
+        # piston was taken care of in construction of original zernike basis  b0 = construct_command_basis(
+        if without_piston:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]]
+        else:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[:]]
+        M2C = np.array( control_basis ).T
+
+             
+    elif basis == 'fourier':
+        # NOT TESTED YET ON REAL DM!! 
+        if without_piston:
+            number_of_modes += 1 # we add one more mode since we dont include piston 
+
+        # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY number_of_modes
+        n = round( number_of_modes**0.5 ) + 1 # number of modes = (n-1)*(m-1) , n=m => (n-1)**2 
+        control_basis_dict  = develop_Fourier_basis( n, n ,P = 2 * Nx_act_DM, Nx = Nx_act_DM, Ny = Nx_act_DM )
+        
+        # create raw basis as ordered list from our dictionary
+        raw_basis = []
+        for i in range( n-1 ):
+            for j in np.arange( i , n-1 ):
+                if i==j:
+                    raw_basis.append( control_basis_dict[i,i] )
+                else:
+                    raw_basis.append( control_basis_dict[i,j] ) # get either side of diagonal 
+                    raw_basis.append( control_basis_dict[j,i] )
+                    
+        
+        bmcdm_basis_list = []
+        for i,B in enumerate(raw_basis):
+            B = B.reshape(-1)
+            B[corner_indices] = np.nan
+            bmcdm_basis_list.append( B[np.isfinite(B)] )
+        # flatten & normalize each basis cmd 
+        # <M|M> = 1
+        if without_piston:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+        else:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
+        M2C = np.array( control_basis ).T 
+
+    elif basis == 'fourier_pinned_edges':
+        """
+        designed for BMC multi 3.5 DM, define zernike basis on 10x10 central grid and 
+        interpolate outside of this grid, pinning the value of perimeter actuators to the
+        inner perimeter value. 
+        """
+        n = round( number_of_modes**0.5 ) + 1 # number of modes = (n-1)*(m-1) , n=m => (n-1)**2 
+        actlen_tmp = 10 # must be 10 for this option! we then calculate perimeter values here! 
+        control_basis_dict  = develop_Fourier_basis( n, n ,P = 2 * actlen_tmp, Nx = actlen_tmp, Ny = actlen_tmp )
+                
+        # create raw basis as ordered list from our dictionary
+        raw_basis = []
+        for i in range( n-1 ):
+            for j in np.arange( i , n-1 ):
+                if i==j:
+                    raw_basis.append( control_basis_dict[i,i] )
+                else:
+                    raw_basis.append( control_basis_dict[i,j] ) # get either side of diagonal 
+                    raw_basis.append( control_basis_dict[j,i] )
+                    
+        # pin_outer_actuators_to_inner requires 10x10 input!!! creates 12x12 with missing corner pinning outer actuators 
+        bmcdm_basis_list = np.array( [pin_outer_actuators_to_inner_diameter(bb.reshape(-1)) for bb in np.array( raw_basis)] )
+
+        # <M|M> = 1
+        if without_piston:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+        else:
+            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
+        
+        M2C = np.array( control_basis ).T 
+
+
+    elif basis == 'Zonal': 
+        #hardcoded for BMC multi3.5 DM (140 actuators)
+        M2C = np.eye( 140 ) # we just consider this over all actuators (so defaults to 140 modes) 
+        # we filter zonal basis in the eigenvectors of the control matrix. 
+    
+    elif basis == 'Zonal_pinned_edges':
+        # pin edges of actuator
+        b = np.eye(100) #
+        bmcdm_basis_list = np.array( [pin_outer_actuators_to_inner_diameter(bb) for bb in b.T] )
+        # <M|M> = 1
+        control_basis = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list] )
+
+        M2C = np.array( control_basis ).T
+
     elif basis == 'KL':         
         if without_piston:
             number_of_modes += 1 # we add one more mode since we dont include piston 
@@ -116,48 +243,12 @@ def construct_command_basis( basis='Zernike', number_of_modes = 20, Nx_act_DM = 
         else:
             M2C = np.array( bmcdm_basis_list ).T # take transpose to make columns the modes in command space.
 
-
-    #elif basis == 'Sensor_Eigenmodes': this is done specifically in a phase_control.py function - as it needs a interaction matrix covariance first 
-
-             
-    elif basis == 'fourier':
-        # NOT TESTED YET ON REAL DM!! 
-        if without_piston:
-            number_of_modes += 1 # we add one more mode since we dont include piston 
-
-        # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY number_of_modes
-        n = round( number_of_modes**0.5 ) + 1 # number of modes = (n-1)*(m-1) , n=m => (n-1)**2 
-        control_basis_dict  = develop_Fourier_basis( n, n ,P = 2 * Nx_act_DM, Nx = Nx_act_DM, Ny = Nx_act_DM )
-        
-        # create raw basis as ordered list from our dictionary
-        raw_basis = []
-        for i in range( n-1 ):
-            for j in np.arange( i , n-1 ):
-                if i==j:
-                    raw_basis.append( control_basis_dict[i,i] )
-                else:
-                    raw_basis.append( control_basis_dict[i,j] ) # get either side of diagonal 
-                    raw_basis.append( control_basis_dict[j,i] )
-                    
-        
-        bmcdm_basis_list = []
-        for i,B in enumerate(raw_basis):
-            B = B.reshape(-1)
-            B[corner_indices] = np.nan
-            bmcdm_basis_list.append( B[np.isfinite(B)] )
-        # flatten & normalize each basis cmd 
-        if without_piston:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
-        else:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
-        M2C = np.array( control_basis ).T 
-
-    elif basis == 'Zonal': 
-        #hardcoded for BMC multi3.5 DM (140 actuators)
-        M2C = np.eye( 140 ) # we just consider this over all actuators (so defaults to 140 modes) 
-        # we filter zonal basis in the eigenvectors of the control matrix. 
+    else:
+        raise TypeError( ' input basis name invalid. Try: Zonal, Zonal_pinned_edges, Zernike, Zernike_pinned_edges, fourier, fourier_pinned_edges, KL etc ')
+    
     
     return(M2C)
+
 
 
 def fourier_vector(n, m, P = 2*12, Nx = 12, Ny = 12):
@@ -573,6 +664,127 @@ def get_reference_images(zwfs, phasemask, theta_degrees=11.8, number_of_frames=2
     return(I0, N0)
         
 
+def shape_dm_manually(zwfs, compass = True , initial_cmd = None ,number_of_frames=100, apply_manual_reduction=True, theta_degrees=11.8, savefig=None):
+    if initial_cmd == None:
+        cmd =  zwfs.dm_shapes['flat_dm'].copy()
+    else:
+        assert len(cmd) == 140
+        assert np.max(cmd) < 1
+        assert np.min(cmd) > 0
+        cmd = initial_cmd
+
+
+    try: 
+        # try send the initial command
+        zwfs.dm.send_data( cmd  )
+    except:
+        raise TypeError('For some reason we cannot send the initial_cmd to the DM. Check it!')
+
+    # get an initial image 
+    initial_img = np.mean(zwfs.get_some_frames(number_of_frames = number_of_frames, apply_manual_reduction = apply_manual_reduction ) , axis=0 )
+
+    if compass:
+        x_pos, y_pos = 0.85 * initial_img.shape[0], 0.15 * initial_img.shape[1] # compass origin
+    e0=True
+    e1=False
+    while e0 :
+        act =  input('input actuator number (1-140) to move, "e" to exit') 
+        if act == 'e':
+            e0 =False
+        else:
+            try:
+                act = int( act ) - 1 # subtract one since array index starts at 0
+            except:
+                print('actuator must be integer between 1-140, or enter "e" to exit')
+            if (act < 1) or (act > 140):
+                print('actuator must be integer between 1-140, or enter "e" to exit')
+            else:
+                e1 = True
+        while e1 :
+            dc =  input('input relative movement of actuator (-0.5 - 0.5) a hint is "0.05", or "e" to exit') 
+            if dc == 'e':
+                e1 =False
+            else:
+                try:
+                    dc = float( dc )
+                except:
+                    print('relative movement of actuator must be float between (-1 - 1), or enter "e" to exit')
+                #if (dc < 0) or (dc > 1):
+                #    print('relative movement of actuator must be float between (-1 - 1), or enter "e" to exit')
+                 
+                # apply relative displacement to specified actuator
+                if (cmd[act]+dc < 0) or (cmd[act]+dc > 1):
+                    print(f'current value {cmd[act]+dc} hitting limits of actuator (0 - 1), \ntry move in opposite dirrection or lower amplitude,\nor enter "e" to exit')
+                else:
+                    cmd[act] += dc 
+                    #send the command 
+                    zwfs.dm.send_data( cmd ) 
+                    time.sleep(0.1)
+                    # look at the new image 
+                    new_img = np.mean(zwfs.get_some_frames(number_of_frames = number_of_frames, apply_manual_reduction = apply_manual_reduction ) , axis=0 )
+
+                    # plotting results
+                    im_list = [new_img , initial_img ]
+                    xlabel_list = [None, None]
+                    ylabel_list = [None, None]
+                    title_list = [r'current image', r'initial image']
+                    cbar_label_list = ['Intensity (Normalized)', 'Intensity (Normalized)'] 
+                    #fig_path + 'delme.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+
+                    n = len(im_list)
+                    fs = 15
+                    fig = plt.figure(figsize=(5*n, 5))
+
+                    for a in range(n) :
+                        ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
+                        im1 = ax1.imshow(  im_list[a] , vmin = np.min(im_list[-1]), vmax = np.max(im_list[-1]))
+
+
+                        ax1.set_title( title_list[a] ,fontsize=fs)
+                        ax1.set_xlabel( xlabel_list[a] ,fontsize=fs) 
+                        ax1.set_ylabel( ylabel_list[a] ,fontsize=fs) 
+                        ax1.tick_params( labelsize=fs ) 
+
+                        
+
+                        divider = make_axes_locatable(ax1)
+                        cax = divider.append_axes('bottom', size='5%', pad=0.05)
+                        cbar = fig.colorbar( im1, cax=cax, orientation='horizontal')
+                        cbar.set_label( cbar_label_list[a], rotation=0,fontsize=fs)
+                        cbar.ax.tick_params(labelsize=fs)
+
+                        if (a==0) & compass:
+                            # Convert theta from degrees to radians
+                            theta = np.radians(theta_degrees)
+                            
+                            # Define the base vectors (unit vectors along y and x axis)
+                            y_vector = 0.2 * im_list[a].shape[0] * np.array([0, 1])
+                            x_vector = -0.2 * im_list[a].shape[0] * np.array([1, 0])
+                            
+                            # Create the rotation matrix
+                            rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                                                        [np.sin(theta),  np.cos(theta)]])
+                            
+                            # Rotate the vectors
+                            rotated_y_vector = rotation_matrix @ y_vector
+                            rotated_x_vector = rotation_matrix @ x_vector
+                            
+                            # Plot the arrows at the specified coordinates
+
+                            ax1.quiver(x_pos, y_pos, rotated_y_vector[0], rotated_y_vector[1], angles='xy', scale_units='xy', scale=1, color='r', label='y')
+                            ax1.quiver(x_pos, y_pos, rotated_x_vector[0], rotated_x_vector[1], angles='xy', scale_units='xy', scale=1, color='r', label='x')
+                            
+                            # Add labels at the end of the arrows
+                            ax1.text(x_pos + 1.2*rotated_y_vector[0], y_pos + 1.2*rotated_y_vector[1], r'$x$', fontsize=12, ha='right',color='r')
+                            ax1.text(x_pos + 1.2*rotated_x_vector[0], y_pos + 1.2*rotated_x_vector[1], r'$y$', fontsize=12, ha='right',color='r')
+                        
+                        ax1.xaxis.tick_top()
+
+                    if savefig!=None: 
+                        plt.savefig( savefig , bbox_inches='tight', dpi=300)
+
+    return( cmd )
+
 
 def watch_camera(zwfs, frames_to_watch = 10, time_between_frames=0.01,cropping_corners=None) :
   
@@ -725,7 +937,7 @@ def nice_DM_plot( data, savefig=None ): #for a 140 actuator BMC 3.5 DM
         ax.imshow( get_DM_command_in_2D(data) )
     else: 
         ax.imshow( data )
-    ax.set_title('poorly registered actuators')
+    #ax.set_title('poorly registered actuators')
     ax.grid(True, which='minor',axis='both', linestyle='-', color='k', lw=2 )
     ax.set_xticks( np.arange(12) - 0.5 , minor=True)
     ax.set_yticks( np.arange(12) - 0.5 , minor=True)
@@ -836,6 +1048,7 @@ def test_controller_in_cmd_space( zwfs, phase_controller, Vw =None , D=None , AO
         zwfs.dm.send_data( zwfs.dm_shapes['flat_dm'] + delta_cmd[-1] + dist[-1] )
 
         time.sleep(0.1)
+
 
 
 
