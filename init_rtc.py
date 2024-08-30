@@ -223,27 +223,6 @@ if 1:
 
 # update for testing 
 
-# 30
-# for iterations below using: 
-#data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
-#reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
-
-# it 5 : with ki[0] =0.1, kp[0]=1
-# it 6 : same but longer , telemetry doesnlt seem to clear or change 
-# it 7 : adding kp[1] = 1 , worked out need to exit / enter every session 
-# it 8 : ki[1] = 0.1
-# it 9 : increasing ki = 0.5 for both 
-# it 10 : starting 1 of the higher order modes with leaky int, ki_leak[2] = 0.1
-# it 11 : realised HO terms commented out in RTC. Includde them and reset ki_leak = 0 to check 
-# it 12 : ok now try ki_leaky[2] = 0.1 again 
-# it 13: semi worked but unstable . added send_dm_cmd and close all. So build basis and add static offset on DM (need to add distubance in rtc to keep it there)
-#    also for reference merged utilities from asgard alignment project 
-# it 14: added dm_distrub vector (nanobinded) default to zero. So we can add DM disturbance. Also prior send_dm_cmd and close_all seem to work fine  
-# it 15 . adding TT disturbance 
-# it 16 . Add change disturbance after 100 telemetry entries
-# it 17 : make disturb bigger! 
-# it 18 ; fresh reco calibrator
-it = 18
 
 # basis to add aberrations 
 basis =  util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
