@@ -26,11 +26,22 @@ def print_n_last_lines(s: str, n: int = 10):
 
 
 
-fig_path = "data/" #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
-data_path = "data/" #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
 dm_serial_number = "17DW019#122" # USYD ="17DW019#122",  ANU = "17DW019#053"
 
+# timestamp
 tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+
+it = 1
+
+fig_path = f'data/latency_{tstamp.split("T")[0]}/' #latency/FPS_4000" #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+data_path = f'data/latency_{tstamp.split("T")[0]}/'  #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data/' 
+
+
+if not os.path.exists(fig_path):
+   os.makedirs(fig_path)
+
+
 
 flat_dm_array = pd.read_csv(f'DMShapes/{dm_serial_number}_FLAT_MAP_COMMANDS.csv', header=None)[0].values
 
@@ -44,7 +55,9 @@ flat_dm_array = pd.read_csv(f'DMShapes/{dm_serial_number}_FLAT_MAP_COMMANDS.csv'
 #/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/data
 #reco_filename = reco_filename #ata_path + "RECONSTRUCTORS_Zernike70_DIT-0.002005_gain_medium_15-07-2024T14.47.50.fits"
 
-reco_filename = '/home/heimdallr/Documents/asgard-alignment/tmp/28-08-2024/RECONSTRUCTORS_set_latency_test_fps2000.0_dit0.000199967_DIT-0.0002_gain_high_28-08-2024T18.56.07.fits'
+reco_filename = '/home/heimdallr/Documents/asgard-alignment/tmp/04-09-2024/RECONSTRUCTORS_set_latency_test_fps4000.655737_dit0.000245534_DIT-0.000246_gain_high_04-09-2024T12.40.43.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/04-09-2024/RECONSTRUCTORS_set_latency_test_fps2000.0_dit0.000199967_DIT-0.0002_gain_high_04-09-2024T11.46.28.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/28-08-2024/RECONSTRUCTORS_set_latency_test_fps2000.0_dit0.000199967_DIT-0.0002_gain_high_28-08-2024T18.56.07.fits'
 #'/home/heimdallr/Documents/asgard-alignment/tmp/28-08-2024/RECONSTRUCTORS_set_latency_test_fps1500.12294_dit0.000501065_DIT-0.000501_gain_high_28-08-2024T16.16.02.fits'
 
 """
@@ -183,9 +196,9 @@ tel_modeErr = np.array([tt.mode_err for tt in t])
 tel_dmErr = np.array([tt.dm_cmd_err for tt in t])
 """
 
-r.enable_telemetry(1000)
+r.enable_telemetry(2000)
 # start a runner that calls latency function 
-runner = rtc.AsyncRunner(r, period = timedelta(microseconds=50))
+runner = rtc.AsyncRunner(r, period = timedelta(microseconds=100))
 runner.start()
 
 runner.pause()
@@ -199,30 +212,7 @@ tel_rawimg = np.array([tt.image_in_pupil for tt in t] )
 tel_reco = np.array([tt.dm_cmd_err for tt in t])
 
 
-
-print(tel_img.shape, tel_dmErr.shape )
-
-np.unravel_index( np.argmax( np.std( tel_rawimg ,axis =0 ).reshape(I0.shape)[38:60,20:40] ) + 1, I0.shape)
-
-# see which pixels poke corresponded too
-plt.figure() ; plt.imshow( np.std( tel_rawimg,axis=0).reshape(I0.shape)[5:,:] ); plt.savefig(fig_path + 'delme.png')
-
-i=0
-pixel_int = [np.mean( tel_rawimg[i].reshape(I0.shape)[39:47,29:33] ) for i in range(tel_rawimg.shape[0])] #[np.max( abs(tel_rawimg[i][5:].astype(float) - tel_rawimg[0][5:].astype(float)) )/1050 for i in range(tel_rawimg.shape[0])]
-i0,i1 = 100,200
-plt.figure() 
-plt.plot( pixel_int[i0:i1]/np.max( pixel_int[i0:i1] ) ,'.',label=f'DIT = {round(float(1e3*det_dit),2)}ms, FPS = {round(float(det_fps),1)}Hz')
-plt.plot( tel_reco.ravel()[i0:i1] ,label='DM poke state')
-#plt.title(f'DIT = {round(float(1e3*det_dit),3)}ms, fps = {det_fps}Hz ')
-plt.xlabel('Frames',fontsize=15)
-plt.ylabel('Normalized intensity',fontsize=15)
-plt.gca().tick_params(labelsize=15)
-plt.legend()
-
-plt.savefig(fig_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}.png',dpi=300)
-#plt.show() 
-
-
+# WRITE 
 
 
 det_dit = r.camera_settings.det_dit
@@ -252,7 +242,75 @@ latency_fits = fits.HDUList( [] )
 latency_fits.append( tele_img_fits )
 latency_fits.append( tele_dm_fits  )
 latency_fits.append( tele_ref_fits  )
-latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}.fits',overwrite=True )  
+latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.fits',overwrite=True )  
+
+
+# some analysis 
+
+
+print(tel_rawimg.shape, tel_reco.shape )
+
+np.unravel_index( np.argmax( np.std( tel_rawimg ,axis =0 ).reshape(I0.shape)[38:60,20:40] ) + 1, I0.shape)
+
+# see which pixels poke corresponded too
+plt.figure() ; plt.imshow( np.std( tel_rawimg,axis=0).reshape(I0.shape)[5:,:] ); plt.savefig(fig_path + 'delme.png')
+
+# honing in 
+plt.figure() ; plt.imshow( np.std( tel_rawimg,axis=0).reshape(I0.shape)[29:34,58:62] ); plt.savefig(fig_path + 'delme.png')
+
+i=0
+pixel_int = [np.mean( tel_rawimg[i].reshape(I0.shape)[29:34,58:62] ) for i in range(tel_rawimg.shape[0])] #[np.max( abs(tel_rawimg[i][5:].astype(float) - tel_rawimg[0][5:].astype(float)) )/1050 for i in range(tel_rawimg.shape[0])]
+i0,i1 = 900,1000 #100,200
+plt.figure() 
+plt.plot( pixel_int[i0:i1]/np.max( pixel_int[i0:i1] ) ,'.',label=f'DIT = {round(float(1e3*det_dit),2)}ms, FPS = {round(float(det_fps),1)}Hz')
+plt.plot( tel_reco.ravel()[i0:i1] ,label='DM poke state')
+#plt.title(f'DIT = {round(float(1e3*det_dit),3)}ms, fps = {det_fps}Hz ')
+plt.xlabel('Frames',fontsize=15)
+plt.ylabel('Normalized intensity',fontsize=15)
+plt.gca().tick_params(labelsize=15)
+plt.legend(bbox_to_anchor=(1,1))
+
+plt.savefig(fig_path + f'Latency_test_[{i0}-{i1}]_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
+#plt.show() 
+
+# look at histogram of how long 
+whe = np.where( np.diff(tel_reco.ravel()) > 0 )[0]
+plt.plot( whe, np.ones( len(whe) ), '.' )
+plt.plot( tel_reco.ravel() ,label='DM poke state')
+plt.show()
+
+
+where_state_change =  np.where( np.diff(tel_reco.ravel()) > 0 )[0] # change top to bottom 
+# check where we are looking
+plt.figure()
+plt.plot( tel_reco.ravel() ,label='DM poke state')
+plt.plot( where_state_change, np.ones( len(where_state_change) ), 'o',label='state change')
+plt.legend()
+plt.savefig(fig_path + f'Latency_test_state_change_DEF_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
+
+sas = 6 # how many samples to look at after state change
+after_state_change = {i:[] for i in range(sas)}
+for i in range( sas ):
+    for w in where_state_change:
+        after_state_change[i].append(pixel_int[w+i])
+
+
+fig,ax = plt.subplots( sas, 1 ,sharex=True,figsize=(5,10))
+for i, axx in enumerate(ax):
+    axx.hist( after_state_change[i] , label=f'adu {i} samples after state change')
+    axx.axvline( np.mean( after_state_change[i]  ), color='k')
+    #axx.set_title( np.mean( after_state_change[i]  ) )
+    axx.legend()
+ax[sas-1].set_xlabel('adu')
+plt.savefig(fig_path + f'Latency_test_hist_state_change_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
+#plt.show() 
+plt.close()
+
+
+plt.figure()
+plt.hist(on_adu  ); plt.hist( off_adu); plt.show()
+
+
 
 rtc.clear_telemetry()
 

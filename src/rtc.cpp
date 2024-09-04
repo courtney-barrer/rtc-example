@@ -1226,11 +1226,25 @@ struct RTC {
             if (j < image_vector[0]) {
 
                 j = image_vector[0];
+
+                // getting time stamps 
+                auto now = std::chrono::high_resolution_clock::now(); 
+                // Convert to a time point representing the time since epoch 
+                auto duration = now.time_since_epoch(); 
+                // Convert the duration to seconds as a floating-point number
+                double seconds = std::chrono::duration_cast<std::chrono::duration<double>>(duration).count(); 
+                // Store the timestamp in a single-element vector 
+                std::vector<double> timestamp_vector = { seconds };
+
+                // getting telemetry 
                 telem_entry entry;
                 //dm_span_flag[0] = (double)(k % 2) ;
                 dm_flag[0] = (double)(k % 2) ;
                 entry.image_in_pupil = std::move(result); // the corresponding image 
                 entry.dm_cmd_err = std::move(dm_flag); // if DM is push or flat 
+                
+                entry.mode_err = std::move(timestamp_vector); // put time here 
+
                 //cout << dm_flag[0] << endl;
 
                 append_telemetry(std::move(entry));
@@ -1278,16 +1292,16 @@ struct RTC {
     {
         os << "computing with " << (*this) << '\n';
 
-        //latency_test() ;
+        latency_test() ;
 
 
         // get image
-        uint16_t* raw_image = poll_last_image();
+        //uint16_t* raw_image = poll_last_image();
         // get current frame number and static init previous 
-        int32_t current_frame_number = static_cast<int32_t>(raw_image[0]);
-        static int32_t previous_frame_number = current_frame_number;
+        //int32_t current_frame_number = static_cast<int32_t>(raw_image[0]);
+        //static int32_t previous_frame_number = current_frame_number;
 
-        if (current_frame_number > previous_frame_number){
+        //if (current_frame_number > previous_frame_number){
             // Do some computation here...
             //cout << current_frame_number << endl;
             // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
@@ -1295,33 +1309,33 @@ struct RTC {
             // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
             // must match raw_image type unsigned int16.
             // update frame number
-            if (current_frame_number == 65535){
-                previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
-            }else{
-                previous_frame_number = current_frame_number;
-            }
+            // if (current_frame_number == 65535){
+            //     previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
+            // }else{
+            //     previous_frame_number = current_frame_number;
+            // }
 
-            std::vector<float> image_vector(camera_settings.full_image_length);
-            for (size_t i = 0; i < camera_settings.full_image_length; ++i) {
-               image_vector[i] = static_cast<float>(raw_image[i]);
-            }
+            // std::vector<float> image_vector(camera_settings.full_image_length);
+            // for (size_t i = 0; i < camera_settings.full_image_length; ++i) {
+            //    image_vector[i] = static_cast<float>(raw_image[i]);
+            // }
 
-            //send command to DM 
-            double *cmd_ptr = dm_flat.data();
-            BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+            // //send command to DM 
+            // double *cmd_ptr = dm_flat.data();
+            // BMCSetArray(&hdm, cmd_ptr, map_lut.data());
 
-            // add telemetry
-            if (telemetry_cnt > 0){
+            // // add telemetry
+            // if (telemetry_cnt > 0){
                
-                telem_entry entry;
+            //     telem_entry entry;
 
-                entry.image_in_pupil = std::move(image_vector); 
+            //     entry.image_in_pupil = std::move(image_vector); 
 
-                append_telemetry(std::move(entry));
+            //     append_telemetry(std::move(entry));
 
-                --telemetry_cnt;
-                cout << telemetry_cnt << endl;
-            }
+            //     --telemetry_cnt;
+            //     cout << telemetry_cnt << endl;
+            // }
     
 
             // Don't delete below
@@ -1385,7 +1399,7 @@ struct RTC {
             //     cout << telemetry_cnt << endl;
             //     }
             
-        }
+        //}
         
             
         //     // convert to vector

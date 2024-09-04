@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import time
 
 r = rtc.RTC() # <- use default constructor to set up camera etc 
-r.dm_flat = 0.5 * np.ones( 140 ) # or what ever you want. See DMShapes folder for calibrated flats 
+r.dm_flat = 0. * np.ones( 140 ) # or what ever you want. See DMShapes folder for calibrated flats 
 
 # set up camera  
 cam_settings_tmp = rtc.camera_settings_struct()
