@@ -196,6 +196,8 @@ tel_modeErr = np.array([tt.mode_err for tt in t])
 tel_dmErr = np.array([tt.dm_cmd_err for tt in t])
 """
 
+label = 'WITH_SHORTCABLE'
+
 r.enable_telemetry(2000)
 # start a runner that calls latency function 
 runner = rtc.AsyncRunner(r, period = timedelta(microseconds=100))
@@ -208,7 +210,7 @@ runner.stop()
 t = rtc.get_telemetry()
 tel_rawimg = np.array([tt.image_in_pupil for tt in t] )
 #tel_imgErr = np.array([tt.image_err_signal for tt in t])
-#tel_modeErr = np.array([tt.mode_err for tt in t])
+tel_time = np.array([tt.mode_err for tt in t])
 tel_reco = np.array([tt.dm_cmd_err for tt in t])
 
 
@@ -223,10 +225,14 @@ w = r.camera_settings.image_width
 
 tele_img_fits = fits.PrimaryHDU( tel_rawimg )
 tele_dm_fits = fits.PrimaryHDU( tel_reco.ravel() )
+tele_time_fits = fits.PrimaryHDU( tel_time.ravel() )
 tele_ref_fits = fits.PrimaryHDU( I0 ) # reference intensity
 tele_ref_fits.header.set('EXTNAME','ref')
 tele_ref_fits.header.set('what is?','reference intensity')
 
+
+tele_time_fits.header.set('what is?','timestamp')
+tele_time_fits.header.set('EXTNAME','TIME')
 
 tele_img_fits.header.set('what is?','images')
 tele_img_fits.header.set('rows',h)
@@ -242,7 +248,7 @@ latency_fits = fits.HDUList( [] )
 latency_fits.append( tele_img_fits )
 latency_fits.append( tele_dm_fits  )
 latency_fits.append( tele_ref_fits  )
-latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.fits',overwrite=True )  
+latency_fits.writeto( data_path + f'Latency_test_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_{label}.fits',overwrite=True )  
 
 
 # some analysis 
@@ -260,17 +266,17 @@ plt.figure() ; plt.imshow( np.std( tel_rawimg,axis=0).reshape(I0.shape)[29:34,58
 
 i=0
 pixel_int = [np.mean( tel_rawimg[i].reshape(I0.shape)[29:34,58:62] ) for i in range(tel_rawimg.shape[0])] #[np.max( abs(tel_rawimg[i][5:].astype(float) - tel_rawimg[0][5:].astype(float)) )/1050 for i in range(tel_rawimg.shape[0])]
-i0,i1 = 900,1000 #100,200
+i0,i1 = 100,1000 #100,200
 plt.figure() 
-plt.plot( pixel_int[i0:i1]/np.max( pixel_int[i0:i1] ) ,'.',label=f'DIT = {round(float(1e3*det_dit),2)}ms, FPS = {round(float(det_fps),1)}Hz')
-plt.plot( tel_reco.ravel()[i0:i1] ,label='DM poke state')
+plt.plot( tel_time.ravel()[i0:i1] , pixel_int[i0:i1]/np.max( pixel_int[i0:i1] ) ,'.',label=f'DIT = {round(float(1e3*det_dit),2)}ms, FPS = {round(float(det_fps),1)}Hz')
+plt.plot( tel_time.ravel()[i0:i1], tel_reco.ravel()[i0:i1] ,label='DM poke state')
 #plt.title(f'DIT = {round(float(1e3*det_dit),3)}ms, fps = {det_fps}Hz ')
 plt.xlabel('Frames',fontsize=15)
 plt.ylabel('Normalized intensity',fontsize=15)
 plt.gca().tick_params(labelsize=15)
 plt.legend(bbox_to_anchor=(1,1))
 
-plt.savefig(fig_path + f'Latency_test_[{i0}-{i1}]_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
+plt.savefig(fig_path + f'Latency_test_{label}_[{i0}-{i1}]_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
 #plt.show() 
 
 # look at histogram of how long 
@@ -286,7 +292,7 @@ plt.figure()
 plt.plot( tel_reco.ravel() ,label='DM poke state')
 plt.plot( where_state_change, np.ones( len(where_state_change) ), 'o',label='state change')
 plt.legend()
-plt.savefig(fig_path + f'Latency_test_state_change_DEF_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
+plt.savefig(fig_path + f'Latency_test_{label}_state_change_DEF_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
 
 sas = 6 # how many samples to look at after state change
 after_state_change = {i:[] for i in range(sas)}
@@ -302,7 +308,7 @@ for i, axx in enumerate(ax):
     #axx.set_title( np.mean( after_state_change[i]  ) )
     axx.legend()
 ax[sas-1].set_xlabel('adu')
-plt.savefig(fig_path + f'Latency_test_hist_state_change_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
+plt.savefig(fig_path + f'Latency_test_{label}_hist_state_change_fps-{round(det_fps)}_DIT-{round(float(1e3*det_dit),3)}ms_gain_{det_gain}_{tstamp}_v2.png',dpi=300)
 #plt.show() 
 plt.close()
 
