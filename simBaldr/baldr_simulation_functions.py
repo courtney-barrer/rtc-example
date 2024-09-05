@@ -1027,6 +1027,7 @@ class ZWFS():
         # same for when focal plane mask dot is out 
         self.FPM_off.sample_phase_shift_region( nx_pix=self.mode['phasemask']['nx_size_focal_plane'], dx=self.mode['phasemask']['phasemask_diameter']/self.mode['phasemask']['N_samples_across_phase_shift_region'], wvl_2_count_res_elements = np.mean(self.wvls), verbose=True)
     
+        self.dm_shapes = {} # to hold calibrated dm shapes
         
     def setup_control_parameters( self, calibration_source_config_dict, N_controlled_modes, modal_basis='zernike', pokeAmp = 50e-9 , label='control_1', replace_nan_with=None,without_piston=True):
         # EDIT: 

@@ -121,9 +121,10 @@ calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
 lab = 'test_zernike'
 z = copy.deepcopy( zwfs )
 z.dm.update_shape( np.zeros( z.dm.N_act ) )
-z.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=20, \
-                                  modal_basis='zernike', pokeAmp = 150e-9 , label=lab, replace_nan_with=0, without_piston=True)
+z.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=144, \
+                                  modal_basis='zonal', pokeAmp = 50e-9 , label=lab, replace_nan_with=0, without_piston=True)
 
+    
 #%% TESTING TIP/TILT PROJECTION 
 
 pokeamp = z.control_variables[lab ]['pokeAmp']

@@ -131,7 +131,7 @@ phasemask_config['off-axis phasemask depth'] = 4.122526315789484e-05
 phasemask_config['phasemask_diameter'] = 1.3 * (phasemask_config['fratio'] * 1.65e-6)
 
 # trying to understand I0 measured in sydney 
-phasemask_config['on-axis_transparency'] = 0.1 
+phasemask_config['on-axis_transparency'] = 1
 
 #---------------------
 
@@ -228,7 +228,17 @@ IM = np.array(z.control_variables[lab ]['IM'] )
 I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
 N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
 
-plt.imshow( I0 )
+plt.subplots( 1,2 ,figsize=(10,5))
+
+im_list= [ I0/np.max(N0), N0/np.max(N0) ]
+xlabel_list = ['','']
+ylabel_list = ['','']
+title_list = [r'$I_0$',r'$N_0$']
+cbar_label_list = ['normalized intensity', 'normalized intensity']
+nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+
+
+
 
 #%%
 
@@ -318,15 +328,245 @@ ax[1].set_ylabel(f'real modal residual')
 ax[2].plot( strehl_list )
 ax[2].set_ylabel(f'Strehl Ratio at {round(1e6*wvl_ref,2)}um')
 ax[2].set_xlabel('iterations')
-plt.savefig( 'data/delme.png' )
+#plt.savefig( 'data/delme.png' )
 
+
+#%% Testing zonal basis and different mask diameters 
 
 
  
 
+# setting up the hardware and software modes of our ZWFS
+tel_config =  config.init_telescope_config_dict(use_default_values = True)
+phasemask_config = config.init_phasemask_config_dict(use_default_values = True) 
+
+# -------- trialling this 
+phasemask_config['on-axis phasemask depth'] = 4.210526315789474e-05
+phasemask_config['off-axis phasemask depth'] = 4.122526315789484e-05
+
+# trying to understand I0 measured in sydney 
+phasemask_config['on-axis_transparency'] = 1
 
 
 
+phasemask_config_1 = phasemask_config.copy()
+phasemask_config_2 = phasemask_config.copy()
+
+phasemask_config_1['phasemask_diameter'] = 1.06 * (phasemask_config['fratio'] * 1.65e-6)
+phasemask_config_2['phasemask_diameter'] = 1.3 * (phasemask_config['fratio'] * 1.65e-6)
+
+
+#---------------------
+
+#DM_config_square = config.init_DM_config_dict(use_default_values = True) 
+DM_config_bmc = config.init_DM_config_dict(use_default_values = True) 
+DM_config_bmc['DM_model'] = 'BMC-multi3.5' #'square_12'
+#DM_config_square['DM_model'] = 'square_12'#'square_12'
+
+# default is 'BMC-multi3.5'
+detector_config = config.init_detector_config_dict(use_default_values = True)
+
+
+# the only thing we need to be compatible is the pupil geometry and Npix, Dpix 
+tel_config['pup_geometry'] = 'disk'
+
+# define a hardware mode for the ZWFS 
+mode_dict_small = config.create_mode_config_dict( tel_config, phasemask_config_1, DM_config_bmc, detector_config)
+mode_dict_big = config.create_mode_config_dict( tel_config, phasemask_config_2, DM_config_bmc, detector_config)
+
+#create our zwfs object with square DM
+zwfs_1 = baldrSim.ZWFS(mode_dict_small)
+# now create another one with the BMC DM 
+zwfs_2 = baldrSim.ZWFS(mode_dict_big)
+
+
+#---------------------
+# define an internal calibration source 
+calibration_source_config_dict = config.init_calibration_source_config_dict(use_default_values = True)
+calibration_source_config_dict['temperature']=1900 #K (Thorlabs SLS202L/M - Stabilized Tungsten Fiber-Coupled IR Light Source )
+calibration_source_config_dict['calsource_pup_geometry'] = 'Disk'
+
+nbasismodes = 20
+basis_labels = [ 'zonal' ] #'zernike','fourier'] #, 'KL']
+control_labels = ['zonal'] #[f'control_{nbasismodes}_{b}_modes' for b in basis_labels]
+
+for b,lab in zip( basis_labels, control_labels):
+    # small phase mask : reduc ed poke amp 150 ->100nm for zonal method  
+    zwfs_1.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, \
+                                  modal_basis=b, pokeAmp = 100e-9 , label=lab, replace_nan_with=0, without_piston=True)
+    # big phase mask : reduc ed poke amp 150 ->100nm for zonal method 
+    zwfs_2.setup_control_parameters(  calibration_source_config_dict, N_controlled_modes=nbasismodes, \
+                                      modal_basis=b, pokeAmp = 100e-9 , label=lab,replace_nan_with=0, without_piston=True)
+
+
+
+
+
+
+
+
+# grad = waffle * M2C @ < I_+ - I_- >
+
+# how to deal with non-registered actuators? nearest neighbour interpolation 
+
+for z in [zwfs_1, zwfs_2]:
+#z = copy.deepcopy( zwfs ) #copy.deepcopy( zwfs) 
+
+    
+    LoD = z.mode['phasemask']['phasemask_diameter'] /( z.mode['phasemask']['fratio'] * 1.65e-6 )
+    lab =  control_labels[0] #'control_20_zernike_modes' #'control_20_zernike_modes' # 'control_20_fourier_modes'
+    control_basis =  np.array(z.control_variables[lab ]['control_basis'])
+    M2C = z.control_variables[lab ]['pokeAmp'] *  control_basis.T #.reshape(control_basis.shape[0],control_basis.shape[1]*control_basis.shape[2]).T
+    I2M = np.array( z.control_variables[lab ]['I2M'] ).T  
+    IM = np.array(z.control_variables[lab ]['IM'] )
+    I0 = np.array(z.control_variables[lab ]['sig_on_ref'].signal )
+    N0 = np.array(z.control_variables[lab ]['sig_off_ref'].signal )
+    
+    
+    im_list= [ I0/np.max(N0), N0/np.max(N0) ]
+    xlabel_list = ['','']
+    ylabel_list = ['','']
+    title_list = [r'$I_0\ \ (\lambda/D=$'+f'{LoD})',r'$N_0$']
+    cbar_label_list = ['normalized intensity', 'normalized intensity']
+    nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+    
+    
+    
+    
+
+def get_tip_tilt_vectors( dm_model='bmc_multi3.5',nact_len=12):
+    tip = np.array([[n for n in np.linspace(-1,1,nact_len)] for _ in range(nact_len)])
+    tilt = tip.T
+    if dm_model == 'bmc_multi3.5':
+        # Define the indices of the corners to be removed
+        corners = [(0, 0), (0, nact_len-1), (nact_len-1, 0), (nact_len-1, nact_len-1)]
+        # Convert 2D corner indices to 1D
+        corner_indices = [i * 12 + j for i, j in corners]
+
+        # remove corners
+        tip_tilt_list = []
+        for i,B in enumerate([tip,tilt]):
+            B = B.reshape(-1)
+            B[corner_indices] = np.nan
+            tip_tilt_list.append( B[np.isfinite(B)] )
+        
+        tip_tilt = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in tip_tilt_list] ).T
+
+    else:
+        tip_tilt = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in [tip.reshape(-1),tilt.reshape(-1)]] ).T
+
+    return( tip_tilt ) 
+
+
+def project_matrix( CM , projection_vector_list ):
+    """
+    create two new matrices CM_TT, and CM_HO from CM, 
+    where CM_TT projects any "Img" onto the column space of vectors in 
+    projection_vector_list  vectors, 
+    and CM_HO which projects any "Img" to the null space of CM_TT that is within CM.
+    
+    Typical use is to seperate control matrix to tip/tilt reconstructor (CM_TT) and
+    higher order reconstructor (CM_HO)
+
+    Note vectors in projection_vector_list  must be 
+    
+    Parameters
+    ----------
+    CM : TYPE matrix
+        DESCRIPTION. 
+    projection_vector_list : list of vectors that are in col space of CM
+        DESCRIPTION.
+
+    Returns
+    -------
+    CM_TT , CM_HO
+
+    """
+
+    # Step 1: Create the matrix T from projection_vector_list (e.g. tip and tilt vectors )
+    projection_vector_list
+    T = np.column_stack( projection_vector_list )  # T is Mx2
+    
+    # Step 2: Calculate the projection matrix P
+    #P = T @ np.linalg.inv(T.T @ T) @ T.T  # P is MxM <- also works like this 
+    # Step 2: Compute SVD of T
+    U, S, Vt = np.linalg.svd(T, full_matrices=False)
+    
+    # Step 2.1: Compute the projection matrix P using SVD
+    P = U @ U.T  # U @ U.T gives the projection matrix onto the column space of T
+    
+    # Step 3: Compute CM_TT (projection onto tip and tilt space)
+    CM_TT = P @ CM  # CM_TT is MxN
+    
+    # Step 4: Compute the null space projection matrix and CM_HO
+    I = np.eye(T.shape[0])  # Identity matrix of size MxM
+    CM_HO = (I - P) @ CM  # CM_HO is MxN
+
+    return( CM_TT , CM_HO )
+
+
+
+test_field = baldrSim.init_a_field( Hmag=0, mode=0, wvls=zwfs.wvls, pup_geometry='disk', D_pix=z.mode['telescope']['pupil_nx_pixels'], dx=z.mode['telescope']['telescope_diameter']/z.mode['telescope']['pupil_nx_pixels'])
+# basis 
+b = baldrSim.create_control_basis(z.dm, N_controlled_modes = 50, basis_modes = 'fourier')
+
+#pup_filt = baldrSim.get_BMCmulti35_DM_command_in_2D( np.var( IM ,axis =1 ) )>1e-8
+
+# DM pupil 
+
+tip, tilt  = get_tip_tilt_vectors( dm_model='bmc_multi3.5',nact_len=12).T
+
+R_TT, R_HO = project_matrix( IM , [tip, tilt] )
+
+mode = b[3] * 150e-9 #tip * 100e-9 # b[0] * 100e-9 
+z.dm.update_shape( mode   )
+
+i = z.detection_chain( test_field, FPM_on=True, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+o = z.detection_chain( test_field, FPM_on=False, include_shotnoise=True, ph_per_s_per_m2_per_nm=True, grids_aligned=True, replace_nan_with=0 )
+
+sig = i.signal / np.sum( o.signal ) - I0 / np.sum( N0 )
+
+plt.figure() 
+plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( R_HO @ sig.reshape(-1)) ); plt.colorbar()
+
+
+
+for i in [5,10,20,30,50,80]:
+    U, S , Vt = np.linalg.svd( R_HO ,full_matrices=False)
+    
+    S[i:] = 1e-20
+    #S[0] = 0 
+    R_HOf = (U * S) @ Vt
+    
+    
+    gain = 0.1
+    
+    im_list= [ baldrSim.get_BMCmulti35_DM_command_in_2D( mode ), baldrSim.get_BMCmulti35_DM_command_in_2D( np.linalg.pinv( I2M ).T @ sig.reshape(-1) ) ,   baldrSim.get_BMCmulti35_DM_command_in_2D( gain * R_HOf @ sig.reshape(-1)), baldrSim.get_BMCmulti35_DM_command_in_2D(mode  -  gain * R_HOf @ sig.reshape(-1))  ]
+    xlabel_list = ['' for _ in range(len(im_list))]
+    ylabel_list = ['' for _ in range(len(im_list))]
+    title_list = ['input aberration', 'full reco.', 'HO reconstruction', 'residual']
+    cbar_label_list = ['DM command', 'DM command', 'DM command', 'DM command']
+    nice_heatmap_subplots(im_list , xlabel_list, ylabel_list, title_list,cbar_label_list, fontsize=15, cbar_orientation = 'bottom', axis_off=True, vlims=None, savefig=None)
+    
+    
+    #fig,ax = plt.subplots(1,2)
+    #ax[0].imshow( );
+    #ax[1].imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( mode ));
+    
+# Do this minimization within pupil     
+plt.plot( np.linspace(-1, 1, 10), [np.sum( pup_filt[np.isfinite( pup_filt * baldrSim.get_BMCmulti35_DM_command_in_2D( mode ) )] * (mode  -  gain * R_HOf @ sig.reshape(-1))**2 ) for gain in np.linspace(-1, 1, 10)] )
+
+
+
+
+
+#plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( U.T[10]) )
+#plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( U.T[-7]) )
+
+
+plt.imshow( baldrSim.get_BMCmulti35_DM_command_in_2D( np.linalg.pinv( I2M ).T @ sig.reshape(-1) ) )
+
+#%%
 
 #%% BUG FIXING 
 
