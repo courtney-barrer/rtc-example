@@ -6,7 +6,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import datetime
 import time 
 from astropy.io import fits 
+import pandas as pd
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
 from scipy import ndimage
+import scipy.ndimage as ndimage
+from scipy.spatial import distance
 from scipy import signal
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import distance_transform_edt
@@ -250,6 +255,29 @@ def construct_command_basis( basis='Zernike_pinned_edges', number_of_modes = 20,
     return(M2C)
 
 
+def get_tip_tilt_vectors( dm_model='bmc_multi3.5',nact_len=12):
+    tip = np.array([[n for n in np.linspace(-1,1,nact_len)] for _ in range(nact_len)])
+    tilt = tip.T
+    if dm_model == 'bmc_multi3.5':
+        # Define the indices of the corners to be removed
+        corners = [(0, 0), (0, nact_len-1), (nact_len-1, 0), (nact_len-1, nact_len-1)]
+        # Convert 2D corner indices to 1D
+        corner_indices = [i * 12 + j for i, j in corners]
+
+        # remove corners
+        tip_tilt_list = []
+        for i,B in enumerate([tip,tilt]):
+            B = B.reshape(-1)
+            B[corner_indices] = np.nan
+            tip_tilt_list.append( B[np.isfinite(B)] )
+        
+        tip_tilt = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in tip_tilt_list] ).T
+
+    else:
+        tip_tilt = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in [tip.reshape(-1),tilt.reshape(-1)]] ).T
+
+    return( tip_tilt ) 
+
 
 def fourier_vector(n, m, P = 2*12, Nx = 12, Ny = 12):
     """
@@ -399,7 +427,327 @@ def pin_outer_actuators_to_inner_diameter(inner_command):
 
     return command_140_flat.tolist()
 
+def pin_to_nearest_registered_with_missing_corners(dm_shape, missing_corners, registered_indices):
+    """
+    Pins non-registered actuators to the closest registered actuator, excluding missing corners.
 
+    Parameters:
+    - dm_shape: Tuple (rows, cols) representing the DM grid, e.g., (12, 12).
+    - missing_corners: List of indices (in the flattened array) of missing corners.
+    - registered_indices: 1D array of indices corresponding to actuators with registered values.
+
+    Returns:
+    - basis: 2D array (dm_shape[0] * dm_shape[1] - len(missing_corners), len(registered_indices))
+             where each non-registered actuator is pinned to its closest registered actuator.
+    """
+    # Create the full DM grid with flattened indices
+    flattened_size = dm_shape[0] * dm_shape[1]
+    
+    # Generate 2D coordinates for each point on the grid
+    grid_coords = np.array(np.unravel_index(np.arange(flattened_size), dm_shape)).T
+    
+    # Remove missing corners from the grid and flatten the remaining actuators
+    valid_indices = np.setdiff1d(np.arange(flattened_size), missing_corners)
+    valid_coords = grid_coords[valid_indices]
+
+    # Extract coordinates of the registered actuators
+    registered_coords = grid_coords[registered_indices]
+    
+    # Initialize the basis matrix for valid actuators
+    basis = np.zeros((len(valid_indices), len(registered_indices)))
+    
+    # For each valid actuator, find the closest registered actuator
+    for idx, valid_idx in enumerate(valid_indices):
+        if valid_idx in registered_indices:
+            # If the actuator is registered, set its basis vector to be identity
+            basis[idx, registered_indices == valid_idx] = 1.0
+        else:
+            # If the actuator is not registered, pin it to the nearest registered actuator
+            distances = distance.cdist([grid_coords[valid_idx]], registered_coords)
+            nearest_idx = np.argmin(distances)
+            # Pin to the nearest registered actuator
+            basis[idx, nearest_idx] = 1.0
+    
+    #<m|m>=1
+    basis_norm = np.array( [b/np.sum(b**2)**0.5 for b in basis.T] ).T
+    
+    
+    return basis_norm
+
+
+def get_theoretical_reference_pupils( wavelength = 1.65e-6 ,F_number = 21.2, mask_diam = 1.2, diameter_in_angular_units = True, get_individual_terms=False, phaseshift = np.pi/2 , padding_factor = 4, debug= True, analytic_solution = True ) :
+    """
+    get theoretical reference pupil intensities of ZWFS with / without phasemask 
+    
+
+    Parameters
+    ----------
+    wavelength : TYPE, optional
+        DESCRIPTION. input wavelength The default is 1.65e-6.
+    F_number : TYPE, optional
+        DESCRIPTION. The default is 21.2.
+    mask_diam : phase dot diameter. TYPE, optional
+            if diameter_in_angular_units=True than this has diffraction limit units ( 1.22 * f * lambda/D )
+            if  diameter_in_angular_units=False than this has physical units (m) determined by F_number and wavelength
+        DESCRIPTION. The default is 1.2.
+    diameter_in_angular_units : TYPE, optional
+        DESCRIPTION. The default is True.
+    get_individual_terms : Type optional
+        DESCRIPTION : if false (default) with jsut return intensity, otherwise return P^2, abs(M)^2 , phi + mu
+    phaseshift : TYPE, optional
+        DESCRIPTION. phase phase shift imparted on input field (radians). The default is np.pi/2.
+    padding_factor : pad to change the resolution in image plane. TYPE, optional
+        DESCRIPTION. The default is 4.
+    debug : TYPE, optional
+        DESCRIPTION. Do we want to plot some things? The default is True.
+    analytic_solution: TYPE, optional
+        DESCRIPTION. use analytic formula or calculate numerically? The default is True.
+    Returns
+    -------
+    Ic, reference pupil intensity with phasemask in 
+    P, reference pupil intensity with phasemask out 
+
+    """
+    pupil_radius = 1  # Pupil radius in meters
+
+    # Define the grid in the pupil plane
+    N = 2**9 + 1 #256  # Number of grid points (assumed to be square)
+    L_pupil = 2 * pupil_radius  # Pupil plane size (physical dimension)
+    dx_pupil = L_pupil / N  # Sampling interval in the pupil plane
+    x_pupil = np.linspace(-L_pupil/2, L_pupil/2, N)   # Pupil plane coordinates
+    y_pupil = np.linspace(-L_pupil/2, L_pupil/2, N) 
+    X_pupil, Y_pupil = np.meshgrid(x_pupil, y_pupil)
+    
+    
+
+
+    # Define a circular pupil function
+    pupil = np.sqrt(X_pupil**2 + Y_pupil**2) <= pupil_radius
+
+    # Zero padding to increase resolution
+    # Increase the array size by padding (e.g., 4x original size)
+    N_padded = N * padding_factor
+    pupil_padded = np.zeros((N_padded, N_padded))
+    start_idx = (N_padded - N) // 2
+    pupil_padded[start_idx:start_idx+N, start_idx:start_idx+N] = pupil
+
+    # Perform the Fourier transform on the padded array (normalizing for the FFT)
+    pupil_ft = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(pupil_padded)))
+    
+    # Compute the Airy disk scaling factor (1.22 * λ * F)
+    airy_scale = 1.22 * wavelength * F_number
+
+    # Image plane sampling interval (adjusted for padding)
+    L_image = wavelength * F_number / dx_pupil  # Total size in the image plane
+    dx_image_padded = L_image / N_padded  # Sampling interval in the image plane with padding
+    
+    if diameter_in_angular_units:
+        x_image_padded = np.linspace(-L_image/2, L_image/2, N_padded) / airy_scale  # Image plane coordinates in Airy units
+        y_image_padded = np.linspace(-L_image/2, L_image/2, N_padded) / airy_scale
+    else:
+        x_image_padded = np.linspace(-L_image/2, L_image/2, N_padded)  # Image plane coordinates in Airy units
+        y_image_padded = np.linspace(-L_image/2, L_image/2, N_padded) 
+        
+    X_image_padded, Y_image_padded = np.meshgrid(x_image_padded, y_image_padded)
+
+    if diameter_in_angular_units:
+        mask = np.sqrt(X_image_padded**2 + Y_image_padded**2) <= mask_diam / 4
+    else: 
+        mask = np.sqrt(X_image_padded**2 + Y_image_padded**2) <= mask_diam / 4
+        
+    psi_B = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(pupil_padded)) )
+                            
+    b = np.fft.fftshift( np.fft.ifft2( mask * psi_B ) ) 
+
+    
+    if debug: 
+        
+        psf = np.abs(pupil_ft)**2  # Get the PSF by taking the square of the absolute value
+        psf /= np.max(psf)  # Normalize PSF intensity
+        
+        if diameter_in_angular_units:
+            zoom_range = 3  # Number of Airy disk radii to zoom in on
+        else:
+            zoom_range = 3 * airy_scale 
+            
+        extent = (-zoom_range, zoom_range, -zoom_range, zoom_range)
+
+        fig,ax = plt.subplots(1,1)
+        ax.imshow(psf, extent=(x_image_padded.min(), x_image_padded.max(), y_image_padded.min(), y_image_padded.max()), cmap='gray')
+        ax.contour(X_image_padded, Y_image_padded, mask, levels=[0.5], colors='red', linewidths=2, label='phasemask')
+        #ax[1].imshow( mask, extent=(x_image_padded.min(), x_image_padded.max(), y_image_padded.min(), y_image_padded.max()), cmap='gray')
+        #for axx in ax.reshape(-1):
+        #    axx.set_xlim(-zoom_range, zoom_range)
+        #    axx.set_ylim(-zoom_range, zoom_range)
+        ax.set_xlim(-zoom_range, zoom_range)
+        ax.set_ylim(-zoom_range, zoom_range)
+        ax.set_title( 'PSF' )
+        ax.legend() 
+        #ax[1].set_title('phasemask')
+
+
+    
+    # if considering complex b 
+    # beta = np.angle(b) # complex argunment of b 
+    # M = b * (np.exp(1J*theta)-1)**0.5
+    
+    # relabelling
+    theta = phaseshift # rad , 
+    P = pupil_padded.copy() 
+    
+    if analytic_solution :
+        
+        M = abs( b ) * np.sqrt((np.cos(theta)-1)**2 + np.sin(theta)**2)
+        mu = np.angle((np.exp(1J*theta)-1) ) # np.arctan( np.sin(theta)/(np.cos(theta)-1) ) #
+        
+        phi = np.zeros( P.shape ) # added aberrations 
+        
+        # out formula ----------
+        #if measured_pupil!=None:
+        #    P = measured_pupil / np.mean( P[P > np.mean(P)] ) # normalize by average value in Pupil
+        
+        Ic = ( P**2 + abs(M)**2 + 2* P* abs(M) * np.cos(phi + mu) ) #+ beta)
+        if not get_individual_terms:
+            return( P, Ic )
+        else:
+            return( P, abs(M) , phi+mu )
+    else:
+        
+        # phasemask filter 
+        
+        T_on = 1
+        T_off = 1
+        H = T_off*(1 + (T_on/T_off * np.exp(1j * theta) - 1) * mask  ) 
+        
+        Ic = abs( np.fft.fftshift( np.fft.ifft2( H * psi_B ) ) ) **2 
+    
+        return( P, Ic)
+
+
+def interpolate_pupil_to_measurement(original_pupil, original_image, M, N, m, n, x_c, y_c, new_radius):
+    """
+    Interpolate the pupil onto a new grid, centering the original pupil at (x_c, y_c) 
+    and giving it a specified radius in the new grid.
+    
+    Parameters:
+    - pupil: Original MxN pupil array.
+    - original_image: original image (i.e intensity with phasemask in) corresponding to the pupil (phasemask out)
+    - M, N: Size of the original grid.
+    - n, m: Size of the new grid.
+    - x_c, y_c: Center of the pupil in the new grid (in pixels).
+    - new_radius: The desired radius of the pupil in the new grid (in pixels).
+    
+    Returns:
+    - new_pupil: The pupil interpolated onto the new grid (nxm).
+    """
+    # Original grid coordinates (centered at the middle)
+    x_orig = np.linspace(-M/2, M/2, M)
+    y_orig = np.linspace(-N/2, N/2, N)
+    #X_orig, Y_orig = np.meshgrid(x_orig, y_orig)
+    
+    # Create the new grid coordinates (centered)
+    x_new = np.linspace(-m/2, m/2, m)  # New grid should also be centered
+    y_new = np.linspace(-n/2, n/2, n)
+    X_new, Y_new = np.meshgrid(x_new, y_new)
+
+    # Find the actual radius of the original pupil in terms of grid size (not M/2)
+    orig_radius = np.sum( original_pupil/np.pi )**0.5 #np.sqrt((X_orig**2 + Y_orig**2).max())
+
+    # Map new grid coordinates to the original grid
+    scale_factor = new_radius / orig_radius  # Correct scaling factor based on actual original radius
+    X_new_mapped = (X_new - x_c + m/2) / scale_factor + M/2
+    Y_new_mapped = (Y_new - y_c + n/2) / scale_factor + N/2
+
+    # Perform interpolation using map_coordinates
+    new_pupil = ndimage.map_coordinates(original_image, [Y_new_mapped.ravel(), X_new_mapped.ravel()], order=1, mode='constant', cval=0)
+    
+    # Reshape the interpolated result to the new grid size
+    new_pupil = new_pupil.reshape(n, m)
+
+    return new_pupil
+
+
+# Planck's law function for spectral radiance
+def planck_law(wavelength, T):
+    """Returns spectral radiance (Planck's law) at a given wavelength and temperature."""
+    h = 6.62607015e-34
+    c = 299792458.0
+    k = 1.380649e-23
+    return (2 * h * c**2) / (wavelength**5) / (np.exp(h * c / (wavelength * k * T)) - 1)
+
+# Function to find the weighted average wavelength (central wavelength)
+def find_central_wavelength(lambda_cut_on, lambda_cut_off, T):
+    # Define integrands for energy and weighted wavelength
+    def _integrand_energy(wavelength):
+        return planck_law(wavelength, T)
+
+    def _integrand_weighted(wavelength):
+        return planck_law(wavelength, T) * wavelength
+
+    # Integrate to find total energy and weighted energy
+    total_energy, _ = quad(_integrand_energy, lambda_cut_on, lambda_cut_off)
+    weighted_energy, _ = quad(_integrand_weighted, lambda_cut_on, lambda_cut_off)
+    
+    # Calculate the central wavelength as the weighted average wavelength
+    central_wavelength = weighted_energy / total_energy
+    return central_wavelength
+
+
+def get_phasemask_phaseshift( wvl, depth, dot_material = 'N_1405' ):
+    """
+    wvl is wavelength in micrometers
+    depth is the physical depth of the phasemask in micrometers
+    dot material is the material of phaseshifting object
+
+    it is assumed phasemask is in air (n=1).
+    N_1405 is photoresist used for making phasedots in Sydney
+    """
+    print( 'reminder wvl input should be um!')
+    if dot_material == 'N_1405':
+        # wavelengths in csv file are in nanometers
+        df = pd.read_csv('Exposed_Ma-N_1405_optical_constants.txt', sep='\s+', header=1)
+        f = interp1d(df['Wavelength(nm)'], df['n'], kind='linear',fill_value=np.nan, bounds_error=False)
+        n = f( wvl * 1e3 ) # convert input wavelength um - > nm
+        phaseshift = 2 * np.pi/ wvl  * depth * (n -1)
+        return( phaseshift )
+    
+    else:
+        raise TypeError('No corresponding dot material for given input. Try N_1405.')
+
+
+def square_spiral_scan(starting_point, step_size, search_radius):
+    """
+    Generates a square spiral scan pattern starting from the initial point within a given search radius and step size.
+    
+    Parameters:
+    starting_point (tuple): The initial (x, y) point to start the spiral.
+    step_size (float): The size of each step in the grid.
+    search_radius (float): The maximum radius to scan in both x and y directions.
+
+    Returns:
+    list: A list of tuples where each tuple contains (x_amp, y_amp), the left/right and up/down amplitudes for the scan.
+    """
+    x, y = starting_point  # Start at the given initial point
+    dx, dy = step_size, 0  # Initial movement to the right
+    scan_points = [(x, y)]
+    steps_taken = 0  # Counter for steps taken in the current direction
+    step_limit = 1  # Initial number of steps in each direction
+
+    while max(abs(x - starting_point[0]), abs(y - starting_point[1])) <= search_radius:
+        for _ in range(2):  # Repeat twice: once for horizontal, once for vertical movement
+            for _ in range(step_limit):
+                x, y = x + dx, y + dy
+                if max(abs(x - starting_point[0]), abs(y - starting_point[1])) > search_radius:
+                    return scan_points
+                scan_points.append((x, y))
+            
+            # Rotate direction (right -> up -> left -> down)
+            dx, dy = -dy, dx
+
+        # Increase step limit after a complete cycle (right, up, left, down)
+        step_limit += 1
+
+    return scan_points
 
 
 def spiral_search_TT_coefficients( dr, dtheta, aoi_tp, aoi_tt, num_points, r0=0, theta0=0):
@@ -615,7 +963,7 @@ def get_reference_images(zwfs, phasemask, theta_degrees=11.8, number_of_frames=2
 
     for a in range(n) :
         ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
-        im1 = ax1.imshow(  im_list[a] , vmin = np.min(im_list[-1]), vmax = np.max(im_list[-1]))
+        im1 = ax1.imshow(  im_list[a] , vmin =  np.min(im_list[-1]), vmax = np.max([np.max(im_list[-1]), np.max(im_list[0])]) )
 
 
         ax1.set_title( title_list[a] ,fontsize=fs)
@@ -664,7 +1012,7 @@ def get_reference_images(zwfs, phasemask, theta_degrees=11.8, number_of_frames=2
     return(I0, N0)
         
 
-def shape_dm_manually(zwfs, compass = True , initial_cmd = None ,number_of_frames=100, apply_manual_reduction=True, theta_degrees=11.8, savefig=None):
+def shape_dm_manually(zwfs, compass = True , initial_cmd = None ,number_of_frames=5, apply_manual_reduction=True, theta_degrees=11.8, flip_dm=True, savefig=None):
     if initial_cmd == None:
         cmd =  zwfs.dm_shapes['flat_dm'].copy()
     else:
@@ -724,11 +1072,15 @@ def shape_dm_manually(zwfs, compass = True , initial_cmd = None ,number_of_frame
                     new_img = np.mean(zwfs.get_some_frames(number_of_frames = number_of_frames, apply_manual_reduction = apply_manual_reduction ) , axis=0 )
 
                     # plotting results
-                    im_list = [new_img , initial_img ]
-                    xlabel_list = [None, None]
-                    ylabel_list = [None, None]
-                    title_list = [r'current image', r'initial image']
-                    cbar_label_list = ['Intensity (Normalized)', 'Intensity (Normalized)'] 
+                    if flip_dm:
+                        cmd2plot = np.flipud( get_DM_command_in_2D( cmd ) )
+                    else:
+                        cmd2plot = get_DM_command_in_2D( cmd )  
+                    im_list = [cmd2plot ,new_img , initial_img ]
+                    xlabel_list = [None, None, None]
+                    ylabel_list = [None, None, None]
+                    title_list = ['current DM\ncommand',r'current image', r'initial image']
+                    cbar_label_list = ['DM units','Intensity (Normalized)', 'Intensity (Normalized)'] 
                     #fig_path + 'delme.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
 
                     n = len(im_list)
@@ -737,8 +1089,22 @@ def shape_dm_manually(zwfs, compass = True , initial_cmd = None ,number_of_frame
 
                     for a in range(n) :
                         ax1 = fig.add_subplot(int(f'1{n}{a+1}'))
-                        im1 = ax1.imshow(  im_list[a] , vmin = np.min(im_list[-1]), vmax = np.max(im_list[-1]))
-
+                        if a != 0:
+                            im1 = ax1.imshow(  im_list[a] , vmin = np.min(im_list[-1]), vmax = np.max(im_list[-1]))
+                        else: # DM command
+                            im1 = ax1.imshow(  im_list[a]  )
+                            n_rows, n_cols = im_list[a].shape
+                            #Annotate each square with the flattened index
+                            for i in range(n_rows):
+                               for j in range(n_cols):
+                                    # Calculate the flattened index
+                                    
+                                    if flip_dm:
+                                        flattened_index = (n_rows - 1 - i) * n_cols + j
+                                    else:
+                                        flattened_index = i * n_cols + j    
+                                    # Add the flattened index as text in the plot. make index between 1-140 so add 1
+                                    ax1.text(j, i, f'{flattened_index}', va='center', ha='center', color='white')
 
                         ax1.set_title( title_list[a] ,fontsize=fs)
                         ax1.set_xlabel( xlabel_list[a] ,fontsize=fs) 
@@ -753,7 +1119,7 @@ def shape_dm_manually(zwfs, compass = True , initial_cmd = None ,number_of_frame
                         cbar.set_label( cbar_label_list[a], rotation=0,fontsize=fs)
                         cbar.ax.tick_params(labelsize=fs)
 
-                        if (a==0) & compass:
+                        if (a==1) & compass:
                             # Convert theta from degrees to radians
                             theta = np.radians(theta_degrees)
                             
@@ -931,16 +1297,28 @@ def nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list,cbar_l
 
     #plt.show() 
 
-def nice_DM_plot( data, savefig=None ): #for a 140 actuator BMC 3.5 DM
+def nice_DM_plot( data, savefig=None , include_actuator_number = True): #for a 140 actuator BMC 3.5 DM
     fig,ax = plt.subplots(1,1)
     if len( np.array(data).shape ) == 1: 
         ax.imshow( get_DM_command_in_2D(data) )
+        n_rows, n_cols = get_DM_command_in_2D(data).shape
     else: 
         ax.imshow( data )
+        n_rows, n_cols = data.shape
     #ax.set_title('poorly registered actuators')
     ax.grid(True, which='minor',axis='both', linestyle='-', color='k', lw=2 )
     ax.set_xticks( np.arange(12) - 0.5 , minor=True)
     ax.set_yticks( np.arange(12) - 0.5 , minor=True)
+
+    if include_actuator_number:
+        
+        for i in range(n_rows):
+            for j in range(n_cols):
+                # Calculate the flattened index
+                flattened_index = i * n_cols + j
+                # Add the flattened index as text in the plot
+                ax.text(j, i, f'{flattened_index}', va='center', ha='center', color='white')
+
     if savefig!=None:
         plt.savefig( savefig , bbox_inches='tight', dpi=300) 
 
@@ -1413,7 +1791,7 @@ def Ic_model_constrained_3param(x, A,  F, mu):
 
 
 # should this be free standing or a method? ZWFS? controller? - output a report / fits file
-def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_actuator_filter=None, debug=True, fig_path = 'tmp/', savefits=None) :
+def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_actuator_filter=None, poke_amplitude_indx=3, debug=True, fig_path = 'tmp/', savefits=None) :
     """
     # calibration of our ZWFS: 
     # this will fit M0, b0, mu, F which can be appended to a phase_controller,
@@ -1474,7 +1852,7 @@ def PROCESS_BDR_RECON_DATA_INTERNAL(recon_data, bad_pixels = ([],[]), active_dm_
         N0 *= bad_pixel_mask
         poke_imgs  = poke_imgs * bad_pixel_mask
 
-    a0 = len(ramp_values)//2 - 2 # which poke value (index) do we want to consider for finding region of influence. Pick a value near the center of the ramp (ramp values are from negative to positive) where we are in a linear regime.
+    a0 = len(ramp_values)//2 - poke_amplitude_indx # which poke value (index) do we want to consider for finding region of influence. Pick a value near the center of the ramp (ramp values are from negative to positive) where we are in a linear regime.
     
     if hasattr(active_dm_actuator_filter,'__len__'):
         #is it some form of boolean type?

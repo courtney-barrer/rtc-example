@@ -55,9 +55,10 @@ def convert_local_to_global_coordinates(relative_pixels_flat, row1, col1, n, m, 
 # TO DO 
 # 
 
-data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_4_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
+data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter_5_J3/zonal_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter_5_J3/zonal_reconstructor/'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter5_J1/' #  # 30-08-2024/iter_4_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
 
-reconstructor_file = data_path + 'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T13.32.11.fits'#'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.002_gain_high_30-08-2024T09.43.22.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_30-08-2024T07.51.19.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T23.48.48.fits' #'RECONSTRUCTORS_fourier_0.2pokeamp_in-out_pokes_map_DIT-0.001_gain_high_29-08-2024T22.59.26.fits'
+reconstructor_file = data_path + 'RECONSTRUCTORS_zonal_0.07pokeamp_in-out_pokes_map_DIT-0.001_gain_high_15-09-2024T20.27.47.fits'
 
 
 #def init_rtc( reco_fits_file ):
@@ -162,6 +163,34 @@ if 1:
 
     N0 = config_fits['N0'].data.astype(np.float32) # calibration source reference intensity (FPM OUT)
 
+
+
+    M2C_0 = M2C.T
+    U, S, Vt = np.linalg.svd( IM.T, full_matrices=False)
+
+    Smax = 40
+    R  = (Vt.T * [1/ss if i < Smax else 0 for i,ss in enumerate(S)])  @ U.T
+
+    TT_vectors = util.get_tip_tilt_vectors()
+
+    TT_space = M2C_0 @ TT_vectors
+        
+    U_TT, S_TT, Vt_TT = np.linalg.svd( TT_space, full_matrices=False)
+
+    I2M_TT = U_TT.T @ R 
+
+    M2C_TT =  M2C_0.T @ U_TT # since pinned need M2C to go back to 140 dimension vector  
+
+    R_HO = (np.eye(U_TT.shape[0])  - U_TT @ U_TT.T) @ R
+
+    # go to Eigenmodes for modal control in higher order reconstructor
+    U_HO, S_HO, Vt_HO = np.linalg.svd( R_HO, full_matrices=False)
+    I2M_HO = Vt_HO  
+    M2C_HO =   M2C_0.T @ (U_HO * S_HO) # since pinned need M2C to go back to 140 dimension vector
+
+
+
+
     #############
     dm_flat =  config_fits['FLAT_DM'].data.astype(np.float32)
     ##########
@@ -172,6 +201,13 @@ if 1:
     reconstructors_tmp.R_HO.update(R_HO.reshape(-1))
     reconstructors_tmp.M2C.update(M2C.reshape(-1))
     reconstructors_tmp.I2M.update(I2M.reshape(-1))
+
+    reconstructors_tmp.I2M_TT.update(I2M_TT.reshape(-1))
+    reconstructors_tmp.I2M_HO.update(I2M_HO.reshape(-1))
+    reconstructors_tmp.M2C_TT.update(M2C_TT.reshape(-1))
+    reconstructors_tmp.M2C_HO.update(M2C_HO.reshape(-1))
+    
+    
     reconstructors_tmp.I0.update(I0.reshape(-1)/np.mean( I0.reshape(-1) )) #normalized
     reconstructors_tmp.N0.update(N0.reshape(-1)/np.mean( N0.reshape(-1) )) #normalized # N0.reshape(-1)/np.mean( I0.reshape(-1)[pupil_pixels] )
     reconstructors_tmp.flux_norm.update(np.mean( I0.reshape(-1) ))   #normalized over mean of whole sub-region
@@ -194,16 +230,21 @@ if 1:
 
     # pid and leaky integator
 
-    Nmodes = I2M.shape[0] #M2C.shape[1]
-    kp = np.zeros(Nmodes) # init all to zero to start 
-    ki = np.zeros(Nmodes)
-    kd = np.zeros(Nmodes)
-    lower_limit = -100 * np.ones(Nmodes)
-    upper_limit = 100 * np.ones(Nmodes)
-    pid_setpoint =  np.zeros(Nmodes)
+    #Nmodes = I2M.shape[0] #M2C.shape[1]
+    kp = np.zeros(I2M_TT.shape[0]) # init all to zero to start 
+    ki = np.zeros(I2M_TT.shape[0])
+    kd = np.zeros(I2M_TT.shape[0])
+    lower_limit = -100 * np.ones(I2M_TT.shape[0])
+    upper_limit = 100 * np.ones(I2M_TT.shape[0])
+    pid_setpoint =  np.zeros(I2M_TT.shape[0])
 
     pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit , pid_setpoint)
-    leaky_tmp = rtc.LeakyIntegrator( ki, lower_limit, upper_limit ) 
+    
+    rho_leak = np.zeros( I2M_HO.shape[0] )
+    kp_leak = np.zeros( I2M_HO.shape[0] )
+    lower_limit_leak = -100 * np.ones( I2M_HO.shape[0] )
+    upper_limit_leak = 100 * np.ones( I2M_HO.shape[0] )
+    leaky_tmp = rtc.LeakyIntegrator( rho_leak, kp_leak, lower_limit_leak, upper_limit_leak ) 
 
     # Append all classes and structures to our rtc object to put them in C
     r.pid = pid_tmp
@@ -220,6 +261,86 @@ if 1:
     #return( r )
 
 
+r.pid.kp = [1,1]
+r.pid.ki = [0.5,05]
+
+# basis to add aberrations 
+basis =  util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+# flatten DM first 
+r.send_dm_cmd( dm_flat ) 
+
+r.dm_disturb = 0 * basis.T[0]  # add a tip disturb 
+
+
+# start it 
+explabel = 'testing'
+tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+no_tele = 1000
+disturb_after = 100
+
+r.send_dm_cmd( dm_flat ) 
+
+
+r.enable_telemetry(1000)
+# start a runner that calls latency function 
+runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+runner.start()
+
+runner.pause()
+
+
+# read out the telemetry 
+t = rtc.get_telemetry()
+telem_dict = {
+    "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+    "e_TT" : np.array([tt.e_TT for tt in t]),
+    "e_HO" : np.array([tt.e_HO for tt in t]),
+    "u_TT" : np.array([tt.u_TT for tt in t]),
+    "u_HO" : np.array([tt.u_HO for tt in t]),
+    "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+    "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+    "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+    "I0":I0,
+    "pupil_pixels":pupil_pixels,
+    "pid.kp": r.pid.kp,
+    "pid.ki": r.pid.ki,
+    "pid.kd": r.pid.kd,
+    "leak.kp": r.LeakyInt.kp,
+    "leak.rho": r.LeakyInt.rho
+}
+
+
+
+ # Create a list of HDUs (Header Data Units)
+hdul = fits.HDUList()
+
+# Add each list to the HDU list as a new extension
+for list_name, data_list in lists_dict.items():
+    # Convert list to numpy array for FITS compatibility
+    data_array = np.array(data_list, dtype=float)  # Ensure it is a float array or any appropriate type
+
+    # Create a new ImageHDU with the data
+    hdu = fits.ImageHDU(data_array)
+
+    # Set the EXTNAME header to the variable name
+    hdu.header['EXTNAME'] = list_name
+
+    # Append the HDU to the HDU list
+    hdul.append(hdu)
+
+# Write the HDU list to a FITS file
+hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+
+
+
+
+
+
+
+
+
 
 # update for testing 
 
@@ -231,7 +352,7 @@ r.send_dm_cmd( dm_flat )
 
 r.dm_disturb = 0 * 0.3 * basis.T[0]  # add a tip disturb 
 
-max_mode = 3
+max_mode = 2
 
 Nmodes = I2M.shape[0] #M2C.shape[1]
 kp = np.zeros(Nmodes)

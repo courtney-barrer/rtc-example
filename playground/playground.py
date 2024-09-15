@@ -8,8 +8,8 @@ import sys
 import copy 
 
 import rtc
-sys.path.append('simBaldr/' )
-sys.path.append('pyBaldr/' )
+sys.path.append('../simBaldr/' )
+sys.path.append('../pyBaldr/' )
 from pyBaldr import utilities as util
 import baldr_simulation_functions as baldrSim
 import data_structure_functions as config
