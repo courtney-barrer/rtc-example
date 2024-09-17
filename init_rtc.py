@@ -842,7 +842,7 @@ for kpTT in [1.0]:
 
 best_TTparam={}
 best_TTparam['kpTT'] = 1
-best_TTparam['kiTT'] = 0.17
+best_TTparam['kiTT'] = 0.125
 
 
 
@@ -855,7 +855,7 @@ lab = 'CLOSING_TT_ON_STATIC_TT_LONG'
 # DISTURBANCE 
 basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
 TT_vectors = util.get_tip_tilt_vectors()
-r.dm_disturb = 0.4 * TT_vectors[:,1]# add a tip disturb 
+r.dm_disturb = 0.5 * TT_vectors[:,1]# add a tip disturb 
 
 
 """
@@ -1206,40 +1206,18 @@ for m in mode_grid:
             HO_gopt_dict[m][(rhoHO,kpHO)] = np.mean( cmd_rmse ) 
 
 
-plt.figure() 
-best_HOparam_dict = {}
-for m in mode_grid:
-    rmse_s = np.array( [v for _,v in HO_gopt_dict[m].items()] ) 
-    rho_s = np.array( [k[0] for k,_ in HO_gopt_dict[m].items()] ) 
-    kpHO_s = np.array( [k[1] for k,_ in HO_gopt_dict[m].items()] ) 
-
-    plt.plot( rho_s, rmse_s , label=f'{m} HO modes')
-    best_rho_s = np.array([r for r,_ in sorted(zip(rho_s, rmse_s))])  #np.argmin( rmse_s )
-    best_kpHO_s = np.array([k for k,_ in sorted(zip(kpHO_s, rmse_s))]) 
-    print( f'best for mode {m}\n========')
-    for i,rmse_tmp in enumerate(sorted( rmse_s )):
-        print( f'  -rmse={rmse_tmp}: kpHO={best_kpHO_s[i]}, rho={best_rho_s[i]}\n')
-
-    # store for our final run
-    best_HOparam_dict[m] = (best_rho_s[0] ,best_kpHO_s[0])
-
-plt.legend(fontsize=12)
-plt.xlabel(r'$\rho$',fontsize=15)
-plt.ylabel('RMSE [DM units]',fontsize=15)
-saven_tmp = f'data/{tstamp.split("T")[0]}FINAL/{lab}/RMSE_vs_RHO_vs_HOmodes_CL_ON_NOTHING_kpHO-{kpHO_s[0]}_{tstamp}.png'
-plt.savefig(saven_tmp ,dpi=200, bbox_inches ='tight')
 
 
 
 
 #####################
 ## CLOSING HO MODES
-lab = 'CLOSING_HO_MODES_GAIN_OPT'
+lab = 'CLOSING_HO_FOURIER_MODES_GAIN_OPT'
 
 # DISTURBANCE 
 basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
 TT_vectors = util.get_tip_tilt_vectors()
-r.dm_disturb = 0.4 * TT_vectors.T[1] + 0.2 * basis.T[8] # add a tip disturb 
+r.dm_disturb = 0.4 * TT_vectors.T[1] + 0.2 * basis.T[4] # add a tip disturb 
 
 
 
@@ -1253,9 +1231,9 @@ plt.figure(); plt.imshow(atest_img); plt.colorbar(); plt.savefig( '/home/heimdal
 """
 #plt.figure(); plt.imshow( util.get_DM_command_in_2D(r.dm_disturb)); plt.savefig(current_path+'delme.png')
 
-mode_grid = [0,3,5,10,15,20,30]
-rho_grid = [0.1, 0.2, 0.5, 0.8]
-kpHO_grid = [1]
+mode_grid = [0,3,5,10,15,20, 30]
+rho_grid = [0.1, 0.2, 0.5]
+kpHO_grid = [0.1]
 HO_gopt_dict = {} # dictionary to hold mean rmse for each mode and respective trialed gains
 for m in mode_grid:
     HO_gopt_dict[m] = {}
@@ -1374,6 +1352,7 @@ for m in mode_grid:
             fig, ax = plt.subplots(5,1,figsize=(10,20))
 
             cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] + telem_dict['dm_disturb']
+            cmd_rmse = np.sqrt( np.mean( cmd_err**2, axis=1 ) )
             ax[0].plot( telem_dict['im_err'] )
             ax[0].set_ylabel(r'$\Delta I$')
             ax[1].plot( cmd_err )
@@ -1382,7 +1361,7 @@ for m in mode_grid:
             ax[2].set_ylabel(r'$e_{TT}$')
             ax[3].plot( telem_dict['e_HO'] )
             ax[3].set_ylabel(r'$e_{HO}$')
-            ax[4].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+            ax[4].plot( cmd_rmse )
             ax[4].set_ylabel(r'RMSE')
 
             plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
