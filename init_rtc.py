@@ -1,4 +1,3 @@
-
 from time import sleep
 import rtc
 import numpy as np
@@ -22,7 +21,7 @@ from pyBaldr import utilities as util
 def convert_local_to_global_coordinates(relative_pixels_flat, row1, col1, n, m, global_shape, flatten = True):
     """
     Convert relative pixel coordinates from the cropped region to global coordinates in the original image.
-    
+
     Parameters:
     - relative_pixels_flat: 1D list or array of indices in the flattened cropped array.
     - row1: The starting row index of the cropped region in the global image.
@@ -32,12 +31,12 @@ def convert_local_to_global_coordinates(relative_pixels_flat, row1, col1, n, m, 
     - global_shape: shape of global image to reference back to
     Returns:
     - global_pixels: List of tuples [(row_global1, col_global1), (row_global2, col_global2), ...]
-                     containing the global coordinates in the original image.
+    containing the global coordinates in the original image.
     """
-    
+
     # Convert flattened relative pixel indices to 2D coordinates within the cropped region
     relative_coords = [(index // m, index % m) for index in relative_pixels_flat]
-    
+
     # Convert relative 2D coordinates to global 2D coordinates
     global_pixels = [(row + row1, col + col1) for (row, col) in relative_coords]
 
@@ -55,16 +54,31 @@ def convert_local_to_global_coordinates(relative_pixels_flat, row1, col1, n, m, 
 # TO DO 
 # 
 
-data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter_5_J3/zonal_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter_5_J3/zonal_reconstructor/'
-#'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter5_J1/' #  # 30-08-2024/iter_4_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
+data_path = '/home/heimdallr/Documents/asgard-alignment/tmp/16-09-2024/iter_2_J3/'#'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter_5_J3/zonal_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter_5_J3/zonal_reconstructor/'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/15-09-2024/iter5_J1/' # # 30-08-2024/iter_4_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_3_J3/fourier_20modes_map_reconstructor/' #'/home/heimdallr/Documents/asgard-alignment/tmp/30-08-2024/iter_1_J3/fourier_20modes_map_reconstructor/'#'/home/heimdallr/Documents/asgard-alignment/tmp/29-08-2024/iter_14_J3/fourier_20modes_map_reconstructor/' #'~/Documents/asgard-alignment/tmp/29-08-2024/iter_13_J3/'
 
-reconstructor_file = data_path + 'RECONSTRUCTORS_zonal_0.07pokeamp_in-out_pokes_map_DIT-0.001_gain_high_15-09-2024T20.27.47.fits'
+reconstructor_file = '/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/fourier_90modes_map_reconstructor/RECONSTRUCTORS_fourier90_0.2pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T23.20.25.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/fourier_90modes_map_reconstructor/RECONSTRUCTORS_fourier90_0.2pokeamp_in-out_pokes_MAP_DIT-0.0049_gain_high_17-09-2024T22.41.03.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/fourier_90modes_pinv_reconstructor/RECONSTRUCTORS_fourier90_0.2pokeamp_in-out_pokes_pinv_DIT-0.0049_gain_high_17-09-2024T20.08.46.fits'
+# FOURIER 
+
+# ZONAL 
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T20.06.24.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T18.24.28.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T17.42.10.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T15.54.12.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T15.13.27.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_10_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T14.08.44.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/16-09-2024/iter_10_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.005_gain_high_16-09-2024T20.45.13.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/16-09-2024/iter_10_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.001_gain_high_16-09-2024T19.42.55.fits'
+#'/home/heimdallr/Documents/asgard-alignment/tmp/16-09-2024/iter_2_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.07pokeamp_in-out_pokes_map_DIT-0.004_gain_high_16-09-2024T16.28.21.fits'
+#data_path + 'RECONSTRUCTORS_zonal_0.07pokeamp_in-out_pokes_map_DIT-0.001_gain_high_15-09-2024T20.27.47.fits'
 
 
 #def init_rtc( reco_fits_file ):
 if 1: 
     # ============== READ IN PUPIL PHASE RECONSTRUCTOR DATA
-    config_fits = fits.open( reconstructor_file  ) 
+    config_fits = fits.open( reconstructor_file ) 
 
     print( [reco.header['EXTNAME'] for reco in config_fits])
 
@@ -81,7 +95,7 @@ if 1:
 
     det_fps = float( config_fits['info'].header['camera_fps'] ) # frames per sec (Hz) 
 
-    det_dit = float( config_fits['info'].header['camera_tint'] )  # integration time (seconds)
+    det_dit = float( config_fits['info'].header['camera_tint'] ) # integration time (seconds)
 
     det_gain = str( config_fits['info'].header['camera_gain'] ) # camera gain 
 
@@ -98,24 +112,24 @@ if 1:
 
     # full image dimensions
     img_height = 512
-    img_width = 640  
+    img_width = 640 
     global_shape = (img_height, img_width)
 
     # pupil region classification data in local (sub-region)
     pupil_pixels_local = np.array( config_fits['pupil_pixels'].data, dtype=np.int32)
     secondary_pixels_local = np.array( config_fits['secondary_pixels'].data, dtype=np.int32)
     outside_pixels_local = np.array( config_fits['outside_pixels'].data, dtype=np.int32)
-    #local_region_pixels_local = np.arange(0, len(config_fits['DARK'].data[0].reshape(-1)) )  #np.array( config_fits['outside_pixels'].data, dtype=np.int32)
+    #local_region_pixels_local = np.arange(0, len(config_fits['DARK'].data[0].reshape(-1)) ) #np.array( config_fits['outside_pixels'].data, dtype=np.int32)
 
     # converting back to the global image (in the reconstructor we likely (to reduce data size) looked at only a sub-region and referenced pixels from there)
     pupil_pixels = convert_local_to_global_coordinates(pupil_pixels_local, r1_subregion, \
-        c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+    c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
     secondary_pixels = convert_local_to_global_coordinates(secondary_pixels_local, r1_subregion, \
-        c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+    c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
     #outside_pixels_0 = convert_local_to_global_coordinates(outside_pixels_local, r1_subregion, \
-    #    c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+    # c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
     #local_region_pixels = convert_local_to_global_coordinates(local_region_pixels_local, r1_subregion, \
-    #    c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
+    # c1_subregion, r2_subregion-r1_subregion, c2_subregion-c1_subregion, global_shape, flatten = True)
 
     # outside_pixels_0 is only outside in local region, defauls to 0 outside of this region so to correct this
     all_pixels = np.arange(0, img_height * img_width )
@@ -123,8 +137,8 @@ if 1:
 
     # to define the total local region used when developing reconstructor
     # this is important for consistent flux normalization!
-    local_region_pixels = np.array( list(outside_pixels) + list(pupil_pixels)  )# could also do what we commented out above
-    
+    local_region_pixels = np.array( list(all_pixels) + list(pupil_pixels) ) #- set( outside_pixels_0)) ) #np.array( list(outside_pixels) + list(pupil_pixels) )# could also do what we commented out above
+
     # reduction data used in reconstructor
     darkss = config_fits['DARK'].data 
     dark = darkss[0] # chose which one
@@ -145,6 +159,32 @@ if 1:
 
 
     # reconstructor data 
+    
+    # use zonal to build TT 
+    tmp_config = fits.open( '/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T23.18.03.fits' )
+    #'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T22.31.57.fits' )
+    #'/home/heimdallr/Documents/asgard-alignment/tmp/17-09-2024/iter_11_J3/zonal_reconstructor/RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T20.06.24.fits')
+    M2C = tmp_config['M2C_4RECO'].data.astype(np.float32) # mode to command matrix normalized to poke amplitude used in IM construction
+    I2M = np.transpose( tmp_config['I2M'].data ).astype(np.float32)
+    IM = tmp_config['IM'].data.astype(np.float32)
+    M2C_0 = M2C.T
+    U, S, Vt = np.linalg.svd( IM.T, full_matrices=False)
+
+    Smax = 40
+    R = (Vt.T * [1/ss if i < Smax else 0 for i,ss in enumerate(S)]) @ U.T
+
+    TT_vectors = util.get_tip_tilt_vectors()
+
+    TT_space = M2C_0 @ TT_vectors
+
+    U_TT, S_TT, Vt_TT = np.linalg.svd( TT_space, full_matrices=False)
+
+    I2M_TT = U_TT.T @ R 
+
+    M2C_TT = M2C_0.T @ U_TT # since pinned need M2C to go back to 140 dimension vector 
+    
+
+    # ====================== THEN FOURIER FOR HO
 
     R_TT = config_fits['R_TT'].data.astype(np.float32) #tip-tilt reconstructor
 
@@ -154,45 +194,77 @@ if 1:
 
     M2C = config_fits['M2C_4RECO'].data.astype(np.float32) # mode to command matrix normalized to poke amplitude used in IM construction
 
-    I2M = np.transpose( config_fits['I2M'].data).astype(np.float32) # intensity (signal) to mode matrix  
+    I2M = np.transpose( config_fits['I2M'].data ).astype(np.float32) # intensity (signal) to mode matrix 
     # (# transposed so we can multiply directly I2M @ signal)
-        
-    CM = config_fits['CM'].data.astype(np.float32)  # full control matrix 
+
+    CM = config_fits['CM'].data.astype(np.float32) # full control matrix 
 
     I0 = config_fits['I0'].data.astype(np.float32) # calibration source reference intensity (FPM IN)
 
     N0 = config_fits['N0'].data.astype(np.float32) # calibration source reference intensity (FPM OUT)
 
 
+    """
+
+
+    # fourier projections - doesn't project great onto tip tilt 
+    M2C_0 = M2C.T
+    TT_vectors = util.get_tip_tilt_vectors()
+    TT_space = M2C_0 @ TT_vectors # TT space in naitive basis (Fourier here)
+    
+    U_TT, S_TT, Vt_TT = np.linalg.svd( TT_space, full_matrices=False)
+
+    I2M_TT = U_TT.T @ I2M
+
+    M2C_TT = M2C_0.T @ U_TT
+
+    I2M_HO = (np.eye(U_TT.shape[0]) - U_TT @ U_TT.T) @ I2M
+
+    M2C_HO = M2C_0.T #@ I2M_HO
+    """
+
+    
+    # fourier simply assuming index 0, 1 are essentially TT 
+    M2C_0 = M2C.T
+    #I2M_TT = I2M[:2,:]
+    I2M_HO = I2M[2:,:]
+    #M2C_TT = M2C_0[:2,:].T
+    M2C_HO = M2C_0[2:,:].T
+    # issue here is that tip+tilt isnt right 
+    
+
+
+
+    """
+    #using actuator push/pull 
 
     M2C_0 = M2C.T
     U, S, Vt = np.linalg.svd( IM.T, full_matrices=False)
 
     Smax = 40
-    R  = (Vt.T * [1/ss if i < Smax else 0 for i,ss in enumerate(S)])  @ U.T
+    R = (Vt.T * [1/ss if i < Smax else 0 for i,ss in enumerate(S)]) @ U.T
 
     TT_vectors = util.get_tip_tilt_vectors()
 
     TT_space = M2C_0 @ TT_vectors
-        
+
     U_TT, S_TT, Vt_TT = np.linalg.svd( TT_space, full_matrices=False)
 
     I2M_TT = U_TT.T @ R 
 
-    M2C_TT =  M2C_0.T @ U_TT # since pinned need M2C to go back to 140 dimension vector  
+    M2C_TT = M2C_0.T @ U_TT # since pinned need M2C to go back to 140 dimension vector 
 
-    R_HO = (np.eye(U_TT.shape[0])  - U_TT @ U_TT.T) @ R
+    R_HO = (np.eye(U_TT.shape[0]) - U_TT @ U_TT.T) @ R
 
     # go to Eigenmodes for modal control in higher order reconstructor
     U_HO, S_HO, Vt_HO = np.linalg.svd( R_HO, full_matrices=False)
-    I2M_HO = Vt_HO  
-    M2C_HO =   M2C_0.T @ (U_HO * S_HO) # since pinned need M2C to go back to 140 dimension vector
-
-
-
+    I2M_HO = Vt_HO 
+    M2C_HO = M2C_0.T @ (U_HO * S_HO) # since pinned need M2C to go back to 140 dimension vector
+    
+    """
 
     #############
-    dm_flat =  config_fits['FLAT_DM'].data.astype(np.float32)
+    dm_flat = config_fits['FLAT_DM'].data.astype(np.float32)
     ##########
 
     reconstructors_tmp.IM.update(IM.reshape(-1))
@@ -206,11 +278,11 @@ if 1:
     reconstructors_tmp.I2M_HO.update(I2M_HO.reshape(-1))
     reconstructors_tmp.M2C_TT.update(M2C_TT.reshape(-1))
     reconstructors_tmp.M2C_HO.update(M2C_HO.reshape(-1))
-    
-    
+
+
     reconstructors_tmp.I0.update(I0.reshape(-1)/np.mean( I0.reshape(-1) )) #normalized
     reconstructors_tmp.N0.update(N0.reshape(-1)/np.mean( N0.reshape(-1) )) #normalized # N0.reshape(-1)/np.mean( I0.reshape(-1)[pupil_pixels] )
-    reconstructors_tmp.flux_norm.update(np.mean( I0.reshape(-1) ))   #normalized over mean of whole sub-region
+    reconstructors_tmp.flux_norm.update(np.mean( I0.reshape(-1) )) #normalized over mean of whole sub-region
 
     # COMMIT IT ALL 
     reconstructors_tmp.commit_all()
@@ -227,7 +299,6 @@ if 1:
     pupil_regions_tmp.commit_all()
     # -----------------------------
 
-
     # pid and leaky integator
 
     #Nmodes = I2M.shape[0] #M2C.shape[1]
@@ -236,10 +307,10 @@ if 1:
     kd = np.zeros(I2M_TT.shape[0])
     lower_limit = -100 * np.ones(I2M_TT.shape[0])
     upper_limit = 100 * np.ones(I2M_TT.shape[0])
-    pid_setpoint =  np.zeros(I2M_TT.shape[0])
+    pid_setpoint = np.zeros(I2M_TT.shape[0])
 
     pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit , pid_setpoint)
-    
+
     rho_leak = np.zeros( I2M_HO.shape[0] )
     kp_leak = np.zeros( I2M_HO.shape[0] )
     lower_limit_leak = -100 * np.ones( I2M_HO.shape[0] )
@@ -261,64 +332,128 @@ if 1:
     #return( r )
 
 
-r.pid.kp = [1,1]
-r.pid.ki = [0.5,05]
-
-# basis to add aberrations 
-basis =  util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
-# flatten DM first 
-r.send_dm_cmd( dm_flat ) 
-
-r.dm_disturb = 0 * basis.T[0]  # add a tip disturb 
 
 
-# start it 
-explabel = 'testing'
+# quick check 
+plt.figure(); plt.plot( (M2C_HO @ I2M_HO @ IM[65]) ); plt.savefig( 'data/17-09-2024FINAL/delme.png')
+## Projecting TT vectors onto pixel space with our calibrated TT and HO matricies
+# (to check if they work...)
+plt.figure(); plt.imshow( util.get_DM_command_in_2D( M2C_HO @ U[0] ) ); plt.savefig( 'data/17-09-2024FINAL/delme.png')
+
+# check tip/tilt modes on DM 
+plt.figure(); plt.imshow( util.get_DM_command_in_2D( M2C_TT[:,0] ) ); plt.savefig( 'data/17-09-2024FINAL/delme.png')
+
+i = 2
+
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+#basis = np.eye(140)
+TTonHO_img_2D = np.zeros( I0.shape )
+TTonHO_img_2D.reshape(-1)[pupil_pixels_local] =  (I2M_HO.T @ (M2C_HO.T @ basis))[:,i]
+
+TTonTT_img_2D  = np.zeros( I0.shape )
+TTonTT_img_2D.reshape(-1)[pupil_pixels_local] =  (I2M_TT.T @ (M2C_TT.T @ basis))[:,i]
+
+fig,ax = plt.subplots( 3,1,figsize=(10,5))
+
+im_list = [ util.get_DM_command_in_2D( basis[:,i]),  TTonTT_img_2D,  TTonHO_img_2D  ]
+xlabel_list = ['' for _ in im_list] 
+ylabel_list = ['' for _ in im_list]
+title_list = ['DM COMMAND', 'RECO TT IMG', 'RECO HO IMG']
+cbar_label_list = ['DM UNITS', 'ADU', 'ADU']
+savefig = 'data/16-09-2024FINAL/delme.png'
+util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, \
+                           cbar_label_list, fontsize=15, axis_off=True, \
+                            cbar_orientation = 'bottom', savefig=savefig)
+
+
+
+
+
+#####################
+## OPENLOOP 
+lab = 'OPENLOOP'
+rtc.clear_telemetry()
+
+# DISTURBANCE 
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+r.dm_disturb = 0 * basis.T[1] # add a tip disturb 
+
+kpTT = 0
+kiTT = 0
+rhoHO = 0 
+kpHO = 0
+no_HO_modes = 0
+
+no_tele = 2000
+r.enable_telemetry(2000)
+
+
+explabel = f'OPENLOOP_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
 tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
 
-no_tele = 1000
-disturb_after = 100
+current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
 
-r.send_dm_cmd( dm_flat ) 
+if not os.path.exists(current_path):
+    os.makedirs(current_path)
+
+# CONTROLLERS 
+r.pid.kp = [0, 0]
+r.pid.ki = [0, 0]
 
 
-r.enable_telemetry(1000)
+r.send_dm_cmd( dm_flat + r.dm_disturb )
+time.sleep( 1 )
+
 # start a runner that calls latency function 
 runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
 runner.start()
-
+while r.telemetry_cnt > 0:
+    continue #print( r.telemetry_cnt )
 runner.pause()
-
+runner.stop()
 
 # read out the telemetry 
 t = rtc.get_telemetry()
 telem_dict = {
-    "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
-    "e_TT" : np.array([tt.e_TT for tt in t]),
-    "e_HO" : np.array([tt.e_HO for tt in t]),
-    "u_TT" : np.array([tt.u_TT for tt in t]),
-    "u_HO" : np.array([tt.u_HO for tt in t]),
-    "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
-    "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
-    "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
-    "I0":I0,
-    "pupil_pixels":pupil_pixels,
-    "pid.kp": r.pid.kp,
-    "pid.ki": r.pid.ki,
-    "pid.kd": r.pid.kd,
-    "leak.kp": r.LeakyInt.kp,
-    "leak.rho": r.LeakyInt.rho
+ "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+ "e_TT" : np.array([tt.e_TT for tt in t]),
+ "e_HO" : np.array([tt.e_HO for tt in t]),
+ "u_TT" : np.array([tt.u_TT for tt in t]),
+ "u_HO" : np.array([tt.u_HO for tt in t]),
+ "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+ "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+ "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+ "t0" : np.array([tt.t0 for tt in t]),
+ "t1" : np.array([tt.t1 for tt in t]),
+ "I0" : I0,
+ "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+ "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+ "pid.kp": r.pid.kp,
+ "pid.ki": r.pid.ki,
+ "pid.kd": r.pid.kd,
+ "leak.kp": r.LeakyInt.kp,
+ "leak.rho": r.LeakyInt.rho,
+ "IM":IM
 }
 
+# reconstruct the error signal in the cropped pupil region 
+pupil_img_2D = []
+for img_tmp in telem_dict['im_err']:
+    tmp = np.zeros( I0.shape )
+    tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+    pupil_img_2D.append( tmp )
+
+telem_dict['signal_2D'] = pupil_img_2D
 
 
- # Create a list of HDUs (Header Data Units)
+
+# Create a list of HDUs (Header Data Units)
 hdul = fits.HDUList()
 
 # Add each list to the HDU list as a new extension
-for list_name, data_list in lists_dict.items():
+for list_name, data_list in telem_dict.items():
     # Convert list to numpy array for FITS compatibility
-    data_array = np.array(data_list, dtype=float)  # Ensure it is a float array or any appropriate type
+    data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
 
     # Create a new ImageHDU with the data
     hdu = fits.ImageHDU(data_array)
@@ -334,230 +469,1145 @@ hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
 
 
 
+# plot telemetry 
+# plot telemetry 
+fig, ax = plt.subplots(5,1,figsize=(10,20))
 
+cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] + telem_dict['dm_disturb']
+cmd_rmse = np.sqrt( np.mean( cmd_err**2, axis=1 ) )
 
+ax[0].plot( telem_dict['im_err'] )
+ax[0].set_ylabel(r'$\Delta I$')
+ax[1].plot( cmd_err )
+ax[1].set_ylabel(r'$\Delta C$')
+ax[2].plot( telem_dict['e_TT'] )
+ax[2].set_ylabel(r'$e_{TT}$')
+ax[3].plot( telem_dict['e_HO'] )
+ax[3].set_ylabel(r'$e_{HO}$')
+ax[4].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+ax[4].set_ylabel(r'RMSE')
 
-
-
-
-
-
-# update for testing 
-
-
-# basis to add aberrations 
-basis =  util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
-# flatten DM first 
-r.send_dm_cmd( dm_flat ) 
-
-r.dm_disturb = 0 * 0.3 * basis.T[0]  # add a tip disturb 
-
-max_mode = 2
-
-Nmodes = I2M.shape[0] #M2C.shape[1]
-kp = np.zeros(Nmodes)
-ki = np.zeros(Nmodes)
-ki_leak = np.zeros(Nmodes)
-kd = np.zeros(Nmodes)
-
-
-
-
-################
-# tip 
-kp[0] = 1
-ki[0] = 0.5
-# tilt 
-kp[1] = 1
-ki[1] = 0.5
-
-# lets try leaky on a higher order mode 
-for i in range(2,max_mode):
-    ki_leak[i] = 0.1
-################
-
-lower_limit = -100 * np.ones(Nmodes)
-upper_limit = 100 * np.ones(Nmodes)
-pid_setpoint =  np.zeros(Nmodes)
-
-pid_tmp = rtc.PIDController( kp, ki, kd, lower_limit, upper_limit , pid_setpoint)
-leaky_tmp = rtc.LeakyIntegrator( ki_leak, lower_limit, upper_limit ) 
-
-# Append all classes and structures to our rtc object to put them in C
-r.pid = pid_tmp
-r.LeakyInt = leaky_tmp
-
-
-
-# start it 
-no_tele = 1000
-disturb_after = 100
-r.enable_telemetry(1000)
-# start a runner that calls latency function 
-runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
-runner.start()
-
-while r.telemetry_cnt > 900: #no_tele-distub_after:
-    print(r.telemetry_cnt)
-runner.pause()
-
-r.dm_disturb = 0.5 * basis.T[0]  # add a tip disturb 
-
-time.sleep(0.2)
-runner.resume()
-while r.telemetry_cnt > 0:
-    print(r.telemetry_cnt)
-
-runner.pause()
-# now add a disturbance
-runner.stop()
-
-
-# read out the telemetry 
-t = rtc.get_telemetry()
-tel_rawimg = np.array([tt.image_in_pupil for tt in t] ) # reduced image filtered in pupil (not signal)
-#tel_imgErr = np.array([tt.image_err_signal for tt in t])
-tel_modeErr = np.array([tt.mode_err for tt in t])
-tel_reco = np.array([tt.dm_cmd_err for tt in t])
-
-
-#runner.flush # not writing anything here yet, but could 
-#rtc.clear_telemetry() 
-
-# reconstruct 2D image from pupil filtered img
-
-pupil_img_2D = []
-for img_tmp in tel_rawimg:
-    tmp = np.zeros( I0.shape )
-    tmp.reshape(-1)[pupil_pixels_local] =  img_tmp 
-    pupil_img_2D.append( tmp )
-
-
-im_list = [] #[ pupil_img_2D]
-title_list = [] #['initial','final']
-xlabel_list = [] #[None, None]
-ylabel_list = []# [None, None]
-cbar_label_list = []#['DM units', 'DM units' ] 
-
-look_at_it =[0] + [disturb_after-i for i in np.arange(-4,8,2)[::-1] ] + [-10,-1]
-for i in look_at_it:
-    im_list.append( pupil_img_2D[i] )
-    title_list.append( f'iteration {i}' ) 
-    xlabel_list.append( None ) 
-    ylabel_list.append( None )
-    cbar_label_list.append( 'DM units' ) 
-savefig = data_path + f'rtc_RED_IMGS_it{it}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
-util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
-
-
-# save telemetry 
-telemetry_fits = fits.HDUList( [] )
-for tel, lab in zip ( [tel_rawimg, pupil_img_2D, tel_modeErr, tel_reco, r.pid.kp, r.pid.ki, r.LeakyInt.rho, r.dm_disturb], ['reduced_img_pupil', 'reduced_img_pupil_2D','mode_err', 'dm_cmd',  'r.pid.kp', 'r.pid.ki', 'r.LeakyInt.rho','r.dm_disturb']):
-
-    frame_fits = fits.PrimaryHDU( tel ) 
-    frame_fits.header.set('EXTNAME',f'{lab}')
-    
-    telemetry_fits.append( frame_fits )
-telemetry_fits.writeto( data_path + f'telemetry_it{it}.fits' ) #, overwrite = True) # don't by default, overwrite = True)
+plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
 
 
 plt.figure()
-for m in range(2):
-    plt.plot( tel_modeErr.T[m], label=f'mode {m}' )
-plt.xlabel('iterations')
-plt.ylabel('mode error amplitude')
-plt.legend()
-savefig = data_path + f'rtc_TT_ONLY_test_mode_err_it{it}.png'
-plt.savefig( savefig , bbox_inches ='tight')
+fig,ax = plt.subplots( 1,2)
+ax[0].set_title('intial image')
+ax[1].set_title('final image')
+ax[0].imshow( telem_dict['signal_2D'][0] )
+ax[1].imshow( telem_dict['signal_2D'][-1] )
+#plt.savefig(fig_path + 'delme.png')
+plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+# write telemetry to file 
 
 
-plt.figure()
-for m in range(max_mode):
-    plt.plot( tel_modeErr.T[m], alpha=0.3, label=f'mode {m}' )
-plt.xlabel('iterations')
-plt.ylabel('mode error amplitude')
-plt.legend()
-savefig = data_path + f'rtc_HO_test_mode_err_it{it}.png'
-plt.savefig( savefig , bbox_inches ='tight')
-
-
-im_list = [ util.get_DM_command_in_2D(tel_reco[0]-dm_flat), util.get_DM_command_in_2D(tel_reco[-1]-dm_flat)]
-title_list = ['initial','final']
+im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+title_list = ['final\nreconstruction','final\ndisturbance']
 xlabel_list = [None, None]
 ylabel_list = [None, None]
 cbar_label_list = ['DM units', 'DM units' ] 
-savefig = data_path + f'rtc_TT_test_cmds_inital-final_it{it}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
 util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
 
 
 
 
 
-# r.close_all() # to close/disconnect DM and camera safely  
+
+#####################
+## CLOSING TT ON NOTHING
+lab = 'CLOSING_TT_ON_NOTHING'
+for kpTT in np.linspace(0.2,1.5,6):
+    for kiTT in np.linspace(0,0.99,5): 
+        print( f'\n\nki = {kiTT}\n\nkp = {kpTT}\n\n')
+
+        # start it 
+        rtc.clear_telemetry()
+
+        no_tele = 200
+        close_after = 20
+        r.enable_telemetry(200)
+
+        #kpTT = 10.8
+        #kiTT = 0.9
+        rhoHO = 0 
+        kpHO = 0
+        no_HO_modes = 0
+
+        explabel = f'close_after{close_after}_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
+        tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+        current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+
+        if not os.path.exists(current_path):
+            os.makedirs(current_path)
+
+        # CONTROLLERS 
+        r.pid.kp = [0, 0]
+        r.pid.ki = [0, 0]
+
+        # DISTURBANCE 
+        basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+
+        r.dm_disturb = 0 * basis.T[1] # add a tip disturb 
+        r.send_dm_cmd( dm_flat + r.dm_disturb )
+        time.sleep( 1 )
+
+        # start a runner that calls latency function 
+        runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+        runner.start()
+        while r.telemetry_cnt > no_tele - close_after:
+            print( r.telemetry_cnt )
+        runner.pause()
+
+        # CONTROLLERS 
+        r.pid.kp = kpTT * np.ones( 2 ) 
+        r.pid.ki = kiTT * np.ones( 2 )
+        time.sleep(0.1)
+        runner.start()
+
+        while r.telemetry_cnt > 0:
+            continue
+        runner.pause()
+        runner.stop()
+
+        # read out the telemetry 
+        t = rtc.get_telemetry()
+        telem_dict = {
+        "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+        "e_TT" : np.array([tt.e_TT for tt in t]),
+        "e_HO" : np.array([tt.e_HO for tt in t]),
+        "u_TT" : np.array([tt.u_TT for tt in t]),
+        "u_HO" : np.array([tt.u_HO for tt in t]),
+        "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+        "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+        "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+        "t0" : np.array([tt.t0 for tt in t]),
+        "t1" : np.array([tt.t1 for tt in t]),
+        "I0" : I0,
+        "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+        "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+        "pid.kp": r.pid.kp,
+        "pid.ki": r.pid.ki,
+        "pid.kd": r.pid.kd,
+        "leak.kp": r.LeakyInt.kp,
+        "leak.rho": r.LeakyInt.rho,
+        "IM":IM
+        }
+
+        # reconstruct the error signal in the cropped pupil region 
+        pupil_img_2D = []
+        for img_tmp in telem_dict['im_err']:
+        tmp = np.zeros( I0.shape )
+        tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+        pupil_img_2D.append( tmp )
+
+        telem_dict['signal_2D'] = pupil_img_2D
+
+
+
+        # Create a list of HDUs (Header Data Units)
+        hdul = fits.HDUList()
+
+        # Add each list to the HDU list as a new extension
+        for list_name, data_list in telem_dict.items():
+        # Convert list to numpy array for FITS compatibility
+        data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
+
+        # Create a new ImageHDU with the data
+        hdu = fits.ImageHDU(data_array)
+
+        # Set the EXTNAME header to the variable name
+        hdu.header['EXTNAME'] = list_name
+
+        # Append the HDU to the HDU list
+        hdul.append(hdu)
+
+        # Write the HDU list to a FITS file
+        hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+
+
+        # plot telemetry 
+        fig, ax = plt.subplots(4,1,figsize=(10,20))
+
+        cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] - telem_dict['dm_disturb']
+        ax[0].plot( cmd_err )
+        ax[0].set_ylabel(r'$\Delta C$')
+        ax[1].plot( telem_dict['e_TT'] )
+        ax[1].set_ylabel(r'$e_{TT}$')
+        ax[2].plot( telem_dict['e_HO'] )
+        ax[2].set_ylabel(r'$e_{HO}$')
+        ax[3].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+        ax[3].set_ylabel(r'RMSE')
+
+        plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
+
+
+
+        plt.figure()
+        fig,ax = plt.subplots( 1,2)
+        ax[0].set_title('intial image')
+        ax[1].set_title('final image')
+        ax[0].imshow( telem_dict['signal_2D'][0] )
+        ax[1].imshow( telem_dict['signal_2D'][-1] )
+        #plt.savefig(fig_path + 'delme.png')
+        plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+        # write telemetry to file 
+
+
+        im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+        title_list = ['final\nreconstruction','final\ndisturbance']
+        xlabel_list = [None, None]
+        ylabel_list = [None, None]
+        cbar_label_list = ['DM units', 'DM units' ] 
+        savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+        util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+
+
+
+#####################
+## CLOSING TT ON STATIC
+lab = 'CLOSING_TT_ON_STATIC_TT_fourierbasis'
+
+# optimal seems to be kpTT = 1, kiTT = 0.125
+
+# DISTURBANCE 
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+TT_vectors = util.get_tip_tilt_vectors()
+r.dm_disturb = 0.4 * TT_vectors[:,1] #+ 0.6 * TT_vectors[:,1]# add a tip disturb 
+
+
+
+"""
+
+r1,r2 = 180,225
+c1,c2 = 115,175
+r.send_dm_cmd( dm_flat  )#+ r.dm_disturb )
+time.sleep(1)
+atest_img = np.array ( r.reduceImg_test() ).reshape( 512,640 )[r1:r2, c1:c2]
+plt.figure(); plt.imshow(atest_img); plt.colorbar(); plt.savefig( '/home/heimdallr/Documents/rtc-example/data/17-09-2024FINAL/delme.png' )
+
+"""
+
+for kpTT in [1.0]:
+    for kiTT in [0.1, 0.2,0.5,0.7,0.9]: 
+        # start it 
+        rtc.clear_telemetry()
+
+        no_tele = 200
+        close_after = 20
+        r.enable_telemetry(200)
+
+        #kpTT = 10.8
+        #kiTT = 0.9
+        rhoHO = 0 
+        kpHO = 0
+        no_HO_modes = 0
+
+        explabel = f'f_Smax{Smax}_close_after{close_after}_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
+        tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+        current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+
+        if not os.path.exists(current_path):
+            os.makedirs(current_path)
+
+        # CONTROLLERS 
+        r.pid.reset()
+        r.pid.kp = [0, 0]
+        r.pid.ki = [0, 0]
+        
+        r.LeakyInt.reset()
+        r.LeakyInt.kp = np.zeros( len( r.LeakyInt.kp ))
+        r.LeakyInt.rho = np.zeros( len( r.LeakyInt.rho ))
+
+        r.send_dm_cmd( dm_flat + r.dm_disturb )
+        time.sleep( 1 )
+
+        # start a runner that calls latency function 
+        runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+        runner.start()
+        while r.telemetry_cnt > no_tele - close_after:
+            continue #print( r.telemetry_cnt )
+        runner.pause()
+
+        # CONTROLLERS 
+        #r.pid.reset()
+        r.pid.kp = kpTT * np.ones( 2 ) 
+        r.pid.ki = kiTT * np.ones( 2 )
+        time.sleep(0.1)
+        runner.start()
+
+        while r.telemetry_cnt > 0:
+            print( r.telemetry_cnt )
+        runner.pause()
+        runner.stop()
+
+        # read out the telemetry 
+        t = rtc.get_telemetry()
+        telem_dict = {
+        "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+        "e_TT" : np.array([tt.e_TT for tt in t]),
+        "e_HO" : np.array([tt.e_HO for tt in t]),
+        "u_TT" : np.array([tt.u_TT for tt in t]),
+        "u_HO" : np.array([tt.u_HO for tt in t]),
+        "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+        "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+        "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+        "t0" : np.array([tt.t0 for tt in t]),
+        "t1" : np.array([tt.t1 for tt in t]),
+        "I0" : I0,
+        "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+        "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+        "pid.kp": r.pid.kp,
+        "pid.ki": r.pid.ki,
+        "pid.kd": r.pid.kd,
+        "leak.kp": r.LeakyInt.kp,
+        "leak.rho": r.LeakyInt.rho,
+        "IM":IM
+        }
+
+        # reconstruct the error signal in the cropped pupil region 
+        pupil_img_2D = []
+        for img_tmp in telem_dict['im_err']:
+            tmp = np.zeros( I0.shape )
+            tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+            pupil_img_2D.append( tmp )
+
+        telem_dict['signal_2D'] = pupil_img_2D
+
+
+
+        # Create a list of HDUs (Header Data Units)
+        hdul = fits.HDUList()
+
+        # Add each list to the HDU list as a new extension
+        for list_name, data_list in telem_dict.items():
+            # Convert list to numpy array for FITS compatibility
+            data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
+
+            # Create a new ImageHDU with the data
+            hdu = fits.ImageHDU(data_array)
+
+            # Set the EXTNAME header to the variable name
+            hdu.header['EXTNAME'] = list_name
+
+            # Append the HDU to the HDU list
+            hdul.append(hdu)
+
+            # Write the HDU list to a FITS file
+        hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+
+        # plot telemetry 
+        fig, ax = plt.subplots(5,1,figsize=(10,20))
+
+        cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] - telem_dict['dm_disturb']
+        ax[0].plot( telem_dict['im_err'] )
+        ax[0].set_ylabel(r'$\Delta I$')
+        ax[1].plot( cmd_err )
+        ax[1].set_ylabel(r'$\Delta C$')
+        ax[2].plot( telem_dict['e_TT'] )
+        ax[2].set_ylabel(r'$e_{TT}$')
+        ax[3].plot( telem_dict['e_HO'] )
+        ax[3].set_ylabel(r'$e_{HO}$')
+        ax[4].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+        ax[4].set_ylabel(r'RMSE')
+
+        plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
+
+
+        plt.figure()
+        fig,ax = plt.subplots( 1,2)
+        ax[0].set_title('intial image')
+        ax[1].set_title('final image')
+        ax[0].imshow( telem_dict['signal_2D'][0] )
+        ax[1].imshow( telem_dict['signal_2D'][-1] )
+        #plt.savefig(fig_path + 'delme.png')
+        plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+        # write telemetry to file 
+
+
+        im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+        title_list = ['final\nreconstruction','final\ndisturbance']
+        xlabel_list = [None, None]
+        ylabel_list = [None, None]
+        cbar_label_list = ['DM units', 'DM units' ] 
+        savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+        util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+
+
+best_TTparam={}
+best_TTparam['kpTT'] = 1
+best_TTparam['kiTT'] = 0.17
+
+
+
+#####################
+## CLOSING TT ON STATIC LONG SERIES AT OPTIMAL GAINS
+lab = 'CLOSING_TT_ON_STATIC_TT_LONG'
+
+# optimal seems to be kpTT = 1, kiTT = 0.125
+
+# DISTURBANCE 
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+TT_vectors = util.get_tip_tilt_vectors()
+r.dm_disturb = 0.4 * TT_vectors[:,1]# add a tip disturb 
+
+
+"""
+
+r1,r2 = 180,225
+c1,c2 = 115,175
+r.send_dm_cmd( dm_flat  + r.dm_disturb )
+time.sleep(1)
+atest_img = np.array ( r.reduceImg_test() ).reshape( 512,640 )[r1:r2, c1:c2]
+plt.figure(); plt.imshow(atest_img); plt.colorbar(); plt.savefig( '/home/heimdallr/Documents/rtc-example/data/17-09-2024FINAL/delme.png' )
+
+"""
+
+
+
+if 1:
+
+    kpTT = best_TTparam['kpTT']
+    kiTT = best_TTparam['kiTT']
+
+    # start it 
+    rtc.clear_telemetry()
+
+    no_tele = 5000
+    close_after = 1000
+    r.enable_telemetry(5000)
+
+    #kpTT = 10.8
+    #kiTT = 0.9
+    rhoHO = 0 
+    kpHO = 0
+    no_HO_modes = 0
+
+    explabel = f'close_after{close_after}_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
+    tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+    current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+
+    if not os.path.exists(current_path):
+        os.makedirs(current_path)
+
+    # CONTROLLERS 
+    r.LeakyInt.reset()
+    r.pid.reset()
+    r.pid.kp = [0, 0]
+    r.pid.ki = [0, 0]
+
+    r.send_dm_cmd( dm_flat + r.dm_disturb )
+    time.sleep( 1 )
+
+    # start a runner that calls latency function 
+    runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+    runner.start()
+    while r.telemetry_cnt > no_tele - close_after:
+        print( r.telemetry_cnt )
+    runner.pause()
+
+    # CONTROLLERS 
+    r.pid.kp = kpTT * np.ones( 2 ) 
+    r.pid.ki = kiTT * np.ones( 2 )
+    time.sleep(0.1)
+    runner.start()
+
+    while r.telemetry_cnt > 0:
+        print( r.telemetry_cnt )
+
+    runner.pause()
+    runner.stop()
+    r1,r2 = 180,225
+    c1,c2 = 115,175
+    #r.send_dm_cmd( dm_flat  + r.dm_disturb )
+    time.sleep(1)
+    atest_img = np.array ( r.reduceImg_test() ).reshape( 512,640 )[r1:r2, c1:c2]
+    plt.figure(); plt.imshow(atest_img); plt.colorbar(); plt.savefig( current_path + 'not_telem_final_img.png' )
+
+
+    # read out the telemetry 
+    t = rtc.get_telemetry()
+    telem_dict = {
+    "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+    "e_TT" : np.array([tt.e_TT for tt in t]),
+    "e_HO" : np.array([tt.e_HO for tt in t]),
+    "u_TT" : np.array([tt.u_TT for tt in t]),
+    "u_HO" : np.array([tt.u_HO for tt in t]),
+    "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+    "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+    "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+    "t0" : np.array([tt.t0 for tt in t]),
+    "t1" : np.array([tt.t1 for tt in t]),
+    "I0" : I0,
+    "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+    "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+    "pid.kp": r.pid.kp,
+    "pid.ki": r.pid.ki,
+    "pid.kd": r.pid.kd,
+    "leak.kp": r.LeakyInt.kp,
+    "leak.rho": r.LeakyInt.rho,
+    "IM":IM
+    }
+
+    # reconstruct the error signal in the cropped pupil region 
+    pupil_img_2D = []
+    for img_tmp in telem_dict['im_err']:
+        tmp = np.zeros( I0.shape )
+        tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+        pupil_img_2D.append( tmp )
+
+    telem_dict['signal_2D'] = pupil_img_2D
+
+    # Create a list of HDUs (Header Data Units)
+    hdul = fits.HDUList()
+
+    # Add each list to the HDU list as a new extension
+    for list_name, data_list in telem_dict.items():
+        # Convert list to numpy array for FITS compatibility
+        data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
+
+        # Create a new ImageHDU with the data
+        hdu = fits.ImageHDU(data_array)
+
+        # Set the EXTNAME header to the variable name
+        hdu.header['EXTNAME'] = list_name
+
+        # Append the HDU to the HDU list
+        hdul.append(hdu)
+
+    # Write the HDU list to a FITS file
+    hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+    # plot telemetry 
+    fig, ax = plt.subplots(5,1,figsize=(10,20))
+
+    cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] + telem_dict['dm_disturb']
+    ax[0].plot( telem_dict['im_err'] )
+    ax[0].set_ylabel(r'$\Delta I$')
+    ax[1].plot( cmd_err )
+    ax[1].set_ylabel(r'$\Delta C$')
+    ax[2].plot( telem_dict['e_TT'] )
+    ax[2].set_ylabel(r'$e_{TT}$')
+    ax[3].plot( telem_dict['e_HO'] )
+    ax[3].set_ylabel(r'$e_{HO}$')
+    ax[4].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+    ax[4].set_ylabel(r'RMSE')
+
+    plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
+
+
+    plt.figure()
+    fig,ax = plt.subplots( 1,2)
+    ax[0].set_title('intial image')
+    ax[1].set_title('final image')
+    ax[0].imshow( telem_dict['signal_2D'][0] )
+    ax[1].imshow( telem_dict['signal_2D'][-1] )
+    #plt.savefig(fig_path + 'delme.png')
+    plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+    # write telemetry to file 
+
+
+    im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+    title_list = ['final\nreconstruction','final\ndisturbance']
+    xlabel_list = [None, None]
+    ylabel_list = [None, None]
+    cbar_label_list = ['DM units', 'DM units' ] 
+    savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+    util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+
+
+#####################
+## CLOSING HO MODES
+lab = 'CLOSING_HO_FOURIER_MODES_ON_NOTHING'
+
+# DISTURBANCE 
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+TT_vectors = util.get_tip_tilt_vectors()
+r.dm_disturb = 0. * TT_vectors.T[1] 
+
+
+
+"""r1,r2 = 180,225
+c1,c2 = 115,175
+r.send_dm_cmd( dm_flat  + r.dm_disturb )
+time.sleep(1)
+atest_img = np.array ( r.reduceImg_test() ).reshape( 512,640 )[r1:r2, c1:c2]
+plt.figure(); plt.imshow(atest_img); plt.colorbar(); plt.savefig( '/home/heimdallr/Documents/rtc-example/data/17-09-2024FINAL/delme.png' )
+
+"""
+#plt.figure(); plt.imshow( util.get_DM_command_in_2D(r.dm_disturb)); plt.savefig(current_path+'delme.png')
+
+mode_grid = [0,3,5,10,15,20,30]
+rho_grid = [0.1, 0.2, 0.5, 0.7]
+kpHO_grid = [0.1, 0.5]
+HO_gopt_dict = {} # dictionary to hold mean rmse for each mode and respective trialed gains
+for m in mode_grid:
+    HO_gopt_dict[m] = {}
+    for rhoHO in rho_grid:
+        for kpHO in kpHO_grid: 
+            
+            # use TT optimal gains 
+            kpTT = best_TTparam['kpTT']
+            kiTT = best_TTparam['kiTT']
+
+            rtc.clear_telemetry()
+            no_tele = 200
+            close_after = 20
+            r.enable_telemetry(200)
+            no_HO_modes = m
+
+            # NAME SAVE DIRECTORIES 
+            explabel = f'fourier_HOgain_opt_close_after{close_after}_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
+            tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+            current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+
+            if not os.path.exists(current_path):
+                os.makedirs(current_path)
+
+            # INIT CONTROLLERS 
+            r.pid.reset()
+            r.LeakyInt.reset()
+            r.pid.kp = np.array([0, 0])
+            r.pid.ki = np.array([0, 0])
+            r.LeakyInt.rho = np.zeros( len(r.LeakyInt.rho ) )
+            r.LeakyInt.kp = np.zeros( len(r.LeakyInt.kp ) )
+
+            # ADD DISTURBANCE 
+            r.send_dm_cmd( dm_flat + r.dm_disturb )
+            time.sleep( 1 )
+
+            # INIT RTC RUNNER 
+            runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+
+            # RUN RTC FOR A BIT...
+            runner.start()
+            while r.telemetry_cnt > no_tele - close_after:
+                print( r.telemetry_cnt )
+            runner.pause()
+
+            # TURN ON CONTROLLERS AND RESTART IT 
+            r.pid.kp = kpTT * np.ones( 2 ) # = 1.0
+            r.pid.ki = kiTT* np.ones( 2 ) # = 0.125
+
+            r.LeakyInt.rho = [rhoHO if mtmp < m else 0 for mtmp in range(len(r.LeakyInt.rho))]
+            r.LeakyInt.kp = [kpHO if mtmp < m else 0 for mtmp in range(len(r.LeakyInt.kp))]
+
+            time.sleep(0.001)
+            runner.start()
+
+            while r.telemetry_cnt > 0:
+                print( r.telemetry_cnt )
+            runner.pause()
+            runner.stop()
+
+            # SAVE AND PLOT TELEMETRY 
+            t = rtc.get_telemetry()
+            telem_dict = {
+            "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+            "e_TT" : np.array([tt.e_TT for tt in t]),
+            "e_HO" : np.array([tt.e_HO for tt in t]),
+            "u_TT" : np.array([tt.u_TT for tt in t]),
+            "u_HO" : np.array([tt.u_HO for tt in t]),
+            "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+            "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+            "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+            "t0" : np.array([tt.t0 for tt in t]),
+            "t1" : np.array([tt.t1 for tt in t]),
+            "I0" : I0,
+            "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+            "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+            "pid.kp": r.pid.kp,
+            "pid.ki": r.pid.ki,
+            "pid.kd": r.pid.kd,
+            "leak.kp": r.LeakyInt.kp,
+            "leak.rho": r.LeakyInt.rho,
+            "IM":IM
+            }
+
+            # reconstruct the error signal in the cropped pupil region 
+            pupil_img_2D = []
+            for img_tmp in telem_dict['im_err']:
+                tmp = np.zeros( I0.shape )
+                tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+                pupil_img_2D.append( tmp )
+
+            telem_dict['signal_2D'] = pupil_img_2D
+
+            # Create a list of HDUs (Header Data Units)
+            hdul = fits.HDUList()
+
+            # Add each list to the HDU list as a new extension
+            for list_name, data_list in telem_dict.items():
+                # Convert list to numpy array for FITS compatibility
+                data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
+
+                # Create a new ImageHDU with the data
+                hdu = fits.ImageHDU(data_array)
+
+                # Set the EXTNAME header to the variable name
+                hdu.header['EXTNAME'] = list_name
+
+                # Append the HDU to the HDU list
+                hdul.append(hdu)
+
+            # Write the HDU list to a FITS file
+            hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+            # plot telemetry 
+            fig, ax = plt.subplots(5,1,figsize=(10,20))
+          
+            cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] + telem_dict['dm_disturb']
+            cmd_rmse = np.sqrt( np.mean( cmd_err**2, axis=1 ) )
+           
+            ax[0].plot( telem_dict['im_err'] )
+            ax[0].set_ylabel(r'$\Delta I$')
+            ax[1].plot( cmd_err )
+            ax[1].set_ylabel(r'$\Delta C$')
+            ax[2].plot( telem_dict['e_TT'] )
+            ax[2].set_ylabel(r'$e_{TT}$')
+            ax[3].plot( telem_dict['e_HO'] )
+            ax[3].set_ylabel(r'$e_{HO}$')
+            ax[4].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+            ax[4].set_ylabel(r'RMSE')
+
+            plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
+
+
+
+            plt.figure()
+            fig,ax = plt.subplots( 1,2)
+            ax[0].set_title('intial image')
+            ax[1].set_title('final image')
+            ax[0].imshow( telem_dict['signal_2D'][0] )
+            ax[1].imshow( telem_dict['signal_2D'][-1] )
+            #plt.savefig(fig_path + 'delme.png')
+            plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+            # write telemetry to file 
+
+
+            im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+            title_list = ['final\nreconstruction','final\ndisturbance']
+            xlabel_list = [None, None]
+            ylabel_list = [None, None]
+            cbar_label_list = ['DM units', 'DM units' ] 
+            savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+            util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+            
+            HO_gopt_dict[m][(rhoHO,kpHO)] = np.mean( cmd_rmse ) 
+
+
+plt.figure() 
+best_HOparam_dict = {}
+for m in mode_grid:
+    rmse_s = np.array( [v for _,v in HO_gopt_dict[m].items()] ) 
+    rho_s = np.array( [k[0] for k,_ in HO_gopt_dict[m].items()] ) 
+    kpHO_s = np.array( [k[1] for k,_ in HO_gopt_dict[m].items()] ) 
+
+    plt.plot( rho_s, rmse_s , label=f'{m} HO modes')
+    best_rho_s = np.array([r for r,_ in sorted(zip(rho_s, rmse_s))])  #np.argmin( rmse_s )
+    best_kpHO_s = np.array([k for k,_ in sorted(zip(kpHO_s, rmse_s))]) 
+    print( f'best for mode {m}\n========')
+    for i,rmse_tmp in enumerate(sorted( rmse_s )):
+        print( f'  -rmse={rmse_tmp}: kpHO={best_kpHO_s[i]}, rho={best_rho_s[i]}\n')
+
+    # store for our final run
+    best_HOparam_dict[m] = (best_rho_s[0] ,best_kpHO_s[0])
+
+plt.legend(fontsize=12)
+plt.xlabel(r'$\rho$',fontsize=15)
+plt.ylabel('RMSE [DM units]',fontsize=15)
+saven_tmp = f'data/{tstamp.split("T")[0]}FINAL/{lab}/RMSE_vs_RHO_vs_HOmodes_CL_ON_NOTHING_kpHO-{kpHO_s[0]}_{tstamp}.png'
+plt.savefig(saven_tmp ,dpi=200, bbox_inches ='tight')
+
+
+
+
+#####################
+## CLOSING HO MODES
+lab = 'CLOSING_HO_MODES_GAIN_OPT'
+
+# DISTURBANCE 
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+TT_vectors = util.get_tip_tilt_vectors()
+r.dm_disturb = 0.4 * TT_vectors.T[1] + 0.2 * basis.T[8] # add a tip disturb 
+
+
+
+"""r1,r2 = 180,225
+c1,c2 = 115,175
+r.send_dm_cmd( dm_flat  + r.dm_disturb )
+time.sleep(1)
+atest_img = np.array ( r.reduceImg_test() ).reshape( 512,640 )[r1:r2, c1:c2]
+plt.figure(); plt.imshow(atest_img); plt.colorbar(); plt.savefig( '/home/heimdallr/Documents/rtc-example/data/17-09-2024FINAL/delme.png' )
+
+"""
+#plt.figure(); plt.imshow( util.get_DM_command_in_2D(r.dm_disturb)); plt.savefig(current_path+'delme.png')
+
+mode_grid = [0,3,5,10,15,20,30]
+rho_grid = [0.1, 0.2, 0.5, 0.8]
+kpHO_grid = [1]
+HO_gopt_dict = {} # dictionary to hold mean rmse for each mode and respective trialed gains
+for m in mode_grid:
+    HO_gopt_dict[m] = {}
+    for rhoHO in rho_grid:
+        for kpHO in kpHO_grid: 
+            
+            # use TT optimal gains 
+            kpTT = best_TTparam['kpTT']
+            kiTT = best_TTparam['kiTT']
+
+            rtc.clear_telemetry()
+            no_tele = 200
+            close_after = 20
+            r.enable_telemetry(200)
+            no_HO_modes = m
+
+            # NAME SAVE DIRECTORIES 
+            explabel = f'a_HOgain_opt_close_after{close_after}_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
+            tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+            current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+
+            if not os.path.exists(current_path):
+                os.makedirs(current_path)
+
+            # INIT CONTROLLERS 
+            r.pid.reset()
+            r.LeakyInt.reset()
+            r.pid.kp = np.array([0, 0])
+            r.pid.ki = np.array([0, 0])
+            r.LeakyInt.rho = np.zeros( len(r.LeakyInt.rho ) )
+            r.LeakyInt.kp = np.zeros( len(r.LeakyInt.kp ) )
+
+            # ADD DISTURBANCE 
+            r.send_dm_cmd( dm_flat + r.dm_disturb )
+            time.sleep( 1 )
+
+            # INIT RTC RUNNER 
+            runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+
+            # RUN RTC FOR A BIT...
+            runner.start()
+            while r.telemetry_cnt > no_tele - close_after:
+                print( r.telemetry_cnt )
+            runner.pause()
+
+            # TURN ON CONTROLLERS AND RESTART IT 
+            r.pid.kp = kpTT * np.ones( 2 ) # = 1.0
+            r.pid.ki = kiTT* np.ones( 2 ) # = 0.125
+
+            r.LeakyInt.rho = [rhoHO if mtmp < m else 0 for mtmp in range(len(r.LeakyInt.rho))]
+            r.LeakyInt.kp = [kpHO if mtmp < m else 0 for mtmp in range(len(r.LeakyInt.kp))]
+
+            time.sleep(0.001)
+            runner.start()
+
+            while r.telemetry_cnt > 0:
+                print( r.telemetry_cnt )
+            runner.pause()
+            runner.stop()
+
+            # SAVE AND PLOT TELEMETRY 
+            t = rtc.get_telemetry()
+            telem_dict = {
+            "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+            "e_TT" : np.array([tt.e_TT for tt in t]),
+            "e_HO" : np.array([tt.e_HO for tt in t]),
+            "u_TT" : np.array([tt.u_TT for tt in t]),
+            "u_HO" : np.array([tt.u_HO for tt in t]),
+            "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+            "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+            "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+            "t0" : np.array([tt.t0 for tt in t]),
+            "t1" : np.array([tt.t1 for tt in t]),
+            "I0" : I0,
+            "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+            "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+            "pid.kp": r.pid.kp,
+            "pid.ki": r.pid.ki,
+            "pid.kd": r.pid.kd,
+            "leak.kp": r.LeakyInt.kp,
+            "leak.rho": r.LeakyInt.rho,
+            "IM":IM
+            }
+
+            # reconstruct the error signal in the cropped pupil region 
+            pupil_img_2D = []
+            for img_tmp in telem_dict['im_err']:
+                tmp = np.zeros( I0.shape )
+                tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+                pupil_img_2D.append( tmp )
+
+            telem_dict['signal_2D'] = pupil_img_2D
+
+            # Create a list of HDUs (Header Data Units)
+            hdul = fits.HDUList()
+
+            # Add each list to the HDU list as a new extension
+            for list_name, data_list in telem_dict.items():
+                # Convert list to numpy array for FITS compatibility
+                data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
+
+                # Create a new ImageHDU with the data
+                hdu = fits.ImageHDU(data_array)
+
+                # Set the EXTNAME header to the variable name
+                hdu.header['EXTNAME'] = list_name
+
+                # Append the HDU to the HDU list
+                hdul.append(hdu)
+
+            # Write the HDU list to a FITS file
+            hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+            # plot telemetry 
+            fig, ax = plt.subplots(5,1,figsize=(10,20))
+
+            cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] + telem_dict['dm_disturb']
+            ax[0].plot( telem_dict['im_err'] )
+            ax[0].set_ylabel(r'$\Delta I$')
+            ax[1].plot( cmd_err )
+            ax[1].set_ylabel(r'$\Delta C$')
+            ax[2].plot( telem_dict['e_TT'] )
+            ax[2].set_ylabel(r'$e_{TT}$')
+            ax[3].plot( telem_dict['e_HO'] )
+            ax[3].set_ylabel(r'$e_{HO}$')
+            ax[4].plot( np.sqrt( np.mean( cmd_err**2, axis=1 ) ) )
+            ax[4].set_ylabel(r'RMSE')
+
+            plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
+
+
+
+            plt.figure()
+            fig,ax = plt.subplots( 1,2)
+            ax[0].set_title('intial image')
+            ax[1].set_title('final image')
+            ax[0].imshow( telem_dict['signal_2D'][0] )
+            ax[1].imshow( telem_dict['signal_2D'][-1] )
+            #plt.savefig(fig_path + 'delme.png')
+            plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+            # write telemetry to file 
+
+
+            im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+            title_list = ['final\nreconstruction','final\ndisturbance']
+            xlabel_list = [None, None]
+            ylabel_list = [None, None]
+            cbar_label_list = ['DM units', 'DM units' ] 
+            savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+            util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+            
+            HO_gopt_dict[m][(rhoHO,kpHO)] = np.mean( cmd_rmse ) 
+
+
+plt.figure() 
+best_HOparam_dict = {}
+for m in mode_grid:
+    rmse_s = np.array( [v for _,v in HO_gopt_dict[m].items()] ) 
+    rho_s = np.array( [k[0] for k,_ in HO_gopt_dict[m].items()] ) 
+    kpHO_s = np.array( [k[1] for k,_ in HO_gopt_dict[m].items()] ) 
+
+    plt.plot( rho_s, rmse_s , label=f'{m} HO modes')
+    best_rho_s = np.array([r for r,_ in sorted(zip(rho_s, rmse_s))])  #np.argmin( rmse_s )
+    best_kpHO_s = np.array([k for k,_ in sorted(zip(kpHO_s, rmse_s))]) 
+    print( f'best for mode {m}\n========')
+    for i,rmse_tmp in enumerate(sorted( rmse_s )):
+        print( f'  -rmse={rmse_tmp}: kpHO={best_kpHO_s[i]}, rho={best_rho_s[i]}\n')
+
+    # store for our final run
+    best_HOparam_dict[m] = (best_rho_s[0] ,best_kpHO_s[0])
+
+plt.legend(fontsize=12)
+plt.xlabel(r'$\rho$',fontsize=15)
+plt.ylabel('RMSE [DM units]',fontsize=15)
+saven_tmp = f'data/{tstamp.split("T")[0]}FINAL/{lab}/RMSE_vs_RHO_vs_HOmodes_kpHO-{kpHO_s[0]}_{tstamp}.png'
+plt.savefig(saven_tmp ,dpi=200, bbox_inches ='tight')
 
 
 
 
 
-#---- TESTS 
-
-# coerrect mapping to global pixels works correctly (saves output in data input folder)
-# get a full frame and reshape it 
 
 
-for lab, reg in zip(['pupil_pixels', 'outside_pixels'],[pupil_pixels, outside_pixels]):
-    pupil_reg_test = np.zeros(np.array( r.im2vec_test()).shape )
-    #outside_reg_test = np.zeros(np.array( r.im2vec_test()).shape )
-    pupil_reg_test[reg] = 1
-
-    plt.figure() ; plt.imshow( pupil_reg_test.reshape(r.camera_settings.image_height, r.camera_settings.image_width)) ; plt.savefig(data_path+f'full_frame_{lab}_registration.png')
+#####################
+## CLOSING HO MODES ON LONG SERIES 
+lab = 'LONGG_CLOSING_HO_MODES'
 
 
-# checking reduced image 
-img = np.array(r.reduceImg_test()).reshape( 512, 640 )
-pupimg = pupil_reg_test.reshape(r.camera_settings.image_height, r.camera_settings.image_width)
-fig,ax = plt.subplots(1,2) 
-ax[0].imshow( img[ 100:300, 100:300] ) ; plt.savefig(data_path + 'delme.png')
-ax[1].imshow( pupimg[ 100:300, 100:300] ) 
-plt.savefig(data_path+f'full_frame_{lab}_registration_with_image_in_rtc.png')
+# DISTURBANCE 
+basis = util.construct_command_basis( basis='fourier_pinned_edges', number_of_modes = 40, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+TT_vectors = util.get_tip_tilt_vectors()
+r.dm_disturb = 0.6 * TT_vectors.T[1] + 0.5 * basis.T[6] # add a tip disturb 
+
+plt.figure(); plt.imshow( util.get_DM_command_in_2D(r.dm_disturb)); plt.savefig(current_path+'delme.png')
 
 
-# polling image and convert to vector 
-test1 = r.im2vec_test()
-if(len(test1) == r.camera_settings.full_image_length):
-    print( ' passed im2vec_test')
-else:
-    print( ' FAILED --- im2vec_test')
+for m in mode_grid:
 
-# polling and reducing using the camera settings dark and bad pixels 
+    # use the found optimal gains
+    kpTT = best_TTparam['kpTT']
+    kiTT = best_TTparam['kiTT']
+    rhoHO, kpHO = best_HOparam_dict[m]  
 
-test1 = r.reduceImg_test()
-if(len(test1) == r.camera_settings.full_image_length):
-    print( ' passed reduceImg test')
-else:
-    print( ' FAILED --- reduceImg test')
+    rtc.clear_telemetry()
+    no_tele = 2000
+    close_after = 500
+    r.enable_telemetry(2000)
+    no_HO_modes = m
+
+    # NAME SAVE DIRECTORIES 
+    explabel = f'HOgain_opt_close_after{close_after}_HOmodes-{no_HO_modes}_kpTT-{kpTT}_kiTT-{kiTT}_rhoHO-{rhoHO}_kpHO-{kpHO}_impulse'
+    tstamp = datetime.datetime.now().strftime("%d-%m-%YT%H.%M.%S")
+
+    current_path = f'data/{tstamp.split("T")[0]}FINAL/{lab}/{explabel}/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+
+    if not os.path.exists(current_path):
+        os.makedirs(current_path)
+
+    # INIT CONTROLLERS 
+    r.pid.reset()
+    r.LeakyInt.reset()
+    r.pid.kp = np.array([0, 0])
+    r.pid.ki = np.arary([0, 0])
+    r.LeakyInt.rho = np.zeros( len(r.LeakyInt.rho ) )
+    r.LeakyInt.kp = np.zeros( len(r.LeakyInt.kp ) )
+
+    # ADD DISTURBANCE 
+    r.send_dm_cmd( dm_flat + r.dm_disturb )
+    time.sleep( 1 )
+
+    # INIT RTC RUNNER 
+    runner = rtc.AsyncRunner(r, period = timedelta(microseconds=1000))
+
+    # RUN RTC FOR A BIT...
+    runner.start()
+    while r.telemetry_cnt > no_tele - close_after:
+        print( r.telemetry_cnt )
+    runner.pause()
+
+    # TURN ON CONTROLLERS AND RESTART IT 
+    r.pid.kp = kpTT * np.ones( 2 ) # = 1.0
+    r.pid.ki = kiTT * np.ones( 2 ) # = 0.125
+    
+    for mi in range(m):
+        r.LeakyInt.rho[mi] = rhoHO
+        r.LeakyInt.kp[mi] = kpHO 
 
 
-# polling image and convert to vector and filter for pupil pixels 
-test2 = r.im2filtered_im_test()
-if(len(test2 ) == len(r.regions.pupil_pixels.current)):
-    print( ' passed im2filtered_im_test')
-else:
-    print( ' FAILED --- im2filtered_im_test')
+    time.sleep(0.001)
+    runner.start()
 
-# filter reference intensity setpoint for pupil pixels 
-test3 = r.im2filteredref_im_test()
-if(len(test3 ) == len(r.regions.pupil_pixels.current)):
-    print( ' passed test3 .im2filteredref_im_test()')
-else:
-    print( ' FAILED --- test3 .im2filteredref_im_test()')
+    while r.telemetry_cnt > 0:
+        print( r.telemetry_cnt )
+    runner.pause()
+    runner.stop()
 
-# process image 
-test4 = r.process_im_test()
-if(len(test4 ) == len(r.regions.pupil_pixels.current)):
-    print( ' passed test4 .process_im_test()')
-else:
-    print( ' FAILED --- test4 .process_im_test()')
+    # SAVE AND PLOT TELEMETRY 
+    t = rtc.get_telemetry()
+    telem_dict = {
+    "im_err" : np.array([tt.image_in_pupil for tt in t] ) ,
+    "e_TT" : np.array([tt.e_TT for tt in t]),
+    "e_HO" : np.array([tt.e_HO for tt in t]),
+    "u_TT" : np.array([tt.u_TT for tt in t]),
+    "u_HO" : np.array([tt.u_HO for tt in t]),
+    "cmd_TT" : np.array([tt.cmd_TT for tt in t]),
+    "cmd_HO" : np.array([tt.cmd_HO for tt in t]),
+    "dm_disturb" : np.array([tt.dm_disturb for tt in t]),
+    "t0" : np.array([tt.t0 for tt in t]),
+    "t1" : np.array([tt.t1 for tt in t]),
+    "I0" : I0,
+    "pupil_pixels" : r.regions.pupil_pixels.current, #in global frame
+    "local_pupil_pixels" : pupil_pixels_local, #in local frame 
+    "pid.kp": r.pid.kp,
+    "pid.ki": r.pid.ki,
+    "pid.kd": r.pid.kd,
+    "leak.kp": r.LeakyInt.kp,
+    "leak.rho": r.LeakyInt.rho,
+    "IM":IM
+    }
+
+    # reconstruct the error signal in the cropped pupil region 
+    pupil_img_2D = []
+    for img_tmp in telem_dict['im_err']:
+        tmp = np.zeros( I0.shape )
+        tmp.reshape(-1)[pupil_pixels_local] = img_tmp 
+        pupil_img_2D.append( tmp )
+
+    telem_dict['signal_2D'] = pupil_img_2D
+
+    # Create a list of HDUs (Header Data Units)
+    hdul = fits.HDUList()
+
+    # Add each list to the HDU list as a new extension
+    for list_name, data_list in telem_dict.items():
+    # Convert list to numpy array for FITS compatibility
+    data_array = np.array(data_list, dtype=float) # Ensure it is a float array or any appropriate type
+
+    # Create a new ImageHDU with the data
+    hdu = fits.ImageHDU(data_array)
+
+    # Set the EXTNAME header to the variable name
+    hdu.header['EXTNAME'] = list_name
+
+    # Append the HDU to the HDU list
+    hdul.append(hdu)
+
+    # Write the HDU list to a FITS file
+    hdul.writeto(current_path + f'{explabel}_{tstamp}.fits', overwrite=True)
+
+    # plot telemetry 
+    fig, ax = plt.subplots(4,1,figsize=(10,20))
+
+    cmd_err = telem_dict['cmd_TT'] + telem_dict['cmd_HO'] - telem_dict['dm_disturb']
+    cmd_rmse = np.sqrt( np.mean( cmd_err**2, axis=1 ) )
+    
+    ax[0].plot( cmd_err )
+    ax[0].set_ylabel(r'$\Delta C$')
+    ax[1].plot( telem_dict['e_TT'] )
+    ax[1].set_ylabel(r'$e_{TT}$')
+    ax[2].plot( telem_dict['e_HO'] )
+    ax[2].set_ylabel(r'$e_{HO}$')
+    ax[3].plot( cmd_rmse )
+    ax[3].set_ylabel(r'RMSE')
+
+    plt.savefig(current_path + f'telemetry_summary_{tstamp}.png')
+
+
+    plt.figure()
+    fig,ax = plt.subplots( 1,2)
+    ax[0].set_title('intial image')
+    ax[1].set_title('final image')
+    ax[0].imshow( telem_dict['signal_2D'][0] )
+    ax[1].imshow( telem_dict['signal_2D'][-1] )
+    #plt.savefig(fig_path + 'delme.png')
+    plt.savefig(current_path + f'initial_v_final_image_{explabel}_{tstamp}.png')
+    # write telemetry to file 
+
+
+    im_list = [ util.get_DM_command_in_2D(telem_dict['cmd_TT'][-1] + telem_dict['cmd_HO'][-1]), util.get_DM_command_in_2D(telem_dict['dm_disturb'][-1])]
+    title_list = ['final\nreconstruction','final\ndisturbance']
+    xlabel_list = [None, None]
+    ylabel_list = [None, None]
+    cbar_label_list = ['DM units', 'DM units' ] 
+    savefig = current_path + f'dm_final_disturb_v_reco_{explabel}_{tstamp}.png' #f'mode_reconstruction_images/phase_reconstruction_example_mode-{mode_indx}_basis-{phase_ctrl.config["basis"]}_ctrl_modes-{phase_ctrl.config["number_of_controlled_modes"]}ctrl_act_diam-{phase_ctrl.config["dm_control_diameter"]}_readout_mode-12x12.png'
+    util.nice_heatmap_subplots( im_list , xlabel_list, ylabel_list, title_list, cbar_label_list, fontsize=15, axis_off=True, cbar_orientation = 'bottom', savefig=savefig)
+
+    
+
+
+
 
 
 

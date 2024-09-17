@@ -19,6 +19,10 @@ struct telem_entry {
     std::vector<double> cmd_TT; // TT reconstruction command
     std::vector<double> cmd_HO; // HO reconstruction command
     std::vector<double> dm_disturb; // HO reconstruction command
+    double t0;
+    double t1;
+    //std::vector<double> t0; // start time of calculation 
+    //std::vector<double> t1; // end time of calculation 
 };
 
 void append_telemetry(telem_entry telem);

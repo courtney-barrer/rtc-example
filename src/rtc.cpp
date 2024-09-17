@@ -286,6 +286,17 @@ public:
 //     return values;
 // }
 
+
+// check for DM 
+bool isOutOfBounds(const std::vector<double>& vec) {
+    for (const auto& value : vec) {
+        if (value > 1.0 || value < 0.0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Gets value at indices for an input vector
 template<typename DestType, typename T>
 void getValuesAtIndices(std::vector<DestType>& values, const T & data, std::span<int> indices) { // std::span<const int> indices
@@ -1472,12 +1483,20 @@ struct RTC {
         std::vector<double> dm_cmd(140, 0); // should init somewhere else  
         if (current_frame_number > previous_frame_number){
             // Do some computation here...
-            cout << "current frame" << current_frame_number << endl;
+            //cout << "current frame" << current_frame_number << endl;
+
             // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
             // so need to catch case of overflow (current=0, previous = 65535)
             // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
             // must match raw_image type unsigned int16.
             // update frame number
+
+            // Get the current time point using the high-resolution clock
+            auto now0 = std::chrono::high_resolution_clock::now();
+
+            // Convert the time point to the duration in seconds (double)
+            auto t0 = std::chrono::duration<double>(now0.time_since_epoch()).count();
+
             if (current_frame_number == 65535){
                 previous_frame_number = -1; // catch overflow case for int16 where current=0, previous = 65535
             }else{
@@ -1522,14 +1541,22 @@ struct RTC {
             
             for (size_t i = 0; i < TT_cmd_err.size(); ++i) {
                 //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
-                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i]; // + dm_disturb[i];  // comment out HO_cmd_err if desired
+                dm_cmd[i] = dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i] + dm_disturb[i];  // comment out HO_cmd_err if desired
                 //cout << dm_cmd[i] << endl;
             }
+
+            //isOutOfBounds( dm_cmd )
 
             // get cmd pointer 
             double *cmd_ptr = dm_cmd.data();
             // update DM 
             BMCSetArray(&hdm, cmd_ptr, map_lut.data());
+
+            // Get the current time point using the high-resolution clock
+            auto now1 = std::chrono::high_resolution_clock::now();
+
+            // Convert the time point to the duration in seconds (double)
+            auto t1 = std::chrono::duration<double>(now1.time_since_epoch()).count();
 
 
             if (telemetry_cnt > 0){
@@ -1545,6 +1572,8 @@ struct RTC {
                 entry.cmd_HO = HO_cmd_err; //std::move(HO_cmd_err);
                 entry.cmd_TT = TT_cmd_err; //std::move(TT_cmd_err);
                 entry.dm_disturb = dm_disturb; 
+                entry.t0 = t0;
+                entry.t1 = t1;
                 //cout << dm_flag[0] << endl;
 
                 append_telemetry(std::move(entry));
@@ -1992,7 +2021,9 @@ NB_MODULE(_rtc, m) {
         .def_ro("u_HO", &telem_entry::u_HO)
         .def_ro("cmd_TT", &telem_entry::cmd_TT)
         .def_ro("cmd_HO", &telem_entry::cmd_HO)
-        .def_ro("dm_disturb", &telem_entry::dm_disturb); 
+        .def_ro("dm_disturb", &telem_entry::dm_disturb)
+        .def_ro("t0", &telem_entry::t0)
+        .def_ro("t1", &telem_entry::t1); 
 
     bind_telemetry(m);
 }
