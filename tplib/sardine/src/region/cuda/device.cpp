@@ -19,7 +19,7 @@ namespace sardine::region::cuda::device
 namespace detail
 {
 
-    using handle_region_map = boost::bimap< void*, handle_impl* >;
+    using handle_region_map = myboost::bimap< void*, handle_impl* >;
 
     handle_region_map& get_handle_region_map() {
         static handle_region_map instance;

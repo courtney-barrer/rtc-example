@@ -2,11 +2,11 @@ default: install
 
 configure:
     # Configure conan and adds additional deps
-    # curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s -- --skip-install
+    curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s -- --skip-install
     just tplib/emu/dev -o python=True
     just tplib/sardine/dev
 
-# Install sardine in conan cache and in pip
+# Install rtc in conan cache and in pip
 install *args:
     just cpp-install {{args}}
     just python-install
@@ -22,7 +22,7 @@ cpp-install *args:
 python-install *args:
     pip install .  {{args}}
 
-# Install sardine in developer mode (editable) in conan and pip
+# Install rtc in developer mode (editable) in conan and pip
 dev *args:
     just cpp-dev {{args}}
     just python-dev

@@ -29,15 +29,16 @@ namespace node
      }
 
      void Camera::operator()() {
+        
           camera_impl->get_frame(frame.view());
 
           frame.send(ctx);
-          mutex->unlock();
+        //   mutex->unlock();
      }
 
 } // namespace node
 
-     std::future<void> init_camera(json::object config) {
+    node::Camera init_camera(json::object config) {
         auto type = sardine::json::opt_to<std::string>(config, "type").value();
 
         auto camera_config = config.at("config").as_object();
@@ -50,13 +51,17 @@ namespace node
             "Could not open frame using url: {}", frame_url);
 
         sardine::mutex_t& mutex = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<sardine::mutex_t>(mutex_url),
-          "Could not open notify mutex using url: {}", mutex_url);
+        "Could not open notify mutex using url: {}", mutex_url);
 
-        node::Camera camera(type, camera_config, std::move(frame), mutex);
+        return node::Camera(type, camera_config, std::move(frame), mutex);
+     }
+
+     std::future<void> init_camera_thread(json::object config) {
+        auto camera = init_camera(config);
 
         Command& command = sardine::from_url<Command>(*sardine::json::opt_to<url>(config, "command")).value();
 
-        return spawn_runner(std::move(camera), command, fmt::format("camera {}", type));
+        return spawn_runner(std::move(camera), command, "camera");
     }
 
 } // namespace baldr

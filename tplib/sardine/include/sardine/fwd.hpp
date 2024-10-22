@@ -11,7 +11,7 @@ namespace std
 } // namespace std
 
 
-namespace boost::urls
+namespace myboost::urls
 {
 
     struct url;
@@ -23,15 +23,15 @@ namespace boost::urls
     struct parse_uri;
     struct parse_uri_reference;
 
-} // namespace boost::urls
+} // namespace myboost::urls
 
-namespace boost::json
+namespace myboost::json
 {
 
     struct value;
 
 
-} // namespace boost::json
+} // namespace myboost::json
 
 
 namespace tl
@@ -50,16 +50,16 @@ namespace sardine
 
     using emu::result;
 
-    using boost::urls::url;
-    using boost::urls::url_view;
+    using myboost::urls::url;
+    using myboost::urls::url_view;
 
 namespace urls
 {
-    using boost::urls::params_view;
-    using boost::urls::params_ref;
+    using myboost::urls::params_view;
+    using myboost::urls::params_ref;
 
-    using boost::urls::parse_uri;
-    using boost::urls::parse_uri_reference;
+    using myboost::urls::parse_uri;
+    using myboost::urls::parse_uri_reference;
 
 } // namespace urls
 

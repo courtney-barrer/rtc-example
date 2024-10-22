@@ -30,37 +30,67 @@ add_library(sardine
 
 target_sources(sardine
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
-    # include/sardine/sardine.hpp
+    include/sardine/error.hpp
+    include/sardine/context.hpp
+    include/sardine/concepts.hpp
+    include/sardine/mapping_descriptor.hpp
+    include/sardine/buffer/ring.hpp
+    include/sardine/buffer/base.hpp
+    include/sardine/buffer/utility.hpp
+    include/sardine/buffer/interface.hpp
+    include/sardine/buffer/impl.hpp
+    include/sardine/fwd.hpp
+    include/sardine/memory_converter.hpp
+    include/sardine/utility.hpp
+    include/sardine/mapper.hpp
+    include/sardine/mapping_descriptor
+    include/sardine/mapping_descriptor/base.hpp
+    include/sardine/mapping_descriptor/interface.hpp
     include/sardine/type.hpp
-    # include/sardine/fwd.hpp
-    # include/sardine/type/url.hpp
-    # include/sardine/type/json.hpp
-    # include/sardine/concepts.hpp
-    # include/sardine/url.hpp
-    # include/sardine/error.hpp
-    # include/sardine/utility.hpp
-    # include/sardine/region/host.hpp
-    # include/sardine/region/host/manager.hpp
-    # include/sardine/region/host/utility.hpp
-    # include/sardine/region/local.hpp
-    # include/sardine/region/managed.hpp
-    # include/sardine/region/managed/utility.hpp
-    # include/sardine/buffer/base.hpp
-    # include/sardine/buffer/ring.hpp
-    # include/sardine/buffer/interface.hpp
-    # include/sardine/buffer/impl.hpp
-    # include/sardine/buffer/utility.hpp
-    # include/sardine/context.hpp
-    # include/sardine/buffer.hpp
-    # include/sardine/python/cast/url.hpp
-    # include/sardine/python/mapper.hpp
-    # include/sardine/mapping/interface.hpp
-    # include/sardine/mapping/base.hpp
-    # include/sardine/mapper.hpp
-    # include/sardine/mapper/base.hpp
-    # include/sardine/mapper/mapper_base.hpp
-    # include/sardine/memory_converter.hpp
-    # include/sardine/cache.hpp
+    include/sardine/load.hpp
+    include/sardine/cache.hpp
+    include/sardine/sardine.hpp
+    include/sardine/semaphore.hpp
+    include/sardine/url.hpp
+    include/sardine/buffer.hpp
+    include/sardine/region/embedded.hpp
+    include/sardine/region/managed.hpp
+    include/sardine/region/managed/manager.hpp
+    include/sardine/region/managed/utility.hpp
+    include/sardine/region/cuda/device/utility.hpp
+    include/sardine/region/cuda/device.hpp
+    include/sardine/region/host/manager.hpp
+    include/sardine/region/host/utility.hpp
+    include/sardine/region/milk/array/synchronization/detail/lock.h
+    include/sardine/region/milk/array/synchronization/detail/atomic.h
+    include/sardine/region/milk/array/synchronization/handle.h
+    include/sardine/region/milk/array/synchronization/type.h
+    include/sardine/region/milk/array/synchronization/guard.h
+    include/sardine/region/milk/array/detail/utility.h
+    include/sardine/region/milk/array/detail/type.h
+    include/sardine/region/milk/array/shm/handle.h
+    include/sardine/region/milk/array/shm/error.h
+    include/sardine/region/milk/array/shm/handle_managed.h
+    include/sardine/region/milk/array/cacao.h
+    include/sardine/region/milk/parameter/detail/utility.hpp
+    include/sardine/region/milk/parameter/detail/type.hpp
+    include/sardine/region/milk/parameter/shm/error.hpp
+    include/sardine/region/milk/parameter/shm/parameter.hpp
+    include/sardine/region/milk/parameter/shm/handle_managed.hpp
+    include/sardine/region/milk/parameter/shm/handle.hpp
+    include/sardine/region/milk/parameter/fps.hpp
+    include/sardine/region/local.hpp
+    include/sardine/region/host.hpp
+    include/sardine/type/url.hpp
+    include/sardine/type/json.hpp
+    include/sardine/mapper/base.hpp
+    include/sardine/mapper/mapper_base.hpp
+    include/sardine/json.hpp
+    include/sardine/python/managed_helper.hpp
+    include/sardine/python/mapper.hpp
+    include/sardine/python/cast/url.hpp
+    include/sardine/python/cast/json.hpp
+    include/sardine/python/url_helper.hpp
 )
 
 if(sardine_build_cuda)

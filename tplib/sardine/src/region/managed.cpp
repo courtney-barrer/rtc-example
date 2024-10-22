@@ -6,7 +6,7 @@
 #include <string>
 #include <charconv>
 
-//Note: Was using the '+' before but it seems to impossible to uncode it into a boost::url.
+//Note: Was using the '+' before but it seems to impossible to uncode it into a myboost::url.
 // Try again later or continue to use '@' in the meantime.
 
 namespace sardine::region

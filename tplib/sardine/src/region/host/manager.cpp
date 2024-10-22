@@ -15,8 +15,8 @@ namespace sardine::region::host
     span_b manager::open(string name) {
         emu::cstring_view name_view = name;
         auto& h = find_or_emplace(static_cast<base&>(*this), std::move(name), [s = name_view.c_str()] {
-            auto res = boost::interprocess::shared_memory_object(boost::interprocess::open_only, s, boost::interprocess::read_write);
-            return handle(res, boost::interprocess::read_write);
+            auto res = myboost::interprocess::shared_memory_object(myboost::interprocess::open_only, s, myboost::interprocess::read_write);
+            return handle(res, myboost::interprocess::read_write);
         })->second;
 
         return map(h);
@@ -25,9 +25,9 @@ namespace sardine::region::host
     span_b manager::create(string name, size_t size) {
         emu::cstring_view name_view = name;
         auto& h = emplace_or_throw(static_cast<base&>(*this), std::move(name), [s = name_view.c_str(), size] {
-            auto res = boost::interprocess::shared_memory_object(boost::interprocess::create_only, s, boost::interprocess::read_write);
+            auto res = myboost::interprocess::shared_memory_object(myboost::interprocess::create_only, s, myboost::interprocess::read_write);
             res.truncate(size);
-            return handle(res, boost::interprocess::read_write);
+            return handle(res, myboost::interprocess::read_write);
         })->second;
 
         return map(h);
@@ -36,9 +36,9 @@ namespace sardine::region::host
     span_b manager::open_or_create(string name, size_t size) {
         emu::cstring_view name_view = name;
         auto& h = find_or_emplace(static_cast<base&>(*this), std::move(name), [s = name_view.c_str(), size] {
-            auto res = boost::interprocess::shared_memory_object(boost::interprocess::open_or_create, s, boost::interprocess::read_write);
+            auto res = myboost::interprocess::shared_memory_object(myboost::interprocess::open_or_create, s, myboost::interprocess::read_write);
             res.truncate(size);
-            return handle(res, boost::interprocess::read_write);
+            return handle(res, myboost::interprocess::read_write);
         })->second;
 
         return map(h);

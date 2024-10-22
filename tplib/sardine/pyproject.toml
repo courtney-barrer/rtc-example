@@ -23,7 +23,7 @@ dependencies = []
 sardine = "sardine.main:main"
 
 [build-system]
-requires = ["scikit-build-core >=0.10.3", "pybind11 >= 2.13.1"]
+requires = ["scikit-build-core >=0.10.3", "pybind11 >= 2.13.1", "cmake >=3.27", "conan >= 2.8.0"]
 
 build-backend = "scikit_build_core.build"
 

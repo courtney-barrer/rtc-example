@@ -25,7 +25,7 @@ namespace emu
 
     using std::string_view;
 
-    using boost::hana::make;
+    using myboost::hana::make;
 
     template<typename T>
     inline byte* b_ptr_of(const T* t) {
@@ -198,7 +198,7 @@ namespace detail
      */
     template<typename Fn, typename ReferenceFn>
     constexpr decltype(auto) invoke_with_args(Fn&& fn, const ReferenceFn&) {
-        namespace ct = boost::callable_traits;
+        namespace ct = myboost::callable_traits;
 
         return std::invoke(EMU_FWD(fn), make_type_pack_from_tuple<ct::args_t<Fn>>{});
     }

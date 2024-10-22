@@ -5,7 +5,7 @@
 namespace sardine
 {
 
-    using semaphore_t = boost::interprocess::interprocess_semaphore;
-    using mutex_t = boost::interprocess::interprocess_mutex;
+    using semaphore_t = myboost::interprocess::interprocess_semaphore;
+    using mutex_t = myboost::interprocess::interprocess_mutex;
 
 } // namespace sardine

@@ -30,8 +30,9 @@ namespace baldr
                     break;
 
                 if (new_cmd == cmd::pause) {
-                    fmt::print("pausing loop for {}\n", component_name);
-                    command.wait(cmd::pause);
+                    // fmt::print("pausing loop for {}\n", component_name);
+                    // command.wait(cmd::pause);
+                    // fmt::print("exiting pause for {}\n", component_name);
                     continue;
                 }
 

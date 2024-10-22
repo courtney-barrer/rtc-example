@@ -64,6 +64,7 @@ class sardineConan(ConanFile):
 
     def package_info(self):
         self.cpp_info.libs = ['sardine']
+        self.cpp_info.system_libs = ['pthread', 'rt']
 
         if self.options.cuda:
             self.cpp_info.defines = ['SARDINE_CUDA']

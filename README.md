@@ -8,18 +8,34 @@ This project is an example of how to use a RTC written in C++ from python.
 - python 3.10 or later
 - [just](https://just.systems/) (optional), utility to run the commands in the `justfile`
 
+## Configure
+
+```bash
+    # install conan and configure it
+    curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s
+    # install the two embeded dependencies: emu and sardine
+    conan create tplib/emu -b missing
+    conan create tplib/sardine -b missing
+    pip install tplib/sardine
+```
+
 ## Build
 
 ```bash
+conan build .
 pip install .
 ```
 
 ## Test
 
+Simple test:
+
 ```bash
-python example.py
+ipython -i script_test.py
 ```
 
-## Documentation
+And in another terminal:
 
-For now, just look at `example.py` and `src/rtc.cpp`.
+```bash
+./build/Release/baldr_main --config camera_config.json
+```

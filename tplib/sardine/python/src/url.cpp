@@ -44,11 +44,11 @@ namespace sardine
             emu::throw_error(error::python_type_not_supported);
         }, py::arg("url"), py::arg("type"));
 
-        m.def("url_of", [](py::object obj, bool allow_local) -> py::object {
+        m.def("url_of", [](py::object obj, bool allow_local) -> url {
             // if (py::hasattr(obj, "__url_of__"))
             //     return obj.attr("__url_of__")();
             // else
-                return py::cast(EMU_UNWRAP_OR_THROW(sardine::url_of(obj.cast<py::array>(), allow_local)));
+                return EMU_UNWRAP_OR_THROW(sardine::url_of(obj.cast<py::array>(), allow_local));
                 // throw std::runtime_error(fmt::format("{} does not have __url_of__", obj.type()));
         }, py::arg("obj"), py::arg("allow_local") = false);
 

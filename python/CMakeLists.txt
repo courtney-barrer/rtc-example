@@ -31,8 +31,6 @@ find_package(Python 3.8
   REQUIRED COMPONENTS Interpreter Development.Module
   OPTIONAL_COMPONENTS Development.SABIModule)
 find_package(pybind11 CONFIG REQUIRED)
-find_package(sardine REQUIRED)
-find_package(emu REQUIRED)
 find_package(baldr REQUIRED)
 
 pybind11_add_module(_baldr
@@ -45,7 +43,53 @@ target_include_directories(_baldr PUBLIC include)
 
 target_compile_features(_baldr PUBLIC cxx_std_20)
 
-target_link_libraries(_baldr PRIVATE sardine::sardine emu::emu baldr::baldr)
+target_link_libraries(_baldr PRIVATE baldr::baldr)
+
+##################
+# IMPORT BMC SDK #
+##################
+
+set(DEFAULT_BMC_DIR "/opt/Boston Micromachines")
+
+if(EXISTS "${DEFAULT_BMC_DIR}" AND IS_DIRECTORY "${DEFAULT_BMC_DIR}")
+    target_include_directories(_baldr PRIVATE
+        "${DEFAULT_BMC_DIR}/include"
+    )
+    target_link_directories(_baldr PUBLIC
+        "${DEFAULT_BMC_DIR}/lib"
+    )
+    target_link_libraries(_baldr PUBLIC
+        BMC
+    )
+
+    target_compile_definitions(_baldr PUBLIC BALDR_BMC)
+else()
+    message(STATUS "Could not find BMC. Skipping...")
+endif()
+
+##################
+# IMPORT FLI SDK #
+##################
+
+set(DEFAULT_FLI_DIR "/opt/FirstLightImaging/FliSdk")
+
+if(EXISTS "${DEFAULT_FLI_DIR}" AND IS_DIRECTORY "${DEFAULT_FLI_DIR}")
+    target_include_directories(_baldr PRIVATE
+        "${DEFAULT_FLI_DIR}/include"
+    )
+    target_link_directories(_baldr PUBLIC
+        "${DEFAULT_FLI_DIR}/lib/release"
+        "${DEFAULT_FLI_DIR}/3rdParty"
+    )
+    target_link_libraries(_baldr PUBLIC
+        FliSdk
+    )
+
+    target_compile_definitions(_baldr PUBLIC BALDR_FLI)
+else()
+    message(STATUS "Could not find FliSdk. Skipping...")
+endif()
+
 
 # Install the python module in the sardine python package.
 install(TARGETS _baldr LIBRARY DESTINATION baldr)

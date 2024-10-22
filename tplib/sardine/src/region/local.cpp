@@ -6,13 +6,13 @@ namespace sardine::local
 {
 
     optional<result<url>> url_from_bytes(span_cb data) {
-        auto pid = boost::interprocess::ipcdetail::get_current_process_id();
+        auto pid = myboost::interprocess::ipcdetail::get_current_process_id();
 
         return sardine::url(fmt::format("{}://{}/{}/{}", url_scheme, pid, reinterpret_cast<std::uintptr_t>(data.data()), data.size()));
     }
 
     result<bytes_and_device> bytes_from_url(url_view u) {
-        auto pid = boost::interprocess::ipcdetail::get_current_process_id();
+        auto pid = myboost::interprocess::ipcdetail::get_current_process_id();
 
         if (u.host() != std::to_string(pid))
             return make_unexpected(error::local_url_invalid_host);
@@ -24,9 +24,9 @@ namespace sardine::local
 
         auto seg = segments.begin();
 
-        auto addr = boost::lexical_cast<std::uintptr_t>(*seg);
+        auto addr = myboost::lexical_cast<std::uintptr_t>(*seg);
         seg++;
-        auto size = boost::lexical_cast<std::size_t>(*seg);
+        auto size = myboost::lexical_cast<std::size_t>(*seg);
 
         span_b data{reinterpret_cast<std::byte*>(addr), size};
 

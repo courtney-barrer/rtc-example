@@ -28,48 +28,58 @@ target_sources(emucore
 
 target_sources(emucore
     PUBLIC FILE_SET HEADERS BASE_DIRS include/core FILES
-    include/core/emu/blas.hpp
-    include/core/emu/tuple.hpp
-    include/core/emu/assert.hpp
-    include/core/emu/detail/error.hpp
-    include/core/emu/detail/basic_container.hpp
-    include/core/emu/detail/basic_span.hpp
-    include/core/emu/detail/basic_mdspan.hpp
-    include/core/emu/detail/basic_mdcontainer.hpp
-    include/core/emu/charconv.hpp
-    include/core/emu/config.hpp
-    include/core/emu/functional/misc.hpp
-    include/core/emu/optional.hpp
-    include/core/emu/storage.hpp
-    include/core/emu/range.hpp
-    include/core/emu/scoped.hpp
-    include/core/emu/numeric_type.hpp
+    include/core/emu/const_string.hpp
     include/core/emu/unordered_map.hpp
-    include/core/emu/mdcontainer.hpp
-    include/core/emu/macro.hpp
-    include/core/emu/mdalgo.hpp
-    include/core/emu/mdspan.hpp
-    include/core/emu/type_traits.hpp
-    include/core/emu/concepts.hpp
-    include/core/emu/capsule.hpp
-    include/core/emu/cstring_view.hpp
-    include/core/emu/functor.hpp
-    include/core/emu/hash.hpp
-    include/core/emu/unordered_set.hpp
+    include/core/emu/error.hpp
+    include/core/emu/detail/error.hpp
+    include/core/emu/detail/basic_mdspan.hpp
+    include/core/emu/detail/dlpack_types.hpp
+    include/core/emu/detail/basic_container.hpp
+    include/core/emu/detail/mdspan_types.hpp
+    include/core/emu/detail/basic_mdcontainer.hpp
+    include/core/emu/detail/basic_span.hpp
     include/core/emu/expected.hpp
+    include/core/emu/blas.hpp
+    include/core/emu/pointer.hpp
+    include/core/emu/concepts.hpp
+    include/core/emu/location_policy.hpp
+    include/core/emu/assert.hpp
+    include/core/emu/range.hpp
+    include/core/emu/macro.hpp
     include/core/emu/fwd.hpp
-    include/core/emu/span.hpp
-    include/core/emu/info.hpp
-    include/core/emu/type_name.hpp
+    include/core/emu/capsule.hpp
+    include/core/emu/mdalgo.hpp
+    include/core/emu/ostream.hpp
     include/core/emu/utility.hpp
+    include/core/emu/numeric_type.hpp
+    include/core/emu/functor.hpp
+    include/core/emu/optional.hpp
+    include/core/emu/scoped.hpp
+    include/core/emu/functional
+    include/core/emu/functional/misc.hpp
+    include/core/emu/type_name.hpp
     include/core/emu/container.hpp
+    include/core/emu/charconv.hpp
+    include/core/emu/unordered_set.hpp
     include/core/emu/debug.hpp
-    include/core/emu/math.hpp
-    include/core/emu/host/span.hpp
+    include/core/emu/host/location_policy.hpp
     include/core/emu/host/container.hpp
+    include/core/emu/host/span.hpp
     include/core/emu/host/mdspan.hpp
     include/core/emu/host/mdcontainer.hpp
-    include/core/emu/ostream.hpp
+    include/core/emu/type_traits.hpp
+    include/core/emu/owning_reference.hpp
+    include/core/emu/tuple.hpp
+    include/core/emu/span.hpp
+    include/core/emu/math.hpp
+    include/core/emu/mdspan.hpp
+    include/core/emu/config.hpp
+    include/core/emu/dlpack.hpp
+    include/core/emu/hash.hpp
+    include/core/emu/storage.hpp
+    include/core/emu/cstring_view.hpp
+    include/core/emu/mdcontainer.hpp
+    include/core/emu/info.hpp
 )
 
 target_compile_features(emucore PUBLIC cxx_std_20)
@@ -208,14 +218,22 @@ if (emu_build_python)
 
     target_sources(emupython
         INTERFACE FILE_SET HEADERS BASE_DIRS include/python FILES
-        include/python/emu/cast/common.hpp
-        include/python/emu/cast/container.hpp
-        include/python/emu/cast/cstring_view.hpp
-        include/python/emu/cast/mdspan.hpp
-        include/python/emu/cast/span.hpp
+        include/python/emu/pybind11/dltensdor.hpp
+        include/python/emu/pybind11/common.hpp
+        include/python/emu/pybind11/format.hpp
+        include/python/emu/pybind11/cast/detail/mdspan_caster.hpp
+        include/python/emu/pybind11/cast/detail/layout_adaptor.hpp
+        include/python/emu/pybind11/cast/detail/capsule.hpp
+        include/python/emu/pybind11/cast/detail/location_adaptor.hpp
+        include/python/emu/pybind11/cast/cuda/stream.hpp
+        include/python/emu/pybind11/cast/container.hpp
+        include/python/emu/pybind11/cast/span.hpp
+        include/python/emu/pybind11/cast/mdspan.hpp
+        include/python/emu/pybind11/cast/cstring_view.hpp
+        include/python/emu/pybind11/cast/mdcontainer.hpp
+        include/python/emu/pybind11.hpp
         include/python/emu/bind/map.hpp
-        include/python/emu/pybind11.h
-        include/python/emu/pybind11/numpy.h
+        include/python/emu/cast/common.hpp
     )
 
     find_package(pybind11 REQUIRED)

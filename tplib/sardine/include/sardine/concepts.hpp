@@ -22,7 +22,7 @@ namespace sardine::cpts
     };
 
     // template<typename T>
-    // concept loadable = requires(const boost::json::value& jv) {
+    // concept loadable = requires(const myboost::json::value& jv) {
     //     { T::load(jv) } -> std::same_as< result<T> >;
     // };
 

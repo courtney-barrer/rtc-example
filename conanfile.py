@@ -22,7 +22,6 @@ class BaldrConan(ConanFile):
 
     def requirements(self):
         self.requires('sardine/1.0.0', transitive_headers=True)
-        self.requires('boost/1.84.0', transitive_headers=True)
 
         self.test_requires('gtest/1.13.0')
 
@@ -43,3 +42,4 @@ class BaldrConan(ConanFile):
 
     def package_info(self):
         self.cpp_info.libs = ['baldr']
+        

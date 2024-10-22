@@ -12,19 +12,19 @@ struct Environment : ::testing::Environment
     {
         sardine::cache::clear();
 
-        boost::interprocess::shared_memory_object::remove(host_filename);
-        boost::interprocess::shared_memory_object::remove(host_filename_2);
-        boost::interprocess::shared_memory_object::remove(shm_filename);
-        boost::interprocess::shared_memory_object::remove(managed_filename);
+        myboost::interprocess::shared_memory_object::remove(host_filename);
+        myboost::interprocess::shared_memory_object::remove(host_filename_2);
+        myboost::interprocess::shared_memory_object::remove(shm_filename);
+        myboost::interprocess::shared_memory_object::remove(managed_filename);
     }
 
     // Override this to define how to tear down the environment.
     void TearDown() override
     {
-        boost::interprocess::shared_memory_object::remove(host_filename);
-        boost::interprocess::shared_memory_object::remove(host_filename_2);
-        boost::interprocess::shared_memory_object::remove(shm_filename);
-        boost::interprocess::shared_memory_object::remove(managed_filename);
+        myboost::interprocess::shared_memory_object::remove(host_filename);
+        myboost::interprocess::shared_memory_object::remove(host_filename_2);
+        myboost::interprocess::shared_memory_object::remove(shm_filename);
+        myboost::interprocess::shared_memory_object::remove(managed_filename);
     }
 };
 

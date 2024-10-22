@@ -20,7 +20,7 @@
     }
 
     int main(int argc, char *argv[]) {
-    using namespace boost::interprocess;
+    using namespace myboost::interprocess;
     if (argc == 1) { // Parent process
 
         auto u_s = cuda::memory::device::make_unique_span<int>(10);

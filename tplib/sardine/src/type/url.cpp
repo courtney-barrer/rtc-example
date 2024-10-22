@@ -2,7 +2,7 @@
 
 #include <sardine/type/json.hpp>
 
-namespace boost::urls
+namespace myboost::urls
 {
 
     void tag_invoke( json::value_from_tag, json::value& jv, const url_view& url ) {
@@ -27,4 +27,4 @@ namespace boost::urls
 
     }
 
-} // namespace boost::urls
+} // namespace myboost::urls

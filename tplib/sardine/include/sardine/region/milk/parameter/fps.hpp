@@ -321,7 +321,7 @@ namespace fps
         s_handle_t handle_;
     };
 
-    struct object_iterator : boost::iterator_facade<object_iterator, Object, boost::forward_traversal_tag, Object>
+    struct object_iterator : myboost::iterator_facade<object_iterator, Object, myboost::forward_traversal_tag, Object>
     {
 
         Object fps;
@@ -336,7 +336,7 @@ namespace fps
         }
 
     private:
-        friend class boost::iterator_core_access;
+        friend class myboost::iterator_core_access;
 
         void increment() { idx = fps.handle().next_token(fps.key, level, idx); }
 
@@ -348,7 +348,7 @@ namespace fps
         Object dereference() const { return fps[*idx]; }
     };
 
-    // struct flat_object_iterator : boost::iterator_facade<flat_object_iterator, Object, boost::forward_traversal_tag, Object>
+    // struct flat_object_iterator : myboost::iterator_facade<flat_object_iterator, Object, myboost::forward_traversal_tag, Object>
     // {
 
     //     Object fps;
@@ -362,7 +362,7 @@ namespace fps
     //     {}
 
     // private:
-    //     friend class boost::iterator_core_access;
+    //     friend class myboost::iterator_core_access;
 
     //     void increment() { idx = fps.handle().next_id(fps.key, level, idx); }
 

@@ -46,6 +46,7 @@ namespace node
 
 } // namespace node
 
-    std::future<void> init_camera(json::object config);
+    node::Camera init_camera(json::object config);
+    std::future<void> init_camera_thread(json::object config);
 
 } // namespace baldr

@@ -26,7 +26,7 @@ namespace emu
 
     template<typename T>
     auto format_as(type_name_t<T>) {
-        return boost::core::demangle(typeid(T).name());
+        return myboost::core::demangle(typeid(T).name());
     }
 
     template <typename T>

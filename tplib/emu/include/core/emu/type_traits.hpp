@@ -178,7 +178,7 @@ namespace spe
      *
      */
     template <typename T>
-    inline constexpr boost::logic::tribool enable_relocatable_owning_range = boost::logic::indeterminate;
+    inline constexpr myboost::logic::tribool enable_relocatable_owning_range = myboost::logic::indeterminate;
 
 } // namespace spe
 

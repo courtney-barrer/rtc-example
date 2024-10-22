@@ -25,7 +25,22 @@ add_library(baldr
 
 target_sources(baldr
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
+    include/baldr/dm.hpp
+    include/baldr/utility/push_record.hpp
+    include/baldr/utility/span_cast.hpp
+    include/baldr/utility/span_format.hpp
+    include/baldr/utility/runner.hpp
+    include/baldr/utility/updatable.hpp
+    include/baldr/utility/command.hpp
+    include/baldr/rtc.hpp
+    include/baldr/type.hpp
+    include/baldr/component/camera/fakecam.hpp
+    include/baldr/component/camera/flicam.hpp
+    include/baldr/component/dm/fakedm.hpp
+    include/baldr/component/dm/bmc.hpp
+    include/baldr/component/rtc/ben.hpp
     include/baldr/baldr.hpp
+    include/baldr/camera.hpp
 )
 
 target_compile_features(baldr PUBLIC cxx_std_20)
@@ -33,7 +48,7 @@ target_compile_features(baldr PUBLIC cxx_std_20)
 find_package(sardine REQUIRED)
 
 target_link_libraries(baldr PUBLIC
-    sardine::sardine
+    sardine::sardine pthread rt
 )
 
 
@@ -44,11 +59,16 @@ target_link_libraries(baldr PUBLIC
 set(DEFAULT_BMC_DIR "/opt/Boston Micromachines")
 
 if(EXISTS "${DEFAULT_BMC_DIR}" AND IS_DIRECTORY "${DEFAULT_BMC_DIR}")
+    message(STATUS "Found BMC SDK at ${DEFAULT_BMC_DIR}")
+
     target_include_directories(baldr PRIVATE
         "${DEFAULT_BMC_DIR}/include"
     )
     target_link_directories(baldr PUBLIC
         "${DEFAULT_BMC_DIR}/lib"
+    )
+    target_link_libraries(baldr PUBLIC
+        BMC
     )
 
     target_compile_definitions(baldr PUBLIC BALDR_BMC)
@@ -63,11 +83,17 @@ endif()
 set(DEFAULT_FLI_DIR "/opt/FirstLightImaging/FliSdk")
 
 if(EXISTS "${DEFAULT_FLI_DIR}" AND IS_DIRECTORY "${DEFAULT_FLI_DIR}")
+    message(STATUS "Found FliSdk at ${DEFAULT_FLI_DIR}")
+    
     target_include_directories(baldr PRIVATE
         "${DEFAULT_FLI_DIR}/include"
     )
     target_link_directories(baldr PUBLIC
         "${DEFAULT_FLI_DIR}/lib/release"
+        "${DEFAULT_FLI_DIR}/3rdParty"
+    )
+    target_link_libraries(baldr PUBLIC
+        FliSdk
     )
 
     target_compile_definitions(baldr PUBLIC BALDR_FLI)

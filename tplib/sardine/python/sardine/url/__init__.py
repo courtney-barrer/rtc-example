@@ -12,7 +12,7 @@ def url_of(value):
     if hasattr(value, '__url_of__'):
         return value.__url_of__()
     else:
-        sa.url_of(value)
+        return sa.url_of(value)
 
 def query(input):
     if isinstance(input, ParseResult):

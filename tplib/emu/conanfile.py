@@ -29,6 +29,7 @@ class EmuConan(ConanFile):
         'python'     : False,
         'shared'     : False,
         'fPIC'       : True,
+        'boost/*:namespace' : 'myboost',
     }
 
     def requirements(self):

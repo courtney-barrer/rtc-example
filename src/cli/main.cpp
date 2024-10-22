@@ -10,7 +10,7 @@
 #include <future>
 
 
-namespace po = boost::program_options;
+namespace po = myboost::program_options;
 
 using namespace baldr;
 
@@ -18,7 +18,7 @@ json::value parse_json(const std::string& input) {
     // Try to parse as inline JSON
     try {
         return json::parse(input);
-    } catch (const boost::json::system_error&) {
+    } catch (const myboost::system::system_error&) {
         // If parsing fails, assume it's a file path
         std::ifstream file(input);
         if (!file) {
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
             auto component_type = json::opt_to<std::string>(comp_config_obj, "component").value();
 
             if (component_type == "camera")
-                locks.push_back( baldr::init_camera(comp_config_obj) );
+                locks.push_back( baldr::init_camera_thread(comp_config_obj) );
 
             if (component_type == "rtc")
                 locks.push_back( baldr::init_rtc(comp_config_obj) );

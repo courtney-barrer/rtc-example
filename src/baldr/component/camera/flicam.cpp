@@ -10,8 +10,12 @@
 
 #ifdef BALDR_FLI
 
+#include <FliSdk.h>
+
 namespace baldr::flicam
 {
+
+    namespace json = myboost::json;
 
     /*@brief to hold camera settings*/
     struct CameraSettings {
@@ -28,27 +32,32 @@ namespace baldr::flicam
         uint32_t full_image_length = 327680; //640*512;
     };
 
-    CameraSettings tag_invoke( value_to_tag< customer >, value const& jv )
+    CameraSettings tag_invoke(
+        const myboost::json::value_to_tag< CameraSettings >&,
+        myboost::json::value const& jv
+    )
     {
         CameraSettings cm;
 
-        object const& obj = jv.as_object();
+        json::object const& obj = jv.as_object();
 
         auto extract = [&]( auto& t, string_view key, auto default_ ) {
             if (obj.contains(key))
-                t = value_to<T>( obj.at( key ) );
+                t = value_to<decltype(default_)>( obj.at( key ) );
             else
                 t = default_;
         };
 
+        using namespace std::string_literals;
+
         extract( cm.camera_index,      "camera_index",      0 );
         extract( cm.det_dit,           "det_dit",           0.0016 );
         extract( cm.det_fps,           "det_fps",           600.0);
-        extract( cm.det_gain,          "det_gain",          "medium");
+        extract( cm.det_gain,          "det_gain",          "medium"s);
         extract( cm.det_crop_enabled,  "det_crop_enabled",  false);
         extract( cm.det_tag_enabled,   "det_tag_enabled",   false);
-        extract( cm.det_cropping_rows, "det_cropping_rows", "0-639");
-        extract( cm.det_cropping_cols, "det_cropping_cols", "0-511");
+        extract( cm.det_cropping_rows, "det_cropping_rows", "0-639"s);
+        extract( cm.det_cropping_cols, "det_cropping_cols", "0-511"s);
         extract( cm.image_height,      "image_height",      640);
         extract( cm.image_width,       "image_width",       512);
         extract( cm.full_image_length, "full_image_length", 327680);
@@ -57,7 +66,7 @@ namespace baldr::flicam
     }
 
 
-    void apply_camera_settings( FliSdk& fli_sdk, const CameraSettings& cm){
+    void apply_camera_settings( FliSdk& fli_sdk, CameraSettings& cm){
         // NEED TO TEST IN SYDNEY ON CAMERA
         // does not check if in simulation mode!
 
@@ -128,13 +137,13 @@ namespace baldr::flicam
         std::unique_ptr<FliSdk> fli_sdk;
 
         FliCam(json::object config)
-            : camera_settings(json::value_to<CameraSettings>(config))
-            , fli_sdk(std::make_unique<FliSdk>())
+            : //camera_settings(myboost::json::value_to<CameraSettings>(json::value(config)))
+             fli_sdk(std::make_unique<FliSdk>())
         {
             fmt::print("Detection of grabbers...\n");
             auto listOfGrabbers = fli_sdk->detectGrabbers();
             fmt::print("Detection of cameras...\n");
-            auto listOfCameras = fli->detectCameras();
+            auto listOfCameras = fli_sdk->detectCameras();
 
             if(listOfGrabbers.size() == 0)
                 throw std::runtime_error("No grabber detected, exit. Putting camera in simulation mode..");
@@ -177,7 +186,7 @@ namespace baldr::flicam
         }
 
         void get_frame(std::span<uint16_t> frame) {
-            std::span<const uint16_t> current_frame{fli_sdk->getRawImage(), camera_settings.full_image_length};
+            std::span<const uint16_t> current_frame(reinterpret_cast<const uint16_t*>(fli_sdk->getRawImage()), camera_settings.full_image_length);
 
             std::ranges::copy(current_frame, frame.data());
         }

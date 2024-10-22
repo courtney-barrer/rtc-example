@@ -69,7 +69,7 @@ namespace detail
         Fn fn,
         pybind11::return_value_policy policy
     ) {
-        register_creates_impl(cls, fn, policy, std::type_identity<boost::callable_traits::args_t<Fn>>{});
+        register_creates_impl(cls, fn, policy, std::type_identity<myboost::callable_traits::args_t<Fn>>{});
     }
 
 } // namespace detail
@@ -101,9 +101,9 @@ namespace detail
 // namespace pybind11::detail
 // {
 //     template<>
-//     struct type_caster< boost::interprocess::ipcdetail::char_ptr_holder<char> > {
+//     struct type_caster< myboost::interprocess::ipcdetail::char_ptr_holder<char> > {
 
-//         using Value = boost::interprocess::ipcdetail::char_ptr_holder<char>;                                                      \
+//         using Value = myboost::interprocess::ipcdetail::char_ptr_holder<char>;                                                      \
 //         static constexpr auto Name = const_name("char_ptr_holder");                                        \
 //         template <typename T_> using Cast = movable_cast_t<T_>;
 

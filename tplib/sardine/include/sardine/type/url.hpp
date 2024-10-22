@@ -18,20 +18,20 @@
 namespace sardine
 {
 
-    using boost::urls::url;
-    using boost::urls::url_view;
+    using myboost::urls::url;
+    using myboost::urls::url_view;
 
 namespace urls
 {
-    using boost::urls::param_view;
+    using myboost::urls::param_view;
 
-    using boost::urls::params_view;
-    using boost::urls::params_ref;
+    using myboost::urls::params_view;
+    using myboost::urls::params_ref;
 
-    using boost::urls::parse_uri;
-    using boost::urls::parse_uri_reference;
+    using myboost::urls::parse_uri;
+    using myboost::urls::parse_uri_reference;
 
-    using boost::urls::ignore_case;
+    using myboost::urls::ignore_case;
 
 
     inline optional<std::string> try_get_at(params_view params, std::string_view key) {
@@ -156,7 +156,7 @@ namespace urls
 
 } // namespace sardine
 
-namespace boost::urls
+namespace myboost::urls
 {
 
     void tag_invoke( json::value_from_tag, json::value& jv, const url_view& url );
@@ -168,14 +168,14 @@ namespace boost::urls
     // We are only interested by converting to json.
     json::result< params_ref > tag_invoke( json::try_value_to_tag< params_ref >, const json::value& jv ) = delete;
 
-} // namespace boost::urls
+} // namespace myboost::urls
 
 template <sardine::cpts::url Url> struct fmt::formatter<Url> : ostream_formatter {};
 
 template<typename CharT>
-struct fmt::formatter<boost::core::basic_string_view<CharT>> : fmt::formatter<fmt::basic_string_view<CharT>> {
+struct fmt::formatter<myboost::core::basic_string_view<CharT>> : fmt::formatter<fmt::basic_string_view<CharT>> {
     template <typename FormatContext>
-    auto format(boost::core::basic_string_view<CharT> data, FormatContext &ctx) const {
+    auto format(myboost::core::basic_string_view<CharT> data, FormatContext &ctx) const {
         return fmt::formatter<fmt::basic_string_view<CharT>>::format({data.data(), data.size()}, ctx);
     }
 };

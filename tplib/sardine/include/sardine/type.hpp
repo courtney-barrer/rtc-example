@@ -40,17 +40,17 @@ namespace sardine
 
     using tl::unexpected;
 
-    using boost::interprocess::create_only_t;
-    using boost::interprocess::open_only_t;
-    using boost::interprocess::open_read_only_t;
-    using boost::interprocess::open_or_create_t;
-    using boost::interprocess::open_copy_on_write_t;
+    using myboost::interprocess::create_only_t;
+    using myboost::interprocess::open_only_t;
+    using myboost::interprocess::open_read_only_t;
+    using myboost::interprocess::open_or_create_t;
+    using myboost::interprocess::open_copy_on_write_t;
 
-    using boost::interprocess::create_only;
-    using boost::interprocess::open_only;
-    using boost::interprocess::open_read_only;
-    using boost::interprocess::open_or_create;
-    using boost::interprocess::open_copy_on_write;
+    using myboost::interprocess::create_only;
+    using myboost::interprocess::open_only;
+    using myboost::interprocess::open_read_only;
+    using myboost::interprocess::open_or_create;
+    using myboost::interprocess::open_copy_on_write;
 
     // struct heap_allocator_tag {};
 

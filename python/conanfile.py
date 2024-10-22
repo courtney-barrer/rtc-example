@@ -13,7 +13,6 @@ class SardinePythonConan(ConanFile):
     }
 
     requires = [
-        'sardine/1.0.0', # keep the version number in sync with the C++ version.
         'emu/1.0.0',
         'baldr/1.0.0'
         # 'pybind11/2.10.4',

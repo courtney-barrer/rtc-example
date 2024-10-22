@@ -76,7 +76,7 @@
 //     template <typename T, auto Met>
 //     auto adapt_method() {
 //         // Gets Method domain.
-//         using args = boost::callable_traits::args_t<decltype(Met)>;
+//         using args = myboost::callable_traits::args_t<decltype(Met)>;
 
 //         return []<typename This, typename... Args>(std::type_identity<std::tuple<This, Args...>>) {
 //             // This lambda which is returned have the exact same domain than `Met` except that

@@ -15,6 +15,8 @@ int add(int i, int j) {
 }
 
 PYBIND11_MODULE(_baldr, m) {
+    fmt::print("pybind11 _baldr plugin!!!!\n");
+
     m.doc() = "pybind11 _baldr plugin"; // optional module docstring
 
     m.def("add", &add, "A function that adds two numbers");
@@ -22,8 +24,8 @@ PYBIND11_MODULE(_baldr, m) {
     using namespace baldr;
 
     py::class_<node::Camera>(m, "Camera")
-        .def(py::init<std::string, baldr::json::object, frame_producer_t, sardine::mutex_t&>())
         .def("__call__", [](node::Camera& self){ self(); })
+        .def_static("init", &init_camera)
     ;
 
     py::enum_<cmd>(m, "Cmd")
@@ -40,11 +42,13 @@ PYBIND11_MODULE(_baldr, m) {
     }, py::arg("init_value") = cmd::pause, py::return_value_policy::reference)
     .def("send", [](Command& command, cmd new_cmd){
         command = new_cmd;
+        command.notify_all();
     })
     .def("recv", [](Command& command){
         return command.load();
     });
 
     sardine::register_url(command);
+    
 
 }
