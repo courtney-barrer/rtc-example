@@ -1,0 +1,116 @@
+---
+# Try to use as many checks as possible to catch as many issues as possible.
+# readability-named-parameter: Prefer the simpler approach of not naming unused parameters.
+# readability-identifier-length: Too much noise. A lot of variables are short and still meaningful.
+# readability-isolate-declaration: Disable because not very useful.
+# readability-braces-around-statements: Not having braces can be actually more readable.
+# readability-uppercase-literal-suffix: force numeric suffix to be upper case... Just why ???
+# readability-implicit-bool-conversion: Implicit bool conversion is one of the safest and most useful implicit conversions.
+# *-magic-numbers: Disable for now. May be useful in the future.
+# clang-analyzer-cplusplus.StringChecker: Disable because it triggers errors present in third-party libraries.
+# *-avoid-c-arrays: Disable because it doesn't allow using std::*_ptr<T[]> and std::make_*_ptr<T[]>.
+# modernize-use-trailing-return-type: Disabled for now. Doesn't bring much value.
+# modernize-return-braced-init-list: Does not work with template function that returns types with explicit constructor
+# bugprone-easily-swappable-parameters: Disable because too hard to fix. The idea is good though.
+# pro-bounds-constant-array-index: Reconsidere when c++23 and std::ranges::enumerate, std::ranges::zip, etc.
+# misc-include-cleaner: Doesn't work well with a lot of standard headers. (i.e. std::operator""s)
+# cppcoreguidelines-pro-bounds-constant-array-index:
+# cppcoreguidelines-pro-type-reinterpret-cast: Conbersome to adds ignore statements for every correct uses of reinterpret_cast.
+# cppcoreguidelines-macro-usage: Cannot detect non replaceable macros doing code generation.
+# cppcoreguidelines-pro-bounds-pointer-arithmetic: Way too restrictive...
+# cppcoreguidelines-pro-bounds-constant-array-index: Unusable with current state of C++...
+# clang-diagnostic-unqualified-std-cast-call: It makes sens to use this one. Need to replace back call to `move` by `std::move`
+# clang-diagnostic-gnu-statement-expression-from-macro-expansion: non standard but so useful !
+Checks: >
+  clang-diagnostic-*, clang-analyzer-*, cppcoreguidelines-*,
+  modernize-*, readability-*, bugprone-*, misc-*, performance-*,
+  ColumnLimit, llvm-namespace-comment,
+  -readability-named-parameter,
+  -readability-identifier-length,
+  -readability-magic-numbers, -cppcoreguidelines-avoid-magic-numbers,
+  -readability-isolate-declaration,
+  -readability-braces-around-statements,
+  -readability-implicit-bool-conversion,
+  -readability-uppercase-literal-suffix,
+  -clang-analyzer-cplusplus.StringChecker,
+  -modernize-avoid-c-arrays, -cppcoreguidelines-avoid-c-arrays,
+  -modernize-use-trailing-return-type,
+  -modernize-return-braced-init-list,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -misc-include-cleaner,
+  -clang-diagnostic-unqualified-std-cast-call,
+  -clang-diagnostic-gnu-statement-expression-from-macro-expansion
+
+# -cppcoreguidelines-pro-bounds-constant-array-index,
+
+FormatStyle: GNU
+CheckOptions:
+
+  - { key: llvm-namespace-comment.ShortNamespaceLines                       , value: '0'     }
+  - { key: ColumnLimit                                                      , value: 128     }
+
+  - { key: readability-identifier-naming.MacroDefinitionCase             , value: UPPER_CASE }
+
+  - { key: readability-identifier-naming.ClassCase                       , value: aNy_CasE   }
+  - { key: readability-identifier-naming.StructCase                      , value: aNy_CasE   }
+  - { key: readability-identifier-naming.TypeAliasCase                   , value: aNy_CasE   }
+
+  - { key: readability-identifier-naming.TemplateParameterCase           , value: CamelCase  }
+  - { key: readability-identifier-naming.TemplateTemplateParameterCase   , value: CamelCase  }
+  - { key: readability-identifier-naming.TypeTemplateParameterCase       , value: CamelCase  }
+  - { key: readability-identifier-naming.ValueTemplateParameterCase      , value: CamelCase  }
+
+  - { key: readability-identifier-naming.ClassConstantCase               , value: lower_case }
+  - { key: readability-identifier-naming.ClassMemberCase                 , value: lower_case }
+  - { key: readability-identifier-naming.ClassMethodCase                 , value: lower_case }
+  - { key: readability-identifier-naming.ConceptCase                     , value: lower_case }
+  - { key: readability-identifier-naming.ConstantCase                    , value: lower_case }
+  - { key: readability-identifier-naming.ConstantMemberCase              , value: lower_case }
+  - { key: readability-identifier-naming.ConstantParameterCase           , value: lower_case }
+  - { key: readability-identifier-naming.ConstantPointerParameterCase    , value: lower_case }
+  - { key: readability-identifier-naming.ConstexprFunctionCase           , value: lower_case }
+  - { key: readability-identifier-naming.ConstexprMethodCase             , value: lower_case }
+  - { key: readability-identifier-naming.ConstexprVariableCase           , value: lower_case }
+  - { key: readability-identifier-naming.EnumCase                        , value: lower_case }
+  - { key: readability-identifier-naming.EnumConstantCase                , value: lower_case }
+  - { key: readability-identifier-naming.FunctionCase                    , value: lower_case }
+  - { key: readability-identifier-naming.GlobalConstantCase              , value: lower_case }
+  - { key: readability-identifier-naming.GlobalConstantPointerCase       , value: lower_case }
+  - { key: readability-identifier-naming.GlobalFunctionCase              , value: lower_case }
+  - { key: readability-identifier-naming.GlobalPointerCase               , value: lower_case }
+  - { key: readability-identifier-naming.GlobalVariableCase              , value: lower_case }
+  - { key: readability-identifier-naming.InlineNamespaceCase             , value: lower_case }
+  - { key: readability-identifier-naming.LocalConstantCase               , value: lower_case }
+  - { key: readability-identifier-naming.LocalConstantPointerCase        , value: lower_case }
+  - { key: readability-identifier-naming.LocalPointerCase                , value: lower_case }
+  - { key: readability-identifier-naming.LocalVariableCase               , value: lower_case }
+  - { key: readability-identifier-naming.MemberCase                      , value: lower_case }
+  - { key: readability-identifier-naming.MethodCase                      , value: lower_case }
+  - { key: readability-identifier-naming.NamespaceCase                   , value: lower_case }
+  - { key: readability-identifier-naming.ParameterCase                   , value: lower_case }
+  - { key: readability-identifier-naming.ParameterPackCase               , value: lower_case }
+  - { key: readability-identifier-naming.PointerParameterCase            , value: lower_case }
+  - { key: readability-identifier-naming.PrivateMemberCase               , value: lower_case }
+  - { key: readability-identifier-naming.PrivateMethodCase               , value: lower_case }
+  - { key: readability-identifier-naming.ProtectedMemberCase             , value: lower_case }
+  - { key: readability-identifier-naming.ProtectedMethodCase             , value: lower_case }
+  - { key: readability-identifier-naming.PublicMemberCase                , value: lower_case }
+  - { key: readability-identifier-naming.PublicMethodCase                , value: lower_case }
+  - { key: readability-identifier-naming.ScopedEnumConstantCase          , value: lower_case }
+  - { key: readability-identifier-naming.StaticConstantCase              , value: lower_case }
+  - { key: readability-identifier-naming.StaticVariableCase              , value: lower_case }
+  - { key: readability-identifier-naming.TypedefCase                     , value: lower_case }
+  - { key: readability-identifier-naming.UnionCase                       , value: lower_case }
+  - { key: readability-identifier-naming.VariableCase                    , value: lower_case }
+  - { key: readability-identifier-naming.VirtualMethodCase               , value: lower_case }
+
+# Allow private and protected members to have trailing underscores.
+  - { key: readability-identifier-naming.PrivateMemberIgnoredRegexp   , value: '[a-zA-Z]+(_[a-zA-Z]+)*_$' }
+  - { key: readability-identifier-naming.ProtectedMemberIgnoredRegexp , value: '[a-zA-Z]+(_[a-zA-Z]+)*_$' }
+
+  - { key: misc-non-private-member-variables-in-classes.IgnorePublicMemberVariables, value: true }
+...

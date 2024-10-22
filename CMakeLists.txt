@@ -1,43 +1,101 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.27)
 
-project(rtc LANGUAGES CXX)
+project(baldr VERSION 0.1.0 LANGUAGES CXX)
 
-############################
-# Find Python and nanobind #
-############################
-find_package(Python 3.8
-  REQUIRED COMPONENTS Interpreter Development.Module
-  OPTIONAL_COMPONENTS Development.SABIModule)
-find_package(nanobind CONFIG REQUIRED)
+# Always generate compile_commands.json. Used by clangd and other tools.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-#####################
-# Create the module #
-#####################
-# Note: python and nanobind are automatically added as dependencies with `nanobind_add_module`.
-nanobind_add_module(_rtc
-  src/rtc.cpp
-  src/push_record.cpp
-  src/updatable_binding.cpp
+#################
+# BALDR LIBRARY #
+#################
+
+add_library(baldr
+    src/baldr/baldr.cpp
+    src/baldr/component/dm/fakedm.cpp
+    src/baldr/component/camera/fakecam.cpp
+    src/baldr/component/rtc/ben.cpp
+    src/baldr/rtc.cpp
+    src/baldr/dm.cpp
+    src/baldr/camera.cpp
+    src/baldr/utility/command.cpp
+
+    src/baldr/component/camera/flicam.cpp
+    src/baldr/component/dm/bmc.cpp
+)
+
+target_sources(baldr
+    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
+    include/baldr/baldr.hpp
+)
+
+target_compile_features(baldr PUBLIC cxx_std_20)
+
+find_package(sardine REQUIRED)
+
+target_link_libraries(baldr PUBLIC
+    sardine::sardine
 )
 
 
+##################
+# IMPORT BMC SDK #
+##################
 
+set(DEFAULT_BMC_DIR "/opt/Boston Micromachines")
 
+if(EXISTS "${DEFAULT_BMC_DIR}" AND IS_DIRECTORY "${DEFAULT_BMC_DIR}")
+    target_include_directories(baldr PRIVATE
+        "${DEFAULT_BMC_DIR}/include"
+    )
+    target_link_directories(baldr PUBLIC
+        "${DEFAULT_BMC_DIR}/lib"
+    )
 
-target_link_libraries(_rtc PRIVATE BMC FliSdk)
+    target_compile_definitions(baldr PUBLIC BALDR_BMC)
+else()
+    message(STATUS "Could not find BMC. Skipping...")
+endif()
 
-target_include_directories(_rtc PRIVATE
-  "/opt/Boston Micromachines/include"
-  "/opt/FirstLightImaging/FliSdk/include"
+##################
+# IMPORT FLI SDK #
+##################
+
+set(DEFAULT_FLI_DIR "/opt/FirstLightImaging/FliSdk")
+
+if(EXISTS "${DEFAULT_FLI_DIR}" AND IS_DIRECTORY "${DEFAULT_FLI_DIR}")
+    target_include_directories(baldr PRIVATE
+        "${DEFAULT_FLI_DIR}/include"
+    )
+    target_link_directories(baldr PUBLIC
+        "${DEFAULT_FLI_DIR}/lib/release"
+    )
+
+    target_compile_definitions(baldr PUBLIC BALDR_FLI)
+else()
+    message(STATUS "Could not find FliSdk. Skipping...")
+endif()
+
+###########
+# INSTALL #
+###########
+
+install(TARGETS baldr
+    FILE_SET HEADERS
 )
 
-target_link_directories(_rtc PRIVATE
-  "/opt/Boston Micromachines/lib"
-  "/opt/FirstLightImaging/FliSdk/lib/release"
-)
+####################
+# BALDR EXECUTABLE #
+####################
 
-target_include_directories(_rtc PRIVATE include)
-target_compile_features(_rtc PRIVATE cxx_std_20)
+add_executable(baldr_main src/cli/main.cpp)
 
-# Copy the module to the rtc python package directory
-install(TARGETS _rtc LIBRARY DESTINATION rtc)
+target_link_libraries(baldr_main PUBLIC baldr)
+
+########
+# TEST #
+########
+
+# include(CTest)
+# if (BUILD_TESTING)
+#     add_subdirectory(test)
+# endif()

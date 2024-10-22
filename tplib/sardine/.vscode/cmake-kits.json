@@ -1,0 +1,14 @@
+[
+  {
+    "name": "GCC Toolset 11",
+    "compilers": {
+      "C": "/opt/rh/gcc-toolset-11/root/bin/gcc",
+      "CXX": "/opt/rh/gcc-toolset-11/root/bin/g++",
+      "ASM": "/opt/rh/gcc-toolset-11/root/usr/bin/as"
+    },
+    "environmentVariables": {
+      "PATH": "/opt/rh/gcc-toolset-11/root/usr/bin:$PATH"
+    }
+  }
+]
+

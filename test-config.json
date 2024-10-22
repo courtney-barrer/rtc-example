@@ -1,0 +1,64 @@
+[
+    {
+        "component" : "rtc",
+        "type" : "ben",
+        "config" : {
+
+        },
+        "io" : {
+            "frame" : "",
+            "command" : ""
+        },
+        "commnand" : "",
+        "sync" : {
+            "wait" : "",
+            "notify" : ""
+        }
+    },
+    {
+        "component" : "dm",
+        "type" : "fake",
+        "config" : {
+
+        },
+        "io" : {
+            "command" : ""
+        },
+        "sync" : {
+            "commnand" : "",
+            "wait" : ""
+        }
+    },
+    {
+        "component" : "camera",
+        "type" : "fake",
+        "config" : {
+            "size": 128,
+            "number": 2,
+            "latency": 1000
+        },
+        "io" : {
+            "frame" : "host://frames/0/128?dtc=1&bits=16&extent=%5B128%5D"
+        },
+        "sync" : {
+            "command" : "",
+            "notify" : ""
+        }
+    },
+    {
+        "component" : "camera",
+        "type" : "fake",
+        "config" : {
+            "size": 128,
+            "number": 2,
+            "latency": 1000
+        },
+        "io" : {
+            "frame" : "host://frames/0/128?dtc=1&bits=16&extent=%5B128%5D"
+        },
+        "sync" : {
+            "command" : "",
+            "notify" : ""
+        }
+    }
+]
