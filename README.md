@@ -21,7 +21,7 @@ This project is an example of how to use a RTC written in C++ from python.
 # Build the C++ library and the cli application
 conan build .
 # Register the library in conan
-conan editable .
+conan editable add .
 # Compile the python module (it will use the library register with conan)
 pip install .
 ```
