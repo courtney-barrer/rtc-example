@@ -1,5 +1,5 @@
-import sardine as sa
 from baldr import _baldr as ba
+from baldr import sardine as sa
 import numpy as np
 
 import json

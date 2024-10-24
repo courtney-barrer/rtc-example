@@ -10,7 +10,6 @@ namespace sardine::region::managed
 
     manager& manager::instance() {
         static manager obj;
-        fmt::print("accessing manager at {}\n", fmt::ptr(&obj));
         return obj;
     }
 
@@ -40,15 +39,11 @@ namespace sardine::region::managed
     }
 
     optional<shm_handle> manager::find_handle(const std::byte* ptr) {
-        fmt::print("cheking for {} in managed with {} elements\n", fmt::ptr(ptr), this->size());
         for (auto& [name, shm] : *this) {
-            fmt::print("checking {}\n", name);
             if (shm.belongs_to_segment(ptr)){
-                fmt::print("fond it !\n");
                 return shm_handle{emu::cstring_view(name), {&shm}, shm.get_handle_from_address(ptr)};
             }
         }
-        fmt::print("did not fund it...\n");
         return nullopt;
     }
 

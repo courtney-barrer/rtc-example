@@ -126,9 +126,8 @@ endif()
 
 
 # Install the python module in the sardine python package.
-install(TARGETS _sardine LIBRARY DESTINATION sardine)
+install(TARGETS _sardine LIBRARY DESTINATION baldr)
 install(TARGETS _baldr LIBRARY DESTINATION baldr)
 
 file(GLOB SHARED_LIBS "${CMAKE_BINARY_DIR}/[!_]*.so*")
-install(FILES ${SHARED_LIBS} DESTINATION sardine)
 install(FILES ${SHARED_LIBS} DESTINATION baldr)

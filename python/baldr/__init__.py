@@ -1,4 +1,4 @@
-import sardine as sa
+import baldr.sardine as sa
 
 from ._baldr import *
 

@@ -1,6 +1,6 @@
 from urllib.parse import parse_qsl, ParseResult
 
-from sardine import _sardine as sa
+from baldr import _sardine as sa
 
 def from_url(type, url):
     if hasattr(type, '__from_url__'):
