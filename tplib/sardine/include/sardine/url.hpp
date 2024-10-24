@@ -1,7 +1,7 @@
 #pragma once
 
-#include "type/url.hpp"
-#include "utility.hpp"
+#include <sardine/utility.hpp>
+#include <sardine/type/url.hpp>
 #include <sardine/type.hpp>
 #include <sardine/mapper.hpp>
 #include <sardine/error.hpp>

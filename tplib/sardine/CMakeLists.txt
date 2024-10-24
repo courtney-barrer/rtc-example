@@ -112,12 +112,12 @@ endif()
 
 target_compile_features(sardine PUBLIC cxx_std_20)
 
-find_package(emu REQUIRED)
-find_package(Boost REQUIRED)
-
 target_link_libraries(sardine PUBLIC
-    emu::emu
-    Boost::boost
+    emu::core
+    Boost::url
+    Boost::json
+    Boost::system
+    rt
 )
 
 if (sardine_build_milk)
@@ -125,13 +125,22 @@ if (sardine_build_milk)
     target_link_libraries(sardine PUBLIC milk::milk)
 endif()
 
+add_library(sardine::sardine ALIAS sardine)
+
 install(TARGETS sardine
     FILE_SET HEADERS
 )
 
-# add_executable(sardine_main src/main.cpp)
+add_executable(sardine_main src/main.cpp)
 
-# target_link_libraries(sardine_main PUBLIC sardine)
+find_package(Boost REQUIRED url json)
+
+target_link_libraries(sardine_main PUBLIC
+    sardine::sardine
+    Boost::url
+    Boost::json
+    Boost::system
+)
 
 ########################################################################
 #

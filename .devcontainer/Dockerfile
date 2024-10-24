@@ -61,4 +61,4 @@ RUN cargo install just
 RUN python3 -m pip install -U --disable-pip-version-check --no-cache-dir cmake ninja conan ipython scikit_build_core numpy
 
 RUN curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s -- --skip-install \
- && conan install -b missing --requires boost/1.84.0 --requires fmt/11.0.0 --requires ms-gsl/4.0.0 --requires pybind11/2.13.1
+ && conan install -b missing --requires boost/1.84.0 --requires fmt/11.0.0 --requires ms-gsl/4.0.0 --requires pybind11/2.13.1 -o "boost/*:namespace=myboost"

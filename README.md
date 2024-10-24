@@ -13,16 +13,16 @@ This project is an example of how to use a RTC written in C++ from python.
 ```bash
     # install conan and configure it
     curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s
-    # install the two embeded dependencies: emu and sardine
-    conan create tplib/emu -b missing
-    conan create tplib/sardine -b missing
-    pip install tplib/sardine
 ```
 
 ## Build
 
 ```bash
+# Build the C++ library and the cli application
 conan build .
+# Register the library in conan
+conan editable .
+# Compile the python module (it will use the library register with conan)
 pip install .
 ```
 

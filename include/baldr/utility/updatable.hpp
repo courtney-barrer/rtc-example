@@ -132,7 +132,7 @@ struct fmt::formatter<baldr::updatable<T>, Char> : fmt::formatter<T, Char>
     using base = fmt::formatter<T, Char>;
 
     template<typename FormatContext>
-    auto format(const baldr::updatable<T>& exp, FormatContext& ctx) {
+    auto format(const baldr::updatable<T>& exp, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "current: {}", exp.current());
     }
 };

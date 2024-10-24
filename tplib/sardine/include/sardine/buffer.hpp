@@ -148,7 +148,7 @@ struct fmt::formatter<sardine::box<T, Ctx>, CharT> {
     }
 
     template<typename FormatContext>
-    auto format(const sardine::box<T, Ctx>& box, FormatContext& ctx) {
+    auto format(const sardine::box<T, Ctx>& box, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "value({})", box.value);
     }
 };
@@ -161,7 +161,7 @@ struct fmt::formatter<sardine::producer<T, Ctx>, CharT> {
     }
 
     template<typename FormatContext>
-    auto format(const sardine::producer<T, Ctx>& value, FormatContext& ctx) {
+    auto format(const sardine::producer<T, Ctx>& value, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "producer({})", value.view());
     }
 };
@@ -174,7 +174,7 @@ struct fmt::formatter<sardine::consumer<T, Ctx>, CharT> {
     }
 
     template<typename FormatContext>
-    auto format(const sardine::consumer<T, Ctx>& value, FormatContext& ctx) {
+    auto format(const sardine::consumer<T, Ctx>& value, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "consumer({})", value.view());
     }
 };

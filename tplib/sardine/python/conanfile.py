@@ -1,4 +1,6 @@
 from conan import ConanFile
+from conan.tools.cmake import cmake_layout
+from conan.tools.files import copy
 
 class SardinePythonConan(ConanFile):
     name = 'sardine-python'
@@ -18,4 +20,13 @@ class SardinePythonConan(ConanFile):
         # 'pybind11/2.10.4',
     ]
 
+    def layout(self):
+        self.folders.generators = "generators"
+
     generators = 'CMakeDeps'
+
+    def generate(self):
+        print(f"BUILDFOLDER: {self.build_folder=}")
+        for dep in self.dependencies.values():
+            for libdir in dep.cpp_info.libdirs:
+                copy(self, "*.so", libdir, self.build_folder)

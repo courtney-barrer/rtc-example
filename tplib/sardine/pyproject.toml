@@ -30,7 +30,7 @@ build-backend = "scikit_build_core.build"
 [tool.scikit-build]
 # path to the wrapper CMakeLists.txt file
 cmake.source-dir = "python"
-editable.rebuild = true
+editable.rebuild = false
 
 # Setuptools-style build caching in build directory
 build-dir = "build/{wheel_tag}"

@@ -38,6 +38,7 @@ namespace node
 } // namespace node
 
     std::future<void> init_rtc(json::object config) {
+
         auto type = sardine::json::opt_to<std::string>(config, "type").value();
 
         auto camera_config = config.at("config").as_object();

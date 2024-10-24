@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.27)
 
 project(rtc-python LANGUAGES CXX)
 
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
 # Warn if the user invokes CMake directly
 if (NOT SKBUILD)
   message(WARNING "\
@@ -32,18 +35,49 @@ find_package(Python 3.8
   OPTIONAL_COMPONENTS Development.SABIModule)
 find_package(pybind11 CONFIG REQUIRED)
 find_package(baldr REQUIRED)
+find_package(Boost REQUIRED COMPONENTS json url system)
+find_package(fmt REQUIRED)
+
+pybind11_add_module(_sardine
+    src/sardine/_sardine.cpp
+    src/sardine/context.cpp
+    src/sardine/url.cpp
+    src/sardine/managed.cpp
+    src/sardine/semaphore.cpp
+    src/sardine/region/host.cpp
+    src/sardine/buffer.cpp
+    # src/sardine/json.cpp
+    # src/sardine/region/device.cpp
+)
+
+set_target_properties(_sardine PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_compile_features(_sardine PUBLIC cxx_std_20)
+
+target_link_libraries(_sardine PRIVATE
+    baldr::sardine
+    baldr::emu-python
+    Boost::url
+    Boost::json
+    fmt::fmt
+)
 
 pybind11_add_module(_baldr
-    src/_baldr.cpp
+    src/baldr/_baldr.cpp
 )
+
+find_package(fmt REQUIRED)
 
 set_target_properties(_baldr PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(_baldr PUBLIC include)
-
 target_compile_features(_baldr PUBLIC cxx_std_20)
 
-target_link_libraries(_baldr PRIVATE baldr::baldr)
+target_link_libraries(_baldr PRIVATE
+    baldr::baldr
+    Boost::url
+    Boost::json
+    fmt::fmt
+)
 
 ##################
 # IMPORT BMC SDK #
@@ -92,4 +126,9 @@ endif()
 
 
 # Install the python module in the sardine python package.
+install(TARGETS _sardine LIBRARY DESTINATION sardine)
 install(TARGETS _baldr LIBRARY DESTINATION baldr)
+
+file(GLOB SHARED_LIBS "${CMAKE_BINARY_DIR}/[!_]*.so*")
+install(FILES ${SHARED_LIBS} DESTINATION sardine)
+install(FILES ${SHARED_LIBS} DESTINATION baldr)

@@ -11,8 +11,7 @@
 
 
 namespace po = myboost::program_options;
-
-using namespace baldr;
+namespace json = myboost::json;
 
 json::value parse_json(const std::string& input) {
     // Try to parse as inline JSON
@@ -61,7 +60,7 @@ int main(int argc, char* argv[]) {
         for (const auto& component_config : config) {
             auto& comp_config_obj = component_config.as_object();
 
-            auto component_type = json::opt_to<std::string>(comp_config_obj, "component").value();
+            auto component_type = sardine::json::opt_to<std::string>(comp_config_obj, "component").value();
 
             if (component_type == "camera")
                 locks.push_back( baldr::init_camera_thread(comp_config_obj) );
@@ -87,5 +86,4 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    return 0;
 }

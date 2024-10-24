@@ -5,6 +5,14 @@ project(baldr VERSION 0.1.0 LANGUAGES CXX)
 # Always generate compile_commands.json. Used by clangd and other tools.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+add_subdirectory(tplib/emu)
+add_subdirectory(tplib/sardine)
+
 #################
 # BALDR LIBRARY #
 #################
@@ -45,10 +53,8 @@ target_sources(baldr
 
 target_compile_features(baldr PUBLIC cxx_std_20)
 
-find_package(sardine REQUIRED)
-
 target_link_libraries(baldr PUBLIC
-    sardine::sardine pthread rt
+    sardine::sardine
 )
 
 
@@ -84,7 +90,7 @@ set(DEFAULT_FLI_DIR "/opt/FirstLightImaging/FliSdk")
 
 if(EXISTS "${DEFAULT_FLI_DIR}" AND IS_DIRECTORY "${DEFAULT_FLI_DIR}")
     message(STATUS "Found FliSdk at ${DEFAULT_FLI_DIR}")
-    
+
     target_include_directories(baldr PRIVATE
         "${DEFAULT_FLI_DIR}/include"
     )
@@ -115,7 +121,14 @@ install(TARGETS baldr
 
 add_executable(baldr_main src/cli/main.cpp)
 
-target_link_libraries(baldr_main PUBLIC baldr)
+find_package(Boost REQUIRED url json program_options)
+
+target_link_libraries(baldr_main PUBLIC
+    baldr
+    Boost::url
+    Boost::json
+    Boost::program_options
+)
 
 ########
 # TEST #

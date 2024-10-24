@@ -25,6 +25,7 @@ namespace emu
         return "unknown";
     }
 
+
     const std::error_category& error_category::instance() {
         static const error_category instance;
         return instance;

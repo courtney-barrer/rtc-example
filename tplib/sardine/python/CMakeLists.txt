@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.27)
 
 project(sardine-python LANGUAGES CXX)
 
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
 # Warn if the user invokes CMake directly
 if (NOT SKBUILD)
   message(WARNING "\
@@ -56,3 +59,4 @@ target_link_libraries(_sardine PRIVATE sardine::sardine emu::emu)
 
 # Install the python module in the sardine python package.
 install(TARGETS _sardine LIBRARY DESTINATION sardine)
+install(FILES ${CMAKE_BINARY_DIR}/libsardine.so DESTINATION sardine)

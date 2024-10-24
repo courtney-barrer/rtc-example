@@ -10,8 +10,7 @@ class sardineConan(ConanFile):
 
     exports_sources = 'CMakeLists.txt', 'include/*', 'src/*', 'test/*'
 
-    # generates shared and fpic options
-    # implements = ["auto_shared_fpic"]
+    implements = ["auto_shared_fpic"]
 
     options = {
         'cuda': [True, False],
@@ -23,7 +22,7 @@ class sardineConan(ConanFile):
     default_options = {
         'cuda': False,
         'milk': False,
-        'shared': False,
+        'shared': True,
         'fPIC': True,
         'milk/*:max_semaphore': "1",
     }
@@ -42,6 +41,8 @@ class sardineConan(ConanFile):
     generators = 'CMakeDeps'
 
     def generate(self):
+        print(f"BUILDFOLDER: {self.build_folder=}")
+
         tc = CMakeToolchain(self)
 
         tc.variables['sardine_build_cuda'] = self.options.cuda
@@ -64,7 +65,6 @@ class sardineConan(ConanFile):
 
     def package_info(self):
         self.cpp_info.libs = ['sardine']
-        self.cpp_info.system_libs = ['pthread', 'rt']
 
         if self.options.cuda:
             self.cpp_info.defines = ['SARDINE_CUDA']
