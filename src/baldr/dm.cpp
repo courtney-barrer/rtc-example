@@ -18,14 +18,14 @@ namespace baldr
 namespace node
 {
 
-    DM::DM(string type, json::object config, commands_consumer_t commands, sardine::mutex_t& mutex)
+    DM::DM(string type, json::object config, commands_consumer_t commands, SpinLock& lock)
         : dm_impl(make_dm(type, config))
         , commands(std::move(commands))
-        , mutex(&mutex)
+        , lock(&lock)
     {}
 
     void DM::operator()() {
-        mutex->lock();
+        lock->lock();
 
         commands.recv(ctx);
 
@@ -34,7 +34,7 @@ namespace node
 
 } // namespace node
 
-     std::future<void> init_dm(json::object config) {
+     node::DM init_dm(json::object config) {
         auto type = sardine::json::opt_to<std::string>(config, "type").value();
 
         auto dm_config = config.at("config").as_object();
@@ -46,14 +46,18 @@ namespace node
         commands_consumer_t commands = EMU_UNWRAP_OR_THROW_LOG(commands_consumer_t::open(commands_url),
             "Could not open commands using url: {}", commands_url);
 
-        sardine::mutex_t& mutex = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<sardine::mutex_t>(mutex_url),
-          "Could not open wait mutex using url: {}", mutex_url);
+        SpinLock& lock = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<SpinLock>(mutex_url),
+          "Could not open wait lock using url: {}", mutex_url);
 
-        node::DM dm(type, dm_config, std::move(commands), mutex);
+        return node::DM(type, dm_config, std::move(commands), lock);
+    }
+
+    std::future<void> init_dm_thread(json::object config) {
+        auto dm = init_dm(config);
 
         Command& command = sardine::from_url<Command>(*sardine::json::opt_to<url>(config, "command")).value();
 
-        return spawn_runner(std::move(dm), command, fmt::format("dm {}", type));
+        return spawn_runner(std::move(dm), command, "dm");
     }
 
 } // namespace baldr

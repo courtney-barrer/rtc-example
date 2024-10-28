@@ -1,6 +1,7 @@
 #pragma once
 
 #include <baldr/utility/command.hpp>
+#include <baldr/utility/spin_lock.hpp>
 
 #include <emu/error.hpp>
 #include <sardine/fwd.hpp>
@@ -32,6 +33,5 @@ namespace baldr
 
     using commands_producer_t = sardine::producer<std::span<double>>;
     using commands_consumer_t = sardine::consumer<std::span<double>>;
-
 
 } // namespace baldr

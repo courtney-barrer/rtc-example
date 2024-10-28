@@ -1,1 +1,0 @@
-[{"component": "camera", "type": "fake", "config": {"size": 16384, "number": 100, "latency": 1000}, "io": {"frame": "host://frames/0/16384?dtc=1&bits=16&extent=%5B128,128%5D"}, "sync": {"notify": "managed://sardine_cache_0/@1664/40?dtc=3&bits=320"}, "command": "managed://sardine_cache_0/@1792/4?dtc=3&bits=32"}]

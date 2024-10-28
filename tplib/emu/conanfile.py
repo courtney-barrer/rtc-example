@@ -80,6 +80,7 @@ class EmuConan(ConanFile):
 
         tc.variables['emu_build_cuda'] = self.options.cuda
         tc.variables['emu_build_python'] = self.options.python
+        tc.variables['emu_boost_namespace'] = self.dependencies['boost'].options.namespace
 
         tc.generate()
 
@@ -109,6 +110,8 @@ class EmuConan(ConanFile):
             'range-v3::range-v3'
 
         ]
+
+        self.cpp_info.components['core'].defines = ['EMU_BOOST_NAMESPACE={}'.format(self.dependencies['boost'].options.namespace)]
 
         if self.options.cuda:
             # Conan does not provide a cuda 'package'. conan_cuda allows to retrieve

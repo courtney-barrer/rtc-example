@@ -37,12 +37,16 @@ namespace node
 
         frame_consumer_t frame;
         commands_producer_t commands;
-        sardine::mutex_t* wait_mutex;
-        sardine::mutex_t* notify_mutex;
+        SpinLock* wait_lock;
+        SpinLock* notify_lock;
 
         sardine::host_context ctx;
 
-        RTC(string type, json::object config, frame_consumer_t frame, commands_producer_t commands, sardine::mutex_t& wait_mutex, sardine::mutex_t& notify_mutex);
+        RTC(
+            string type, json::object config,
+            frame_consumer_t frame, commands_producer_t commands,
+            SpinLock& wait_lock, SpinLock& notify_lock
+        );
 
         void operator()();
 
@@ -50,6 +54,8 @@ namespace node
 
 } // namespace node
 
-    std::future<void> init_rtc(json::object config);
+    node::RTC init_rtc(json::object config);
+    std::future<void> init_rtc_thread(json::object config);
+
 
 } // namespace baldr

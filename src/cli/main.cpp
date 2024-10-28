@@ -66,10 +66,10 @@ int main(int argc, char* argv[]) {
                 locks.push_back( baldr::init_camera_thread(comp_config_obj) );
 
             if (component_type == "rtc")
-                locks.push_back( baldr::init_rtc(comp_config_obj) );
+                locks.push_back( baldr::init_rtc_thread(comp_config_obj) );
 
             if (component_type == "dm")
-                locks.push_back( baldr::init_dm(comp_config_obj) );
+                locks.push_back( baldr::init_dm_thread(comp_config_obj) );
         }
 
         fmt::print("All component initialized\n");

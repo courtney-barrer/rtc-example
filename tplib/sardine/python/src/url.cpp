@@ -19,7 +19,7 @@ namespace sardine
 
     void register_url(py::module_ m) {
 
-        m.def("from_url", [](url url, py::type type) -> py::object {
+        m.def("from_url", [](py::type type, url url) -> py::object {
             // // np.float32 is not a dtype. Calling `py::dtype::from_args(data_type)` is equivalent
             // // to np.dtype(data_type) and also accept types such as int, float, etc.
             // auto dtype = py::dtype::from_args(data_type);
@@ -42,7 +42,7 @@ namespace sardine
             }
 
             emu::throw_error(error::python_type_not_supported);
-        }, py::arg("url"), py::arg("type"));
+        }, py::arg("type"), py::arg("url"));
 
         m.def("url_of", [](py::object obj, bool allow_local) -> url {
             // if (py::hasattr(obj, "__url_of__"))

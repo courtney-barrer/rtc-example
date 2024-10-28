@@ -36,10 +36,10 @@ namespace node
         std::unique_ptr<interface::DM> dm_impl;
 
         commands_consumer_t commands;
-        sardine::mutex_t* mutex;
+        SpinLock* lock;
         sardine::host_context ctx;
 
-        DM(string type, json::object config, commands_consumer_t commands, sardine::mutex_t& mutex);
+        DM(string type, json::object config, commands_consumer_t commands, SpinLock& lock);
 
         void operator()();
 
@@ -47,6 +47,7 @@ namespace node
 
 } // namespace node
 
-    std::future<void> init_dm(json::object config);
+    node::DM init_dm(json::object config);
+    std::future<void> init_dm_thread(json::object config);
 
 } // namespace baldr

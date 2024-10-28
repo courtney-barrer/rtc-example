@@ -1,5 +1,6 @@
 #pragma once
 
+#include "baldr/utility/spin_lock.hpp"
 #include <baldr/type.hpp>
 
 #include <sardine/sardine.hpp>
@@ -35,10 +36,10 @@ namespace node
         std::shared_ptr<interface::Camera> camera_impl;
 
         frame_producer_t frame;
-        sardine::mutex_t* mutex;
+        SpinLock* lock;
         sardine::host_context ctx;
 
-        Camera(string type, json::object config, frame_producer_t frame, sardine::mutex_t& mutex);
+        Camera(string type, json::object config, frame_producer_t frame, SpinLock& lock);
 
         void operator()();
 

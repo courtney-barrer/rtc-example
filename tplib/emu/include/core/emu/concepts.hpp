@@ -242,7 +242,7 @@ namespace detail
     template <typename T>
     concept relocatable_owning_range = conditional<
         // If enable_relocatable_owning_range and is not indenteterminate
-        not myboost::logic::indeterminate(spe::enable_relocatable_owning_range<rm_cvref<T>>),
+        not boost::logic::indeterminate(spe::enable_relocatable_owning_range<rm_cvref<T>>),
         // Then, the type is relocatable if enable_relocatable_owning_range is true
         bool(spe::enable_relocatable_owning_range<rm_cvref<T>>),
         // otherwise, the type is relocatable if it's not a view nor a lvalue reference

@@ -1,7 +1,7 @@
 #include <baldr/camera.hpp>
 #include <baldr/component/camera/fakecam.hpp>
 
-#include <ranges>
+#include <algorithm>
 #include <stdexcept>
 #include <vector>
 #include <random>

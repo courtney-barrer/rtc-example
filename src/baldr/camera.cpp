@@ -9,32 +9,32 @@
 
 namespace baldr
 {
-     std::unique_ptr<interface::Camera> make_camera(string type, json::object config) {
-         if(type == "fli") return flicam::make_camera(config);
+    std::unique_ptr<interface::Camera> make_camera(string type, json::object config) {
+        if(type == "fli") return flicam::make_camera(config);
 
-         if(type == "fake") return fakecam::make_camera(config);
+        if(type == "fake") return fakecam::make_camera(config);
 
         throw std::runtime_error("Could not instantiate the camera");
-     }
+    }
 
 namespace node
 {
 
-     Camera::Camera(string type, json::object config, frame_producer_t frame, sardine::mutex_t& mutex)
-          : camera_impl(make_camera(type, config))
-          , frame(std::move(frame))
-          , mutex(&mutex)
-     {
-          fmt::print("yessay!\n");
-     }
+    Camera::Camera(string type, json::object config, frame_producer_t frame, SpinLock& lock)
+        : camera_impl(make_camera(type, config))
+        , frame(std::move(frame))
+        , lock(&lock)
+    {
+        fmt::print("yessay!\n");
+    }
 
-     void Camera::operator()() {
-        
-          camera_impl->get_frame(frame.view());
+    void Camera::operator()() {
 
-          frame.send(ctx);
-        //   mutex->unlock();
-     }
+        camera_impl->get_frame(frame.view());
+
+        frame.send(ctx);
+        lock->unlock();
+    }
 
 } // namespace node
 
@@ -45,15 +45,15 @@ namespace node
 
         // TODO: adds logs for these two.
         auto frame_url = sardine::json::opt_to<url>(config.at("io"), "frame").value();
-        auto mutex_url = sardine::json::opt_to<url>(config.at("sync"), "notify").value();
+        auto lock_url = sardine::json::opt_to<url>(config.at("sync"), "notify").value();
 
         frame_producer_t frame = EMU_UNWRAP_OR_THROW_LOG(frame_producer_t::open(frame_url),
             "Could not open frame using url: {}", frame_url);
 
-        sardine::mutex_t& mutex = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<sardine::mutex_t>(mutex_url),
-        "Could not open notify mutex using url: {}", mutex_url);
+        SpinLock& lock = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<SpinLock>(lock_url),
+            "Could not open notify lock using url: {}", lock_url);
 
-        return node::Camera(type, camera_config, std::move(frame), mutex);
+        return node::Camera(type, camera_config, std::move(frame), lock);
      }
 
      std::future<void> init_camera_thread(json::object config) {

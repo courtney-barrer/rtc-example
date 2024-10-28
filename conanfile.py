@@ -48,8 +48,6 @@ class BaldrConan(ConanFile):
     def layout(self):
         cmake_layout(self)
 
-        print(f'{self.cpp.build.libdirs=}')
-
         self.cpp.source.components['emu'].includedirs = ['tplib/emu/include/core']
         self.cpp.build.components['emu'].libdirs = self.cpp.build.libdirs
 
@@ -69,6 +67,7 @@ class BaldrConan(ConanFile):
         tc = CMakeToolchain(self)
 
         tc.variables['emu_build_python'] = self.options.python
+        tc.variables['emu_boost_namespace'] = self.dependencies['boost'].options.namespace
 
         tc.generate()
 
@@ -102,6 +101,8 @@ class BaldrConan(ConanFile):
             'range-v3::range-v3'
 
         ]
+
+        self.cpp_info.components['emu'].defines = ['EMU_BOOST_NAMESPACE={}'.format(self.dependencies['boost'].options.namespace)]
 
         self.cpp_info.components['sardine'].libs = ['sardine']
         self.cpp_info.components['sardine'].requires = [

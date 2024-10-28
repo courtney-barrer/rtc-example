@@ -22,6 +22,7 @@ add_library(baldr
     src/baldr/component/dm/fakedm.cpp
     src/baldr/component/camera/fakecam.cpp
     src/baldr/component/rtc/ben.cpp
+    src/baldr/component/rtc/fakertc.cpp
     src/baldr/rtc.cpp
     src/baldr/dm.cpp
     src/baldr/camera.cpp

@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(emu_build_cuda "Enable cuda module" OFF)
 option(emu_build_python "Enable python module" OFF)
+option(emu_boost_namespace "Custom boost namespace name" "boost")
 
 if (emu_build_cuda)
     enable_language(CUDA)
@@ -87,6 +88,8 @@ target_compile_features(emucore PUBLIC cxx_std_20)
 if(emu_build_cuda)
     target_compile_definitions(emucore PUBLIC EMU_CUDA)
 endif()
+
+target_compile_definitions(emucore PUBLIC EMU_BOOST_NAMESPACE=${emu_boost_namespace})
 
 find_package(Boost REQUIRED)
 find_package(fmt REQUIRED)
