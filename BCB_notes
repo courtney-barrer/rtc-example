@@ -1,4 +1,21 @@
 
+30/10/24
+--------
+pull changes on julien_develop
+fixed bug in components / flicam.cpp
+/home/heimdallr/.conan2/p/b/boost371beca2b3497/p/include/boost/json/value_to.hpp:91:5: error: static assertion failed: ! std::is_reference<T>::value
+   91 |     BOOST_STATIC_ASSERT(! std::is_reference<T>::value);
+
+
+
+rebuild 
+    rm -rf build
+    just dev
+    conan build .
+    conan editable add .
+    pip install .
+
+
 29/10/24  
 ---------  
 test_gui.py - test for the gui showing dm and camera in SHM.

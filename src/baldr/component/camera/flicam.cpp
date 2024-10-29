@@ -40,7 +40,7 @@ namespace baldr::flicam
         CameraSettings cm;
 
         json::object const& obj = jv.as_object();
-
+        //// this extract caused errors (30/10/24)
         // auto extract = [&]( auto& t, string_view key) {
         //     if (obj.contains(key))
         //         t = value_to<decltype(t)>( obj.at( key ) );

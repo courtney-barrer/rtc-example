@@ -1,6 +1,6 @@
 {
-    "det_dit" : 0.00066 ,
-    "det_fps" : 1500 ,  
+    "det_dit" : 0.0001 ,
+    "det_fps" : 1000 ,  
     "det_gain" : 1 ,
     "det_crop_enabled" : false ,
     "det_tag_enabled" : true ,
