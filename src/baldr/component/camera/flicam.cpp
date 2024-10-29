@@ -99,14 +99,15 @@ namespace baldr::flicam
         camera.sendCommand("set cropping cols "+ cm.det_cropping_cols);
 
         camera.sendCommand("set cropping cols "+ cm.det_cropping_cols);
-
-        camera.sendCommand("set sensitivity "+ cm.det_gain);
+        //set sensitivity for cred3 / 2  set gain for cred1
+        camera.sendCommand("set gain " + cm.det_gain);
 
         //set fps
-        camera.setFps(cm.det_fps);
+        //camera.setFps(cm.det_fps);
+        camera.sendCommand("set fps " + cm.det_fps);
 
-        //set int
-        camera.sendCommand("set tint " + std::to_string(cm.det_dit));
+        //cred 1 doesn't seem to have tint setting (infered from fps? ) set int
+        //camera.sendCommand("set tint " + std::to_string(cm.det_dit));
 
         //camera.getFps(fps);
         //cout << "fps despues = " << fps << endl;
