@@ -17,8 +17,8 @@ namespace baldr::fakertc
         {}
 
         void compute(std::span<const uint16_t> frame, std::span<double> signal) {
-
-                std::ranges::transform(frame, signal.data(),
+                int min_element = std::min(frame.size(), signal.size());
+                std::ranges::transform(frame.subspan(0, min_element), signal.data(),
                     [
                         factor = factor.current(),
                         offset = offset.current()

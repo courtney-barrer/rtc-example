@@ -38,6 +38,7 @@ def step():
     cam_command.step()
     rtc_command.step()
     dm_command.step()
+    
 
 
 

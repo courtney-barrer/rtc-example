@@ -20,7 +20,7 @@ namespace interface
 
         virtual ~Camera() = default;
 
-        virtual void get_frame(std::span<uint16_t> frame) = 0;
+        virtual bool get_frame(std::span<uint16_t> frame) = 0;
     };
 
 } // namespace interface

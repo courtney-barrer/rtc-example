@@ -29,11 +29,16 @@ namespace node
     }
 
     void Camera::operator()() {
+        // the camera component will write on the 
+        // frame shm here
+        bool receive_something = camera_impl->get_frame(frame.view());
 
-        camera_impl->get_frame(frame.view());
-
-        frame.send(ctx);
-        lock->unlock();
+        if (receive_something) {
+            // ignore for now
+            frame.send(ctx);
+            // unlock the frame lock
+            lock->unlock();
+        }
     }
 
 } // namespace node

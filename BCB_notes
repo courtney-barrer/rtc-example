@@ -1,4 +1,11 @@
 
+29/10/24  
+---------  
+test_gui.py - test for the gui showing dm and camera in SHM.
+script_test_fli.py - simulation of actual setup we want with 
+4 DM and RTCs  (each with own processw ) and a single camera
+reading configurations from json files.
+
 
 
 

@@ -9,7 +9,7 @@ frame_size = 128
 commands_size = frame_size*frame_size
 
 frame = sa.region.host.open_or_create('frames', shape=[frame_size, frame_size], dtype=np.uint16)
-commands = sa.region.host.open_or_create('commands', shape=[commands_size], dtype=np.double)
+commands = sa.region.host.open_or_create('commands', shape=[140], dtype=np.double)
 
 frame_url = sa.url_of(frame)
 commands_url = sa.url_of(commands)

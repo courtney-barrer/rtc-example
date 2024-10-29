@@ -19,17 +19,17 @@ namespace baldr::flicam
 
     /*@brief to hold camera settings*/
     struct CameraSettings {
-        int camera_index;
+        int camera_index = 0;
         double det_dit = 0.0016; // detector integration time (s)
         double det_fps = 600.0; // frames per second (Hz)
         string det_gain="medium"; // "low" or "medium" or "high"
         bool det_crop_enabled = false; //true/false
         bool det_tag_enabled = false; //true/false
-        string det_cropping_rows="0-639"; //"r1-r2" where  r1 multiple of 4, r2 multiple 4-1
-        string det_cropping_cols="0-511"; //"c1-c2" where c1 multiple of 32, c2 multiple 32-1
-        uint16_t image_height = 640; // i.e. rows in image
-        uint16_t image_width = 512;// i.e. cols in image
-        uint32_t full_image_length = 327680; //640*512;
+        string det_cropping_rows="0-320"; //"r1-r2" where  r1 multiple of 4, r2 multiple 4-1
+        string det_cropping_cols="0-256"; //"c1-c2" where c1 multiple of 32, c2 multiple 32-1
+        uint16_t image_height = 320; // i.e. rows in image
+        uint16_t image_width = 256;// i.e. cols in image
+        uint32_t full_image_length = 256*320; //640*512;
     };
 
     CameraSettings tag_invoke(
@@ -41,26 +41,25 @@ namespace baldr::flicam
 
         json::object const& obj = jv.as_object();
 
-        auto extract = [&]( auto& t, string_view key, auto default_ ) {
+        auto extract = [&]( auto& t, string_view key) {
             if (obj.contains(key))
-                t = value_to<decltype(default_)>( obj.at( key ) );
-            else
-                t = default_;
+                t = value_to<decltype(t)>( obj.at( key ) );
+
         };
 
         using namespace std::string_literals;
 
-        extract( cm.camera_index,      "camera_index",      0 );
-        extract( cm.det_dit,           "det_dit",           0.0016 );
-        extract( cm.det_fps,           "det_fps",           600.0);
-        extract( cm.det_gain,          "det_gain",          "medium"s);
-        extract( cm.det_crop_enabled,  "det_crop_enabled",  false);
-        extract( cm.det_tag_enabled,   "det_tag_enabled",   false);
-        extract( cm.det_cropping_rows, "det_cropping_rows", "0-639"s);
-        extract( cm.det_cropping_cols, "det_cropping_cols", "0-511"s);
-        extract( cm.image_height,      "image_height",      640);
-        extract( cm.image_width,       "image_width",       512);
-        extract( cm.full_image_length, "full_image_length", 327680);
+        extract( cm.camera_index,      "camera_index");
+        extract( cm.det_dit,           "det_dit");
+        extract( cm.det_fps,           "det_fps");
+        extract( cm.det_gain,          "det_gain");
+        extract( cm.det_crop_enabled,  "det_crop_enabled");
+        extract( cm.det_tag_enabled,   "det_tag_enabled");
+        extract( cm.det_cropping_rows, "det_cropping_rows");
+        extract( cm.det_cropping_cols, "det_cropping_cols");
+        extract( cm.image_height,      "image_height");
+        extract( cm.image_width,       "image_width");
+        extract( cm.full_image_length, "full_image_length");
 
         return cm;
     }
@@ -136,9 +135,11 @@ namespace baldr::flicam
         CameraSettings camera_settings;
         std::unique_ptr<FliSdk> fli_sdk;
 
+        uint16_t previous_frame_number = 0;
+
         FliCam(json::object config)
-            : //camera_settings(myboost::json::value_to<CameraSettings>(json::value(config)))
-             fli_sdk(std::make_unique<FliSdk>())
+            : camera_settings(myboost::json::value_to<CameraSettings>(json::value(config)))
+            , fli_sdk(std::make_unique<FliSdk>())
         {
             fmt::print("Detection of grabbers...\n");
             auto listOfGrabbers = fli_sdk->detectGrabbers();
@@ -185,10 +186,24 @@ namespace baldr::flicam
             apply_camera_settings(*fli_sdk, camera_settings);
         }
 
-        void get_frame(std::span<uint16_t> frame) {
+        bool get_frame(std::span<uint16_t> frame) {
+
             std::span<const uint16_t> current_frame(reinterpret_cast<const uint16_t*>(fli_sdk->getRawImage()), camera_settings.full_image_length);
 
-            std::ranges::copy(current_frame, frame.data());
+            int current_frame_number = current_frame[0];
+
+            if (current_frame_number != previous_frame_number){
+                // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
+                // so need to catch case of overflow (current=0, previous = 65535)
+                // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
+                // must match raw_image type unsigned int16.
+                // update frame number
+                previous_frame_number = current_frame_number;
+                std::ranges::copy(current_frame, frame.data());
+                return true;
+            }
+            else 
+                return false;
         }
 
     };

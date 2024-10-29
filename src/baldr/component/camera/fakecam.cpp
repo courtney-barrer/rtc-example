@@ -49,7 +49,7 @@ namespace baldr::fakecam
         }
 
 
-        void get_frame(std::span<uint16_t> frame) override {
+        bool get_frame(std::span<uint16_t> frame) override {
             const auto start = std::chrono::high_resolution_clock::now();
 
             {
@@ -66,6 +66,8 @@ namespace baldr::fakecam
 
             if (elapsed < latency)
                 std::this_thread::sleep_for(latency - elapsed);
+
+            return true;
         }
     };
 

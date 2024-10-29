@@ -27,14 +27,20 @@ namespace node
     {}
 
     void RTC::operator()() {
+        // waiting on the frame lock
         wait_lock->lock();
 
+        // ingore for now
         frame.recv(ctx);
 
+        // read the frame shm, compute the commands and write them
+        // to the commands shm
         rtc_impl->compute(frame.view(), commands.view());
 
+        // ignore for now
         commands.send(ctx);
 
+        // unlock the commands lock
         notify_lock->unlock();
     }
 

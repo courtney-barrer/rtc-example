@@ -8,7 +8,7 @@ namespace baldr
 {
 
     std::unique_ptr<interface::DM> make_dm(string type, json::object config) {
-        if (type == "bmd") return bmc::make_dm(config);
+        if (type == "bmc") return bmc::make_dm(config);
 
         if (type == "fake") return fakedm::make_dm(config);
 
@@ -25,10 +25,13 @@ namespace node
     {}
 
     void DM::operator()() {
+        // waiting on the commands lock
         lock->lock();
 
+        // ingore for now
         commands.recv(ctx);
 
+        // read the commands shm and send them to the DM
         dm_impl->send_command(commands.view());
     }
 
