@@ -41,10 +41,17 @@ namespace baldr::flicam
 
         json::object const& obj = jv.as_object();
 
-        auto extract = [&]( auto& t, string_view key) {
-            if (obj.contains(key))
-                t = value_to<decltype(t)>( obj.at( key ) );
+        // auto extract = [&]( auto& t, string_view key) {
+        //     if (obj.contains(key))
+        //         t = value_to<decltype(t)>( obj.at( key ) );
 
+        // };
+
+        auto extract = [&](auto& t, string_view key) {
+            using T = std::decay_t<decltype(t)>;  // Remove references for compatibility
+            if (obj.contains(key)) {
+                t = value_to<T>(obj.at(key));  // Use a non-reference type for extraction
+            }
         };
 
         using namespace std::string_literals;
@@ -100,12 +107,12 @@ namespace baldr::flicam
 
         camera.sendCommand("set cropping cols "+ cm.det_cropping_cols);
         //set sensitivity for cred3 / 2  set gain for cred1
-        camera.sendCommand("set gain " + cm.det_gain);
+        camera.sendCommand("set sensitivity " + cm.det_gain);
 
         //set fps
         //camera.setFps(cm.det_fps);
-        camera.sendCommand("set fps " + cm.det_fps);
-
+        //camera.sendCommand("set fps " + std::to_string(cm.det_fps));
+        camera.setFps(cm.det_fps);
         //cred 1 doesn't seem to have tint setting (infered from fps? ) set int
         //camera.sendCommand("set tint " + std::to_string(cm.det_dit));
 
