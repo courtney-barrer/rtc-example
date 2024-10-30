@@ -3,19 +3,26 @@ from baldr import sardine as sa
 import numpy as np
 import json
 
-global DM_COMMAND_SIZE = 140
+global DM_COMMAND_SIZE 
+DM_COMMAND_SIZE = 140
 
-with open("cred1_camera_default_config.json") as f:
-    cred1_cam_config = json.load(f)
+with open("cred3_camera_default_config.json") as f:
+    cred_cam_config = json.load(f)
 
 with open("bmc_DM_default_config.json") as f:
     bmc_dm_config = json.load(f)
     
-with open("rtc_default_config.json") as f:
-    rtc_config = json.load(f)
+#with open("rtc_default_config.json") as f:
+#    rtc_config = json.load(f)
+
+rtc_config = {
+    'factor' : 0.,
+    'offset': 0.1, # number of random frame rotating to be copied in shm
+}
+
 
 # for now we configure 1 RTC per DM .. ensure this is the case
-assert len( bmc_dm_config ) == len( rtc_config )
+#assert len( bmc_dm_config ) == len( rtc_config )
 
 
 ###############
@@ -55,8 +62,8 @@ for beam, key in enumerate( bmc_dm_config ):
 ###############
 # CAMERA 
 ###############
-frame_size_h = int( cred1_cam_config['image_height'] )
-frame_size_w = int( cred1_cam_config['image_height'] )
+frame_size_h = int( cred_cam_config['image_height'] )
+frame_size_w = int( cred_cam_config['image_height'] )
 
 commands_size = frame_size_h * frame_size_w
 
@@ -74,7 +81,7 @@ frame_lock_url = sa.url_of(frame_lock)
 cam_config = {
     'component': 'camera',
     'type': 'fli',
-    'config': cred1_cam_config,
+    'config': cred_cam_config,
     'io': {
         'frame': frame_url.geturl(), # where to write data 
     },
@@ -97,8 +104,8 @@ for beam in range( len( bmc_dm_config ) ):
     
     tmp_rtc_config = {
         'component': 'rtc',
-        'type': 'ben',
-        'config': rtc_config[beam] ,
+        'type': 'fake',
+        'config': rtc_config ,
         'io': {
             'frame': frame_url.geturl(),
             'commands': commands_url_dict[beam].geturl(),
@@ -138,3 +145,7 @@ class clean_exit:
 
 # Will request all component to exit
 _ = clean_exit()
+
+# 
+# commands_dict[beam]
+# frame

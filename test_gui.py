@@ -6,9 +6,12 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QImage, QPixmap  # Add these imports
-# run script test to generate the config files (baldr_config.json")
-from script_test import *
 
+
+
+# run script test to generate the config files (baldr_config.json")
+#from script_test_fli import *
+#import script_test_fli
 
 ## THIS IS SET UP WITH FAKE CONFIG - NEED TO CHANGE TO REAL CONFIG
 # WHERE WE HAVE commands_dict[beam] for the DM commands. Currently 
@@ -32,8 +35,9 @@ print("Process started with PID:", process.pid)
 
 # start the camera writing to SHM 
 cam_command.run()  # 
-dm_command.run()  # commands_lock.unlock() # unlock the commands_lock so dm recieves rtc output for one iteration 
-rtc_command.run() #
+for k in dm_command_dict:
+    dm_command_dict[k].run()  # commands_lock.unlock() # unlock the commands_lock so dm recieves rtc output for one iteration 
+    rtc_command_dict[k].run() #
 
 # requirements: 
 
@@ -58,11 +62,7 @@ rtc_command.run() #
 #     frame
 # the four images correspond to subregions of the frame that we want to display as images
 # organised in columns across the screen. These are defined by local variables row1, row2, col1, col2
-import sys
-import numpy as np
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QImage, QPixmap
+
 
 
 class MainWindow(QWidget):
@@ -212,10 +212,10 @@ class MainWindow(QWidget):
     def get_and_display_frame(self):
         """Retrieve and display the frame in specified subregions and update DM command images."""
         # Simulate fetching a new frame (replace with actual frame fetching)
-        frame = np.random.randint(0, 256, (256, 256), dtype=np.uint8)  # Example: random image
+        #frame = np.random.randint(0, 256, (256, 256), dtype=np.uint8)  # Example: random image
 
         # Retrieve DM commands and update each DM command image
-        dm_commands = [np.random.rand(140) for _ in range(4)]  # Simulated DM commands
+        dm_commands = [commands_dict[k] for k in commands_dict]  # Simulated DM commands
         for i, command in enumerate(dm_commands):
             command_2D = get_DM_command_in_2D(command)  # Convert command to 2D
             

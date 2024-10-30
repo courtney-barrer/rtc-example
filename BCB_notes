@@ -6,7 +6,14 @@ fixed bug in components / flicam.cpp
 /home/heimdallr/.conan2/p/b/boost371beca2b3497/p/include/boost/json/value_to.hpp:91:5: error: static assertion failed: ! std::is_reference<T>::value
    91 |     BOOST_STATIC_ASSERT(! std::is_reference<T>::value);
 
+seems to work but frame is cropped to 512,512 and not updating 
 
+testing with 
+from pyBaldr import ZWFS
+zwfs = ZWFS.ZWFS(DM_serial_number="17DW019#113", cameraIndex=0, DMshapes_path = 'DMShapes/' )
+zwfs.start_camera()
+zwfs.get_image() 
+and we gut updated images with size 512,640
 
 rebuild 
     rm -rf build
