@@ -27,7 +27,7 @@ namespace baldr::fakecam
 
     using now_type = std::chrono::time_point<std::chrono::system_clock>;
 
-    struct FakeCamera : interface::Camera
+    struct FakeCamera final : interface::Camera
     {
 
         std::vector<uint16_t> data;
@@ -37,41 +37,74 @@ namespace baldr::fakecam
         std::chrono::microseconds latency;
         now_type now;
 
-        FakeCamera(size_t frame_size, size_t frame_number, std::chrono::microseconds latency)
-            : data(frame_size * frame_number)
-            , frame_size(frame_size)
-            , frame_number(frame_number)
+        bool running = false;
+
+        std::jthread thread;
+
+        FakeCamera(CameraLogic cam_logic, size_t new_frame_size, size_t new_frame_number, std::chrono::microseconds new_latency)
+            : interface::Camera(std::move(cam_logic))
+            , data(new_frame_size * new_frame_number)
+            , frame_size(new_frame_size)
+            , frame_number(new_frame_number)
             , index(0)
-            , latency(latency)
+            , latency(new_latency)
             , now( std::chrono::system_clock::now() )
         {
             fill_with_random_values(data);
+
+            thread = std::jthread([this](std::stop_token stoken) mutable {
+                while(true) {
+                    const auto start = std::chrono::high_resolution_clock::now();
+
+                    if (stoken.stop_requested()) {
+                        fmt::print("fakecam worker is requested to stop\n");
+                        return;
+                    }
+
+                    if (running) {
+                        auto current = std::span{ data }.subspan(index * frame_size, frame_size);
+
+                        send_frame(current);
+
+                        index = (index + 1 ) % frame_number;
+                    }
+
+                    const auto previous = now;
+                    now = std::chrono::system_clock::now();
+                    const auto elapsed = now - previous;
+
+                    if (elapsed < latency)
+                        std::this_thread::sleep_for(latency - elapsed);
+                }
+            });
         }
 
-
-        bool get_frame(std::span<uint16_t> frame) override {
-            const auto start = std::chrono::high_resolution_clock::now();
-
-            {
-                auto current = std::span{ data }.subspan(index * frame_size, frame_size);
-
-                std::ranges::copy(current, frame.data());
-
-                index = (index + 1 ) % frame_number;
-            }
-
-            const auto previous = now;
-            now = std::chrono::system_clock::now();
-            const auto elapsed = now - previous;
-
-            if (elapsed < latency)
-                std::this_thread::sleep_for(latency - elapsed);
-
-            return true;
+        ~FakeCamera() {
+            if (thread.joinable())
+                thread.request_stop();
         }
+
+        void set_command(cmd new_command) override  // implement interface::Camera
+        {
+            switch (new_command) {
+                case cmd::pause:
+                    running = false;
+                    break;
+                case cmd::run:
+                case cmd::step:
+                    running = true;
+                    break;
+                default: break;
+            };
+        }
+
+        std::span<const uint16_t> last_frame() const override {
+            return std::span{ data }.subspan(index * frame_size, frame_size);
+        }
+
     };
 
-    std::unique_ptr<interface::Camera> make_camera(json::object config) {
+    std::unique_ptr<interface::Camera> make_camera(CameraLogic cam_logic, json::object config) {
         size_t frame_size = json::opt_to<size_t>(config, "size").or_else([]{
             throw std::runtime_error("missing frame size");
         }).value();
@@ -83,7 +116,7 @@ namespace baldr::fakecam
             throw std::runtime_error("missing frame latency");
         }).value() );
 
-        return std::make_unique<FakeCamera>(frame_size, frame_number, latency);
+        return std::make_unique<FakeCamera>(std::move(cam_logic), frame_size, frame_number, latency);
     }
 
 } // namespace baldr::fakecam

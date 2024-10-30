@@ -254,7 +254,7 @@ namespace buffer::detail
         static auto as_bytes(TT&& array) {
             byte* ptr = reinterpret_cast<byte*>(array.mutable_data());
 
-            return emu::as_writable_bytes(std::span{ptr, array.size()});
+            return emu::as_writable_bytes(std::span{ptr, array.size() * array.itemsize()});
         }
 
 

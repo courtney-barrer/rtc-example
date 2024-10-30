@@ -79,7 +79,11 @@ dm_config = {
 
 baldr_config_file = open("baldr_config.json", "+w")
 
-json.dump([cam_config, rtc_config, dm_config], baldr_config_file)
+json.dump([
+    cam_config,
+    rtc_config,
+    dm_config
+], baldr_config_file)
 
 baldr_config_file.close()
 

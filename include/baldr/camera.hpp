@@ -3,6 +3,7 @@
 #include "baldr/utility/spin_lock.hpp"
 #include <baldr/type.hpp>
 
+#include <cstdint>
 #include <sardine/sardine.hpp>
 #include <sardine/semaphore.hpp>
 
@@ -12,20 +13,43 @@
 namespace baldr
 {
 
+    struct CameraLogic
+    {
+
+        // std::shared_ptr<interface::Camera> camera_impl;
+
+        frame_producer_t frame;
+        SpinLock* lock;
+        sardine::host_context ctx = {};
+    };
+
 namespace interface
 {
 
     struct Camera
     {
 
+        CameraLogic cam_logic;
+
+        Camera(CameraLogic cam_logic);
+
         virtual ~Camera() = default;
 
-        virtual bool get_frame(std::span<uint16_t> frame) = 0;
+        virtual void set_command(cmd new_command) = 0;
+        virtual std::span<const uint16_t> last_frame() const = 0;
+
+        void send_frame(std::span<const uint16_t> last_frame) {
+            std::ranges::copy(last_frame, cam_logic.frame.view().data());
+
+            cam_logic.frame.send(cam_logic.ctx);
+            cam_logic.lock->unlock();
+        };
+
     };
 
 } // namespace interface
 
-    std::unique_ptr<interface::Camera> make_camera(string type, json::object config);
+    std::unique_ptr<interface::Camera> make_camera(string type, CameraLogic cam_logic, json::object config);
 
 namespace node
 {
@@ -35,13 +59,11 @@ namespace node
 
         std::shared_ptr<interface::Camera> camera_impl;
 
-        frame_producer_t frame;
-        SpinLock* lock;
-        sardine::host_context ctx;
+        Camera(string type, CameraLogic cam_logic, json::object config);
 
-        Camera(string type, json::object config, frame_producer_t frame, SpinLock& lock);
+        void set_command(cmd new_command);
 
-        void operator()();
+        std::span<const uint16_t> last_frame() const;
 
     };
 

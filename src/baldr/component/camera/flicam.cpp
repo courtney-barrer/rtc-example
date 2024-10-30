@@ -138,16 +138,19 @@ namespace baldr::flicam
 
     }
 
-    struct FliCam : interface::Camera
+    struct FliCam final : interface::Camera, IRawImageReceivedObserver
     {
         CameraSettings camera_settings;
         std::unique_ptr<FliSdk> fli_sdk;
 
-        uint16_t previous_frame_number = 0;
+        std::span<const uint16_t> last_frame;
 
-        FliCam(json::object config)
-            : camera_settings(myboost::json::value_to<CameraSettings>(json::value(config)))
-            , fli_sdk(std::make_unique<FliSdk>())
+        bool running = false;
+
+        FliCam(CameraLogic cam_logic, json::object config)
+            : interface::Camera(std::move(cam_logic))
+            , camera_settings(myboost::json::value_to<CameraSettings>(json::value(config)))
+            ,  fli_sdk(std::make_unique<FliSdk>())
         {
             fmt::print("Detection of grabbers...\n");
             auto listOfGrabbers = fli_sdk->detectGrabbers();
@@ -186,39 +189,81 @@ namespace baldr::flicam
                 fmt::print("Done.\n");
 
 
-                fli_sdk->start();
-                fli_sdk->imageProcessing()->enableAutoClip(true);
-
             }
 
             apply_camera_settings(*fli_sdk, camera_settings);
+
+            // We don't care about fli internal ring buffer. We disable it.
+            fli_sdk->enableRingBuffer(false);
+
+            // We register the current object as an observer of the camera.
+            // We directly work on the grabber buffer hence the "beforeCopy".
+            fli_sdk->addRawImageReceivedObserver(this, /* beforeCopy = */ true);
+
+            fli_sdk->imageProcessing()->enableAutoClip(true);
         }
 
-        bool get_frame(std::span<uint16_t> frame) {
+        ~FliCam() {
+            if (fli_sdk)
+                fli_sdk->stop();
+        }
 
-            std::span<const uint16_t> current_frame(reinterpret_cast<const uint16_t*>(fli_sdk->getRawImage()), camera_settings.full_image_length);
+        void set_command(cmd new_command) override  // implement interface::Camera
+        {
+            switch (new_command) {
+                case cmd::pause:
+                    running = false;
+                    stop();
+                    break;
+                case cmd::run:
+                case cmd::step:
+                    running = true;
+                    start();
+                    break;
+                default: break;
+            };
+        }
 
-            int current_frame_number = current_frame[0];
-
-            if (current_frame_number != previous_frame_number){
-                // frame number for raw images from FLI camera is typically unsigned int16 (0-65536)
-                // so need to catch case of overflow (current=0, previous = 65535)
-                // previous_frame_number needs to be signed in16 (to go negative) while current_frame_number
-                // must match raw_image type unsigned int16.
-                // update frame number
-                previous_frame_number = current_frame_number;
-                std::ranges::copy(current_frame, frame.data());
-                return true;
+        void start() {
+            if (not fli_sdk->isStarted()){
+                fmt::print("starting the camera\n");
+                fli_sdk->start();
             }
-            else 
-                return false;
+        }
+        void stop() {
+            if (fli_sdk->isStarted()) {
+                fmt::print("stopping the camera\n");
+
+                fli_sdk->stop();
+            }
+        }
+
+
+        std::span<const uint16_t> last_frame() const override // implement interface::Camera
+        {
+            return last_frame;
+        }
+
+        void imageReceived(const uint8_t* image) override // implement IRawImageReceivedObserver
+        {
+            last_frame = std::span{reinterpret_cast<const uint16_t*>(image), camera_settings.full_image_length};
+
+            if (running) {
+                send_frame(last_frame);
+            }
+        }
+
+        uint16_t fpsTrigger() override // implement IRawImageReceivedObserver
+        {
+            // Determine the fps. 0 means "as soon as their is a new frame".
+            return 0;
         }
 
     };
 
 
-    std::unique_ptr<interface::Camera> make_camera(json::object config) {
-        return std::make_unique<FliCam>(config);
+    std::unique_ptr<interface::Camera> make_camera(CameraLogic cam_logic, json::object config) {
+        return std::make_unique<FliCam>(std::move(cam_logic), config);
     }
 
 } // namespace baldr::flicam
@@ -228,7 +273,7 @@ namespace baldr::flicam
 namespace baldr::flicam
 {
 
-    std::unique_ptr<interface::Camera> make_camera(json::object config) {
+    std::unique_ptr<interface::Camera> make_camera(CameraLogic cam_logic, json::object config) {
         throw std::runtime_error("Error fli camera support is not compiled");
     }
 

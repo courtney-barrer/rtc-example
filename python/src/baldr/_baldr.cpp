@@ -1,4 +1,6 @@
-#include <pybind11/pybind11.h>
+#include <baldr/camera.hpp>
+#include <baldr/rtc.hpp>
+#include <baldr/dm.hpp>
 
 #include <sardine/python/url_helper.hpp>
 
@@ -8,6 +10,12 @@
 #include <sardine/python/cast/json.hpp>
 #include <sardine/python/cast/url.hpp>
 
+#include <emu/pybind11/cast/span.hpp>
+
+#include <pybind11/pybind11.h>
+
+
+
 namespace py = pybind11;
 
 int add(int i, int j) {
@@ -15,9 +23,6 @@ int add(int i, int j) {
 }
 
 PYBIND11_MODULE(_baldr, m) {
-
-    fmt::print("pybind11 _baldr plugin!!!!\n");
-
     m.doc() = "pybind11 _baldr plugin"; // optional module docstring
 
     m.def("add", &add, "A function that adds two numbers");
@@ -25,7 +30,7 @@ PYBIND11_MODULE(_baldr, m) {
     using namespace baldr;
 
     py::class_<node::Camera>(m, "Camera")
-        .def("__call__", [](node::Camera& self){ self(); })
+        .def("__call__", &node::Camera::last_frame)
         .def_static("init", &init_camera)
     ;
 
