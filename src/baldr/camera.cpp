@@ -37,8 +37,8 @@ namespace node
         camera_impl->set_command(new_command);
     }
 
-    std::span<const uint16_t> Camera::last_frame() const {
-        return camera_impl->last_frame();
+    std::span<const uint16_t> Camera::LOOK_last_frame() const {
+        return camera_impl->LOOK_last_frame();
     }
 
 

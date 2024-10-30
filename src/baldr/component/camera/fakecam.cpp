@@ -98,7 +98,7 @@ namespace baldr::fakecam
             };
         }
 
-        std::span<const uint16_t> last_frame() const override {
+        std::span<const uint16_t> LOOK_last_frame() const override {
             return std::span{ data }.subspan(index * frame_size, frame_size);
         }
 

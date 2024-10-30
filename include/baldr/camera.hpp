@@ -36,7 +36,7 @@ namespace interface
         virtual ~Camera() = default;
 
         virtual void set_command(cmd new_command) = 0;
-        virtual std::span<const uint16_t> last_frame() const = 0;
+        virtual std::span<const uint16_t> LOOK_last_frame() const = 0;
 
         void send_frame(std::span<const uint16_t> last_frame) {
             std::ranges::copy(last_frame, cam_logic.frame.view().data());
@@ -63,7 +63,7 @@ namespace node
 
         void set_command(cmd new_command);
 
-        std::span<const uint16_t> last_frame() const;
+        std::span<const uint16_t> LOOK_last_frame() const;
 
     };
 

@@ -30,7 +30,7 @@ PYBIND11_MODULE(_baldr, m) {
     using namespace baldr;
 
     py::class_<node::Camera>(m, "Camera")
-        .def("__call__", &node::Camera::last_frame)
+        .def("__call__", &node::Camera::LOOK_last_frame)
         .def_static("init", &init_camera)
     ;
 

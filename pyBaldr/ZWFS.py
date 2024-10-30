@@ -21,6 +21,7 @@ import pandas as pd
 import datetime 
 import matplotlib.pyplot as plt 
 from astropy.io import fits 
+import importlib
 
 sys.path.insert(1, '/opt/FirstLightImaging/FliSdk/Python/demo/')
 sys.path.insert(1,'/opt/Boston Micromachines/lib/Python3/site-packages/')
@@ -274,6 +275,10 @@ class ZWFS():
 
     def stop_camera(self):
         FliSdk_V2.Stop(self.camera)
+        
+    def camera_command( self, cmd ):
+        val = FliSdk_V2.FliSerialCamera.SendCommand(self.camera, cmd)
+        return val 
 
     def get_camera_dit(self):
         camera_err_flag, DIT = FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "tint raw")
@@ -337,7 +342,7 @@ class ZWFS():
         """
         gain_string must be "low", "medium" or "high"
         """
-        FliSdk_V2.FliSerialCamera.SendCommand(camera, f"set sensitivity {gain_string}")
+        FliSdk_V2.FliSerialCamera.SendCommand(self.camera, f"set sensitivity {gain_string}")
         
     def restore_default_settings(self): 
         FliSdk_V2.FliSerialCamera.SendCommand(self.camera, "restorefactory")

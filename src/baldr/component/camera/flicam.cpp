@@ -86,8 +86,8 @@ namespace baldr::flicam
         camera.sendCommand("set cropping off"); //FliCamera_sendCommand("set cropping off");
         if (cm.det_crop_enabled) {
             //set cropping and enable
-            camera.sendCommand("set cropping rows "+ cm.det_cropping_rows);
-            camera.sendCommand("set cropping columns "+ cm.det_cropping_cols);
+            camera.sendCommand("set cropping rows " + cm.det_cropping_rows);
+            camera.sendCommand("set cropping columns " + cm.det_cropping_cols);
             camera.sendCommand("set cropping on");
         }
 
@@ -97,7 +97,7 @@ namespace baldr::flicam
             //TO DO: should make corresponding mask for this to be added to
             //pixel_filter if this is turned on to ensure frame count etc
             //does not get interpretted as intensities.
-            camera.sendCommand("set imagetags on");
+            aaa = camera.sendCommand("set imagetags on");
         } else{
             camera.sendCommand("set imagetags off");
         }
@@ -239,7 +239,7 @@ namespace baldr::flicam
         }
 
 
-        std::span<const uint16_t> last_frame() const override // implement interface::Camera
+        std::span<const uint16_t> LOOK_last_frame() const override // implement interface::Camera
         {
             return last_frame;
         }

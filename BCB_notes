@@ -33,6 +33,38 @@ reading configurations from json files.
 
 
 
+31/10/24
+-------------
+test julien camera branch to use observer 
+
+rebuild 
+    rm -rf build
+    just dev
+    conan build .
+    conan editable add .
+    pip install .
+
+in just dev failed flicam.cpp two line 139, 238 same name for method and memeber. line 238 edit 
+last_frame() -> LOOK_last_frame()
+then error in camera.hpp lines 39, 66 calling last_frame(). changed to LOOK_last_frame()
+also camera.cpp, fakecam.cpp, 
+
+after these changes installed!! 
+
+set up cred3_script_test.py which configs cred3. Runs fine, but when i call frame from SHM 
+its the right size (512,640) but only has non-zero entries for the first 32 rows. 32*512=2**14
+
+testing with previous python script : 
+
+    from pyBaldr import ZWFS
+    zwfs = ZWFS.ZWFS(DM_serial_number="17DW019#113", cameraIndex=0, DMshapes_path = 'DMShapes/' )
+    zwfs.start_camera()
+    zwfs.get_image() 
+    and we gut updated images with correct size. 
+
+
+
+
 Setting up in sydney July 2024
 - installing FLI / BMC software SDK for ubuntu 20.04 - all fine 
 - FLI gui works
