@@ -1,12 +1,13 @@
 {
-    "det_dit" : 0.005 ,
-    "det_fps" : 300 ,  
-    "det_gain" : "high" ,
-    "det_crop_enabled" : false ,
-    "det_tag_enabled" : true ,
-    "det_cropping_rows":"0-512",
-    "det_cropping_cols":"0-640",
-    "image_height" : 512 ,
+    "camera_index":0,
+    "det_dit" : 0.0016,
+    "det_fps" : 600.0,
+    "det_gain" : "medium",
+    "det_crop_enabled" : false,
+    "det_tag_enabled" : false,
+    "det_cropping_rows" : "0-511",
+    "det_cropping_cols" : "0-639",
+    "image_height" : 512,
     "image_width" : 640,
     "full_image_length" : 327680
 }

@@ -97,7 +97,7 @@ namespace baldr::flicam
             //TO DO: should make corresponding mask for this to be added to
             //pixel_filter if this is turned on to ensure frame count etc
             //does not get interpretted as intensities.
-            aaa = camera.sendCommand("set imagetags on");
+            camera.sendCommand("set imagetags on");
         } else{
             camera.sendCommand("set imagetags off");
         }

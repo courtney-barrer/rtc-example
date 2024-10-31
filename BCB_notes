@@ -62,6 +62,14 @@ testing with previous python script :
     zwfs.get_image() 
     and we gut updated images with correct size. 
 
+BUG ::
+bmd -> bmc 
+
+cred3_script_test.py - works on single DM 
+cred3_4dm_scipt_test.py - works , but some bug with multiple rtc initiations.
+
+
+
 
 
 

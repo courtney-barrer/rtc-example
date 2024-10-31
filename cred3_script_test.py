@@ -28,7 +28,7 @@ cred3_cam_config = {
 
 frame_size_h = cred3_cam_config["image_height"]
 frame_size_w =  cred3_cam_config["image_width"]
-commands_size = 140 #frame_size_h * frame_size_w
+commands_size = 140  #frame_size_h * frame_size_w
 
 frame = sa.region.host.open_or_create('frames', shape=[frame_size_h, frame_size_w], dtype=np.uint16)
 commands = sa.region.host.open_or_create('commands', shape=[commands_size], dtype=np.double)
@@ -63,8 +63,8 @@ cam_config = {
 
 
 fake_rtc_config = {
-    'factor' : 2.,
-    'offset': 1., # number of random frame rotating to be copied in shm
+    'factor' : 0.,
+    'offset': 0.02, # number of random frame rotating to be copied in shm
 }
 
 rtc_config = {
@@ -82,10 +82,24 @@ rtc_config = {
     'command': sa.url_of(rtc_command).geturl(),
 }
 
+# dm_config = {
+#     'component': 'dm',
+#     'type': 'fake',
+#     'config': {}, # fake DM does not take anything
+#     'io': {
+#         'commands': commands_url.geturl(),
+#     },
+#     'sync': {
+#         'wait': commands_lock_url.geturl(),
+#     },
+#     'command': sa.url_of(dm_command).geturl(),
+# }
+
+
 dm_config = {
     'component': 'dm',
-    'type': 'fake',
-    'config': {}, # fake DM does not take anything
+    'type': 'bmc',
+    'config': {"serial_number":"17DW019#053"}, # fake DM does not take anything
     'io': {
         'commands': commands_url.geturl(),
     },
@@ -94,6 +108,7 @@ dm_config = {
     },
     'command': sa.url_of(dm_command).geturl(),
 }
+
 
 baldr_config_file = open("baldr_config.json", "+w")
 
@@ -118,3 +133,15 @@ class clean_exit:
 
 # Will request all component to exit
 _ = clean_exit()
+
+
+
+# 
+# commands_dict[beam]
+# frame
+# cam_command.run()
+# rtc_command.run()
+# dm_command.run()
+# cam_command
+# rtc_command
+# dm_command 
