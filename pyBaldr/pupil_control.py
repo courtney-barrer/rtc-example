@@ -9,7 +9,7 @@ from matplotlib import colors
 from . import utilities as util 
 #from . import hardware 
 
-fig_path = '/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
+fig_path = 'data/' #'/home/baldr/Documents/baldr/ANU_demo_scripts/BALDR/figures/' 
 
 class pupil_controller_1():
     """
@@ -80,7 +80,7 @@ class pupil_controller_1():
             #plt.savefig(figure_path + 'process_1.2_center_source_DM.png',dpi=300) 
             plt.show()
 
-        return( e_x, e_y )    
+        return( e_x, e_y )      
 
 
     def set_pupil_reference_pixels(self ):
@@ -121,9 +121,13 @@ def analyse_pupil_openloop( zwfs, debug = True, return_report = True, symmetric_
 
     zwfs.send_cmd(zwfs.dm_shapes['flat_dm'])
 
-    _ = input('MANUALLY MOVE PHASE MASK OUT OF BEAM, PRESS ENTER TO BEGIN' )
-    util.watch_camera(zwfs, frames_to_watch = 50, time_between_frames=0.05) 
 
+    print( '2*TIP MODE TO MOVE PHASE MASK OUT OF BEAM')
+
+    fourier_basis = util.construct_command_basis( basis='fourier', number_of_modes = 5, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True)
+
+    zwfs.dm.send_data(  zwfs.dm_shapes['flat_dm'] + 2 * fourier_basis[:,0] )
+    time.sleep( 0.1 )
     
     # simple idea: we are clearly going to have 2 modes in distribution of pixel intensity, one centered around the mean pupil intensity where illuminated, and another centered around the "out of pupil" region which will be detector noise / scattered light. np.histogram in default setup automatically calculates bins that incoorporate the range and resolution of data. Take the median frequency it returns (which is an intensity value) and set this as the pupil intensity threshold filter. This should be roughly between the two distributions.
 
@@ -184,6 +188,11 @@ def analyse_pupil_openloop( zwfs, debug = True, return_report = True, symmetric_
 
         pupil_filter  = ( inside_pup > 0 ).reshape(-1)
 
+        if hasattr(zwfs, 'bad_pixel_filter'): 
+            # bad_pixel_filter is 1 if bad pixel, zero otherwise 
+            pupil_filter *= ~zwfs.bad_pixel_filter
+            pupil_filter_tight *= ~zwfs.bad_pixel_filter
+
     
     pupil_pixels =  np.where( pupil_filter )[0]
 
@@ -212,11 +221,12 @@ def analyse_pupil_openloop( zwfs, debug = True, return_report = True, symmetric_
 
     # make sure phase mask is IN !!!! 
     #hardware.set_phasemask( phasemask = 'posX' ) # no motors to implement this on yet, so does nothing 
-
+    print( 'FLATTEN DM TO MOVE PHASE MASK BACK IN BEAM')
     zwfs.send_cmd(zwfs.dm_shapes['flat_dm'])
+    time.sleep( 0.1 )
 
-    _ = input('MANUALLY MOVE PHASE MASK INTO BEAM, PRESS ENTER TO BEGIN' )
-    util.watch_camera(zwfs, frames_to_watch = 50, time_between_frames=0.05) 
+    #_ = input('MANUALLY MOVE PHASE MASK INTO BEAM, PRESS ENTER TO BEGIN' )
+    #util.watch_camera(zwfs, frames_to_watch = 50, time_between_frames=0.05) 
 
     # now we get a reference I0 intensity 
     imglist = []
