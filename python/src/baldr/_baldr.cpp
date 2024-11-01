@@ -97,8 +97,8 @@ PYBIND11_MODULE(_baldr, m) {
         .def("lock", &SpinLock::lock)
         .def("try_lock", &SpinLock::try_lock)
         .def("unlock", &SpinLock::unlock)
-        .def_property_readonly("value", [](const SpinLock& sl) -> LockState {
-            return sl.state.load();
+        .def("value", [](const SpinLock& sl, size_t idx) -> LockState {
+            return sl.state[idx].load();
         });
 
     sardine::register_url(spin_lock);

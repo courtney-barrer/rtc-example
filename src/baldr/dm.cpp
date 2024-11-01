@@ -18,15 +18,16 @@ namespace baldr
 namespace node
 {
 
-    DM::DM(string type, json::object config, commands_consumer_t commands, SpinLock& lock)
+    DM::DM(string type, json::object config, commands_consumer_t commands, SpinLock& lock, size_t idx)
         : dm_impl(make_dm(type, config))
         , commands(std::move(commands))
         , lock(&lock)
+        , idx(idx)
     {}
 
     void DM::operator()() {
         // waiting on the commands lock
-        lock->lock();
+        lock->lock(idx);
 
         // ingore for now
         commands.recv(ctx);
@@ -51,8 +52,10 @@ namespace node
 
         SpinLock& lock = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<SpinLock>(mutex_url),
           "Could not open wait lock using url: {}", mutex_url);
+        
+        auto idx = json::opt_to<size_t>(config.at("sync"), "idx").value_or(0);
 
-        return node::DM(type, dm_config, std::move(commands), lock);
+        return node::DM(type, dm_config, std::move(commands), lock, idx);
     }
 
     std::future<void> init_dm_thread(json::object config) {

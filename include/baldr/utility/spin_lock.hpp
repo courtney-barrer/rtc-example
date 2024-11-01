@@ -7,27 +7,28 @@ namespace baldr
     enum class LockState {Locked, Unlocked};
 
     struct SpinLock {
-        myboost::ipc_atomic<LockState> state = LockState::Locked;
+        myboost::ipc_atomic<LockState> state[6];
 
         SpinLock() = default;
 
         SpinLock(LockState state) : state(state) {}
 
-        void lock()
+        void lock(size_t idx)
         {
-            while (state.exchange(LockState::Locked, myboost::memory_order_acquire) == LockState::Locked) {
+            while (state[idx].exchange(LockState::Locked, myboost::memory_order_acquire) == LockState::Locked) {
             /* busy-wait */
             }
         }
 
-        bool try_lock()
+        bool try_lock(size_t idx)
         {
-            return state.exchange(LockState::Locked, myboost::memory_order_acquire) != LockState::Locked;
+            return state[idx].exchange(LockState::Locked, myboost::memory_order_acquire) != LockState::Locked;
         }
 
         void unlock()
         {
-            state.store(LockState::Unlocked, myboost::memory_order_release);
+            for( int i = 0; i < 6; i++)
+                state[i].store(LockState::Unlocked, myboost::memory_order_release);
         }
     };
 

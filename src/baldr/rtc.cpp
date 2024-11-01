@@ -1,5 +1,5 @@
 #include <baldr/rtc.hpp>
-
+#include <iostream> 
 #include <baldr/component/rtc/ben.hpp>
 #include <baldr/component/rtc/fakertc.hpp>
 
@@ -18,18 +18,20 @@ namespace baldr
 namespace node
 {
 
-    RTC::RTC(string type, json::object config, frame_consumer_t frame, commands_producer_t commands, SpinLock& wait_lock, SpinLock& notify_lock)
+    RTC::RTC(string type, json::object config, frame_consumer_t frame, commands_producer_t commands,
+             SpinLock& wait_lock, size_t wait_idx, SpinLock& notify_lock)
         : rtc_impl(make_rtc(type, config))
         , frame(std::move(frame))
         , commands(std::move(commands))
         , wait_lock(&wait_lock)
+        , wait_idx(wait_idx)
         , notify_lock(&notify_lock)
     {}
 
     void RTC::operator()() {
         // waiting on the frame lock
-        wait_lock->lock();
-
+        wait_lock->lock(wait_idx);
+        std::cout << "frame recieved doing computer " << std::endl;
         // ingore for now
         frame.recv(ctx);
 
@@ -68,10 +70,12 @@ namespace node
         SpinLock& wait_lock = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<SpinLock>(wait_lock_url),
           "Could not open wait lock using url: {}", wait_lock_url);
 
+        auto wait_idx = json::opt_to<size_t>(config.at("sync"), "wait_idx").value_or(0);
+
         SpinLock& notify_lock = EMU_UNWRAP_OR_THROW_LOG(sardine::from_url<SpinLock>(notify_lock_url),
           "Could not open notify lock using url: {}", notify_lock_url);
 
-        return node::RTC(type, camera_config, std::move(frame), std::move(commands), wait_lock, notify_lock);
+        return node::RTC(type, camera_config, std::move(frame), std::move(commands), wait_lock, wait_idx, notify_lock);
     }
 
     std::future<void> init_rtc_thread(json::object config) {

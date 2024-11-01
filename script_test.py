@@ -40,6 +40,7 @@ cam_config = {
     },
     'sync': {
         'notify': frame_lock_url.geturl(),
+        'idx': 0,
     },
     'command': sa.url_of(cam_command).geturl(),
 }

@@ -37,9 +37,10 @@ namespace node
 
         commands_consumer_t commands;
         SpinLock* lock;
+        size_t idx;
         sardine::host_context ctx;
 
-        DM(string type, json::object config, commands_consumer_t commands, SpinLock& lock);
+        DM(string type, json::object config, commands_consumer_t commands, SpinLock& lock, size_t idx);
 
         void operator()();
 

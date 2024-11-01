@@ -15,7 +15,7 @@ namespace baldr::fakedm
         }
 
         void send_command(span<const double> commands) override {
-            fmt::print("received commands: {}\n", index++);
+            //fmt::print("received commands: {}\n", index++);
         }
     };
 

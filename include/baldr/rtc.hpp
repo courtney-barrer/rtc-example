@@ -38,6 +38,7 @@ namespace node
         frame_consumer_t frame;
         commands_producer_t commands;
         SpinLock* wait_lock;
+        size_t wait_idx;
         SpinLock* notify_lock;
 
         sardine::host_context ctx;
@@ -45,7 +46,7 @@ namespace node
         RTC(
             string type, json::object config,
             frame_consumer_t frame, commands_producer_t commands,
-            SpinLock& wait_lock, SpinLock& notify_lock
+            SpinLock& wait_lock, size_t wait_idx, SpinLock& notify_lock
         );
 
         void operator()();
