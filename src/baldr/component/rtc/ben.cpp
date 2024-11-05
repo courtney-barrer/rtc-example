@@ -57,7 +57,7 @@ namespace baldr::benrtc
             }
 
             if (integrals.size() != size) {
-                cout << "integrals.size() != size.. reinitializing integrals, prev_errors and output to zero with correct size" << endl; 
+                std::cout << "integrals.size() != size.. reinitializing integrals, prev_errors and output to zero with correct size" << std::endl; 
                 integrals.resize(size, 0.0);
                 prev_errors.resize(size, 0.0);
                 output.resize(size, 0.0);
@@ -288,12 +288,13 @@ namespace baldr::benrtc
         updatable<float> flux_norm; /**< for normalizing intensity across detector. */
     };
 
+
     phase_reconstuctor tag_invoke( json::value_to_tag< phase_reconstuctor >, json::value const& jv )
     {
         phase_reconstuctor reco;
 
         json::object const& obj = jv.as_object();
-        reco.dm_flat    = json::object_to<vector<float>    >(obj, "dm_flat"  );
+        reco.dm_flat    = json::object_to<vector<double>    >(obj, "dm_flat"  );
         reco.IM         = json::object_to<vector<float>    >(obj, "IM"       );
         reco.CM         = json::object_to<vector<float>    >(obj, "CM"       );
         reco.R_TT       = json::object_to<vector<float>    >(obj, "R_TT"     );
@@ -314,6 +315,7 @@ namespace baldr::benrtc
 
     PIDController tag_invoke( json::value_to_tag< PIDController >, json::value const& jv )
     {
+        json::object const& obj = jv.as_object();
         PIDController pid;
         pid.kp            = json::object_to< vector<double> >(obj, "pid_kp"  );
         pid.ki            = json::object_to< vector<double> >(obj, "pid_ki"  );
@@ -327,6 +329,7 @@ namespace baldr::benrtc
 
     LeakyIntegrator tag_invoke( json::value_to_tag< LeakyIntegrator >, json::value const& jv )
     {
+        json::object const& obj = jv.as_object();
         LeakyIntegrator leakyInt;
         leakyInt.rho           = json::object_to< vector<double> >(obj, "leaky_rho"  );
         leakyInt.kp            = json::object_to< vector<double> >(obj, "leaky_kp"  );
@@ -368,7 +371,6 @@ namespace baldr::benrtc
                 dm_disturb(140, 0),
                 TT_cmd_err(140, 0.0),
                 HO_cmd_err(140, 0.0),
-                mode_err_TT(pid.kp.size(), 0),
                 mode_err_TT(pid.kp.size(), 0),
                 mode_err_HO(leakyInt.kp.size(), 0)
 
@@ -422,7 +424,7 @@ namespace baldr::benrtc
             for (size_t i = 0; i < reco.dm_flat.size(); ++i) {
                 //dm_cmd[i] = TT_cmd_err[i] + HO_cmd_err[i];
                 dm_cmd[i] = reco.dm_flat[i] + TT_cmd_err[i] + HO_cmd_err[i] + dm_disturb[i];  // comment out HO_cmd_err if desired
-                //cout << dm_cmd[i] << endl;
+                std::cout << dm_cmd[i] << std::endl;
             }
         
         }

@@ -36,50 +36,9 @@ def fits_to_json(fits_file, output_json):
 # Example usage:
 # fits_to_json("example.fits", "output.json")
 
-fits_file = 'RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T20.06.24.fits'
-fits_to_json(fits_file, output_json):
+# fits_file = 'RECONSTRUCTORS_zonal_0.04pokeamp_in-out_pokes_map_DIT-0.0049_gain_high_17-09-2024T20.06.24.fits'
+# fits_to_json(fits_file, output_json):
 
-
-
-
-
-{
-  "regions": {
-    "pupil_pixels": [100, 101, 102, 103],
-    "secondary_pixels": [200, 201],
-    "outside_pixels": [300, 301, 302]
-  },
-  "reco": {
-    "dm_flat": [0.0, 0.1, 0.2],
-    "IM": [1.0, 0.5, -0.2],
-    "CM": [0.5, -0.1, 0.3],
-    "R_TT": [0.1, 0.2],
-    "R_HO": [0.05, -0.05],
-    "I2M": [0.3, 0.7],
-    "I2M_TT": [0.6, -0.1],
-    "I2M_HO": [0.4, 0.2],
-    "M2C": [0.1, 0.9],
-    "M2C_TT": [0.5, 0.5],
-    "M2C_HO": [0.2, -0.3],
-    "bias": [10, 20, 30],
-    "I0": [1.0, 1.2, 1.1],
-    "flux_norm": 0.85
-  },
-  "pid": {
-    "pid_kp": [1.0, 0.8],
-    "pid_ki": [0.05, 0.02],
-    "pid_kd": [0.1, 0.05],
-    "pid_lower_limit": [-1.0, -1.0],
-    "pid_upper_limit": [1.0, 1.0],
-    "pid_setpoint": [0.0, 0.1]
-  },
-  "leakyInt": {
-    "leaky_rho": [0.98, 0.95],
-    "leaky_kp": [1.0, 1.2],
-    "leaky_lower_limit": [-0.5, -0.5],
-    "leaky_upper_limit": [0.5, 0.5]
-  }
-}
 
 
 
@@ -91,7 +50,7 @@ n_modes_IM = 100
 num_TT_modes  = 2
 num_HO_modes = 20
 
-{
+rtc_config_dict = {
 
   "regions": {
     "pupil_pixels": list( range(  pupil_pixels_length ) ),
@@ -129,3 +88,105 @@ num_HO_modes = 20
     "leaky_upper_limit": list( 100 * np.ones( num_HO_modes ) )
   }
 }
+
+
+
+from baldr import _baldr as ba
+from baldr import sardine as sa
+import numpy as np
+
+import json
+
+frame_size = 128
+
+
+frame = sa.region.host.open_or_create('frames', shape=[frame_size, frame_size], dtype=np.uint16)
+commands = sa.region.host.open_or_create('commands', shape=[140], dtype=np.double)
+
+frame_url = sa.url_of(frame)
+commands_url = sa.url_of(commands)
+
+cam_command = ba.Command.create(ba.Cmd.pause)
+rtc_command = ba.Command.create(ba.Cmd.pause)
+dm_command = ba.Command.create(ba.Cmd.pause)
+
+frame_lock = ba.SpinLock.create()
+commands_lock = ba.SpinLock.create()
+
+frame_lock_url = sa.url_of(frame_lock)
+commands_lock_url = sa.url_of(commands_lock)
+
+fake_cam_config = {
+    'size' : frame_size*frame_size,
+    'number': 100, # number of random frame rotating to be copied in shm
+    'latency': 1000, # latency in μsec
+}
+
+
+cam_config = {
+    'component': 'camera',
+    'type': 'fake',
+    'config': fake_cam_config,
+    'io': {
+        'frame': frame_url.geturl(),
+    },
+    'sync': {
+        'notify': frame_lock_url.geturl(),
+        'idx': 0,
+    },
+    'command': sa.url_of(cam_command).geturl(),
+}
+
+
+
+rtc_config = {
+    'component': 'rtc',
+    'type': 'ben',
+    'config': rtc_config_dict,
+    'io': {
+        'frame': frame_url.geturl(),
+        'commands': commands_url.geturl(),
+    },
+    'sync': {
+        'wait': frame_lock_url.geturl(),
+        'notify': commands_lock_url.geturl(),
+    },
+    'command': sa.url_of(rtc_command).geturl(),
+}
+
+dm_config = {
+    'component': 'dm',
+    'type': 'fake',
+    'config': {}, # fake DM does not take anything
+    'io': {
+        'commands': commands_url.geturl(),
+    },
+    'sync': {
+        'wait': commands_lock_url.geturl(),
+    },
+    'command': sa.url_of(dm_command).geturl(),
+}
+
+baldr_config_file = open("baldr_config.json", "+w")
+
+json.dump([
+    cam_config,
+    rtc_config,
+    dm_config
+], baldr_config_file)
+
+baldr_config_file.close()
+
+class clean_exit:
+    def __del__(self):
+        print("killing all")
+        cam_command.exit()
+        rtc_command.exit()
+        dm_command.exit()
+
+        frame_lock.unlock()
+        commands_lock.unlock()
+
+
+# Will request all component to exit
+_ = clean_exit()
