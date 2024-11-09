@@ -74,7 +74,15 @@
         "mutex": "cpp",
         "ranges": "cpp",
         "shared_mutex": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "any": "cpp",
+        "strstream": "cpp",
+        "bitset": "cpp",
+        "cfenv": "cpp",
+        "csignal": "cpp",
+        "map": "cpp",
+        "source_location": "cpp",
+        "typeindex": "cpp"
     },
     "C_Cpp.dimInactiveRegions": false
 }
