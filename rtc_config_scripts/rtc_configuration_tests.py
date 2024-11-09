@@ -190,3 +190,9 @@ class clean_exit:
 
 # Will request all component to exit
 _ = clean_exit()
+
+
+#cam_command.run()
+#rtc_command.recv()
+#rtc_command.run()
+#
