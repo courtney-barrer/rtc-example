@@ -35,9 +35,9 @@ print("Process started with PID:", process.pid)
 
 # start the camera writing to SHM 
 cam_command.run()  # 
-for k in dm_command_dict:
-    dm_command_dict[k].run()  # commands_lock.unlock() # unlock the commands_lock so dm recieves rtc output for one iteration 
-    rtc_command_dict[k].run() #
+# for k in dm_command_dict:
+#     dm_command_dict[k].run()  # commands_lock.unlock() # unlock the commands_lock so dm recieves rtc output for one iteration 
+#     rtc_command_dict[k].run() #
 
 # requirements: 
 
@@ -215,7 +215,8 @@ class MainWindow(QWidget):
         #frame = np.random.randint(0, 256, (256, 256), dtype=np.uint8)  # Example: random image
 
         # Retrieve DM commands and update each DM command image
-        dm_commands = [commands_dict[k] for k in commands_dict]  # Simulated DM commands
+        #dm_commands = [commands_dict[k] for k in commands_dict]  # Simulated DM commands
+        dm_commands = [np.random.randn(140) for k in range(4) ] #commands_dict] 
         for i, command in enumerate(dm_commands):
             command_2D = get_DM_command_in_2D(command)  # Convert command to 2D
             
