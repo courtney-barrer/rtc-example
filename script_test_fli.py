@@ -6,7 +6,7 @@ import json
 global DM_COMMAND_SIZE 
 DM_COMMAND_SIZE = 140
 
-with open("cred3_camera_default_config.json") as f:
+with open("cred1_camera_default_config.json") as f:
     cred_cam_config = json.load(f)
 
 with open("bmc_DM_default_config.json") as f:
@@ -63,7 +63,7 @@ for beam, key in enumerate( bmc_dm_config ):
 # CAMERA 
 ###############
 frame_size_h = int( cred_cam_config['image_height'] )
-frame_size_w = int( cred_cam_config['image_height'] )
+frame_size_w = int( cred_cam_config['image_width'] )
 
 commands_size = frame_size_h * frame_size_w
 
@@ -122,10 +122,10 @@ for beam in range( len( bmc_dm_config ) ):
     
 baldr_config_file = open("baldr_config.json", "+w")
 
-json.dump([cam_config, rtc_config] +\
-    [d for d in dm_config_list] +\
-    [r for r in rtc_config_list],\
-            baldr_config_file)
+json.dump([cam_config], baldr_config_file) #, rtc_config] +\
+# [d for d in dm_config_list] +\
+# [r for r in rtc_config_list],\
+#         baldr_config_file)
 
 baldr_config_file.close()
 
@@ -134,18 +134,18 @@ class clean_exit:
         print("killing all")
         cam_command.exit()
         frame_lock.unlock()
-        for beam in rtc_command_dict:
-            rtc_command_dict[beam].exit() 
-        for beam in dm_command_dict:
-            dm_command_dict[beam].exit()
-            commands_lock_dict[beam].unlock()
+#         for beam in rtc_command_dict:
+#             rtc_command_dict[beam].exit() 
+#         for beam in dm_command_dict:
+#             dm_command_dict[beam].exit()
+#             commands_lock_dict[beam].unlock()
 
         
 
 
-# Will request all component to exit
-_ = clean_exit()
+# # Will request all component to exit
+# _ = clean_exit()
 
-# 
-# commands_dict[beam]
-# frame
+# # 
+# # commands_dict[beam]
+# # frame
