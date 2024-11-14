@@ -444,11 +444,11 @@ namespace baldr::flicam
 
         
             // We don't care about fli internal ring buffer. We disable it.
-            fli_sdk->enableRingBuffer(false);
+            fli_sdk->enableRingBuffer(true);
 
             // We register the current object as an observer of the camera.
             // We directly work on the grabber buffer hence the "beforeCopy".
-            fli_sdk->addRawImageReceivedObserver(this, /* beforeCopy = */ true);
+            fli_sdk->addRawImageReceivedObserver(this, /* beforeCopy = */ false ) ;//true);
 
             fli_sdk->imageProcessing()->enableAutoClip(true);
         }
@@ -499,6 +499,8 @@ namespace baldr::flicam
             last_frame = std::span{reinterpret_cast<const uint16_t*>(image), camera_settings.full_image_length};
 
             if (running) {
+                static int cnt = 0;
+                //fmt::print("cnt = {}\n", cnt++);
                 send_frame(last_frame);
             }
         }

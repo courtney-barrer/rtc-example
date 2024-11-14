@@ -11,11 +11,11 @@
     "rawimages": "off",
     "cooling": "on",
     "standby": "off",
-    "mode": "globalresetbursts",
-    "resetwidth": "15",
-    "nbreadworeset": "10",
+    "mode": "globalresetcds",
+    "resetwidth": "1",
+    "nbreadworeset": "1",
     "cropping": "off",
     "cropping columns": "1-320",
     "cropping rows": "1-256",
-    "aduoffset": "1000"
+    "aduoffset": "100"
 }
