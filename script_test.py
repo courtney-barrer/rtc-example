@@ -1,5 +1,5 @@
-from baldr import _baldr as ba
-from baldr import sardine as sa
+import baldr as ba
+import sardine as sa
 import numpy as np
 
 import json
@@ -8,15 +8,18 @@ frame_size = 128
 
 commands_size = frame_size*frame_size
 
-frame = sa.region.host.open_or_create('frames', shape=[frame_size, frame_size], dtype=np.uint16)
-commands = sa.region.host.open_or_create('commands', shape=[140], dtype=np.double)
+frame = sa.host.open_or_create('frames', shape=[frame_size, frame_size], dtype=np.uint16)
+# frame = sa.milk.host.open_or_create('frames', [frame_size, frame_size], 1, dtype=np.uint16)
+commands = sa.host.open_or_create('commands', shape=[140], dtype=np.double)
 
 frame_url = sa.url_of(frame)
 commands_url = sa.url_of(commands)
 
-cam_command = ba.Command.create(ba.Cmd.pause)
-rtc_command = ba.Command.create(ba.Cmd.pause)
-dm_command = ba.Command.create(ba.Cmd.pause)
+cim = ba.ComponentInfoManager.get()
+
+cam_command = cim.create_component_info("cam")
+rtc_command = cim.create_component_info("rtc")
+dm_command = cim.create_component_info("dm")
 
 frame_lock = ba.SpinLock.create()
 commands_lock = ba.SpinLock.create()
@@ -27,13 +30,12 @@ commands_lock_url = sa.url_of(commands_lock)
 fake_cam_config = {
     'size' : frame_size*frame_size,
     'number': 100, # number of random frame rotating to be copied in shm
-    'latency': 1000, # latency in μsec
+    'latency': 1000000, # latency in μsec
 }
 
 
 cam_config = {
-    'component': 'camera',
-    'type': 'fake',
+    'type': 'camera:fake',
     'config': fake_cam_config,
     'io': {
         'frame': frame_url.geturl(),
@@ -42,7 +44,8 @@ cam_config = {
         'notify': frame_lock_url.geturl(),
         'idx': 0,
     },
-    'command': sa.url_of(cam_command).geturl(),
+    'cinfo': sa.url_of(cam_command).geturl(),
+    'async': True
 }
 
 
@@ -52,8 +55,7 @@ fake_rtc_config = {
 }
 
 rtc_config = {
-    'component': 'rtc',
-    'type': 'fake',
+    'type': 'rtc:fake',
     'config': fake_rtc_config,
     'io': {
         'frame': frame_url.geturl(),
@@ -63,12 +65,11 @@ rtc_config = {
         'wait': frame_lock_url.geturl(),
         'notify': commands_lock_url.geturl(),
     },
-    'command': sa.url_of(rtc_command).geturl(),
+    'cinfo': sa.url_of(rtc_command).geturl(),
 }
 
 dm_config = {
-    'component': 'dm',
-    'type': 'fake',
+    'type': 'dm:fake',
     'config': {}, # fake DM does not take anything
     'io': {
         'commands': commands_url.geturl(),
@@ -76,15 +77,15 @@ dm_config = {
     'sync': {
         'wait': commands_lock_url.geturl(),
     },
-    'command': sa.url_of(dm_command).geturl(),
+    'cinfo': sa.url_of(dm_command).geturl(),
 }
 
 baldr_config_file = open("baldr_config.json", "+w")
 
 json.dump([
     cam_config,
-    rtc_config,
-    dm_config
+    # rtc_config,
+    # dm_config
 ], baldr_config_file)
 
 baldr_config_file.close()

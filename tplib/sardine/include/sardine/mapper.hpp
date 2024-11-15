@@ -8,8 +8,8 @@ namespace sardine
 {
 
     template<typename T>
-    auto mapper_from_mapping_descriptor(const interface::mapping_descriptor& md, emu::capsule capsule = {}) -> result< mapper<T> > {
-        return mapper<T>::from_mapping_descriptor(md, capsule);
+    auto mapper_from_mapping_descriptor(const interface::mapping_descriptor& md, emu::capsule&& capsule = {}) -> result< mapper<T> > {
+        return mapper<T>::from_mapping_descriptor(md, std::move(capsule));
     }
 
     template<typename T>

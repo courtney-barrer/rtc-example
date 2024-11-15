@@ -8,21 +8,21 @@ requires-python = ">=3.8"
 authors = [ {name = "Julien Bernard", email = "raplonu.jb@gmail.com"}, ]
 
 # Optional: runtime dependency specification
-dependencies = [ "numpy" ]
+dependencies = [ "numpy", "textual"]
 
 [project.urls]
 Homepage = "https://maggot.anu.edu.au/jbernard/rtc_example"
 
-[build-system]
-requires = ["scikit-build-core >=0.4.3", "pybind11 >= 2.13.1", "cmake >=3.27", "conan >= 2.8.0"]
-# and maybe conan but it requires some configuration...
+[project.scripts]
+baldr-info = "baldr.component_info:main"
 
+[build-system]
+requires = ["scikit-build-core >=0.10.3", "pybind11 >= 2.13.1", "conan >= 2.8.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
 # Protect the configuration against future changes in scikit-build-core
-cmake.source-dir = "python"
-# editable.rebuild = true
+editable.rebuild = true
 
 # Setuptools-style build caching in a local directory
 build-dir = "build/{wheel_tag}"

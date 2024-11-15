@@ -8,30 +8,30 @@
 namespace sardine::buffer
 {
 
-namespace detail
-{
+// namespace detail
+// {
 
-    template <typename T>
-    struct adaptor_type {
-        // using value_type = T;
-        // using proxy_type = T;
-        using interface_type = T&;
-    };
+//     template <typename T>
+//     struct adaptor_type {
+//         // using value_type = T;
+//         // using proxy_type = T;
+//         using interface_type = T&;
+//     };
 
-    template <cpts::all_view V>
-    struct adaptor_type< V > {
-        // using value_type = typename V::value_type;
-        // using proxy_type = std::span<value_type>;
-        using interface_type = V;
-    };
+//     template <cpts::all_view V>
+//     struct adaptor_type< V > {
+//         // using value_type = typename V::value_type;
+//         // using proxy_type = std::span<value_type>;
+//         using interface_type = V;
+//     };
 
-} // namespace detail
+// } // namespace detail
 
-    /// Type returned by producer and consumer.
-    /// For values, result is a reference to the value.
-    /// For views, result is the view itself.
-    template<typename T>
-    using interface_type = typename detail::adaptor_type<T>::interface_type;
+//     /// Type returned by producer and consumer.
+//     /// For values, result is a reference to the value.
+//     /// For views, result is the view itself.
+//     template<typename T>
+//     using interface_type = typename detail::adaptor_type<T>::interface_type;
 
     template<typename T>
     struct storage

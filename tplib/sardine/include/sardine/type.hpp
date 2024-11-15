@@ -1,5 +1,7 @@
 #pragma once
 
+#include "emu/capsule.hpp"
+#include <sardine/config.hpp>
 #include <sardine/error.hpp>
 
 #include <emu/type_traits.hpp>
@@ -20,7 +22,7 @@
 
 namespace sardine
 {
-    using std::size_t, std::move, std::byte, std::string, std::string_view, std::dynamic_extent;
+    using std::size_t, std::byte, std::string, std::string_view, std::dynamic_extent;
 
     using emu::span, emu::cstring_view;
 
@@ -40,17 +42,17 @@ namespace sardine
 
     using tl::unexpected;
 
-    using myboost::interprocess::create_only_t;
-    using myboost::interprocess::open_only_t;
-    using myboost::interprocess::open_read_only_t;
-    using myboost::interprocess::open_or_create_t;
-    using myboost::interprocess::open_copy_on_write_t;
+    using boost::interprocess::create_only_t;
+    using boost::interprocess::open_only_t;
+    using boost::interprocess::open_read_only_t;
+    using boost::interprocess::open_or_create_t;
+    using boost::interprocess::open_copy_on_write_t;
 
-    using myboost::interprocess::create_only;
-    using myboost::interprocess::open_only;
-    using myboost::interprocess::open_read_only;
-    using myboost::interprocess::open_or_create;
-    using myboost::interprocess::open_copy_on_write;
+    using boost::interprocess::create_only;
+    using boost::interprocess::open_only;
+    using boost::interprocess::open_or_create;
+    using boost::interprocess::open_read_only;
+    using boost::interprocess::open_copy_on_write;
 
     // struct heap_allocator_tag {};
 
@@ -60,7 +62,10 @@ namespace sardine
         span_b region;
         span_b data;
         emu::dlpack::device_t device;
+        emu::capsule capsule;
     };
+
+
 
     // struct mapped_region {
     //     container_cb region;

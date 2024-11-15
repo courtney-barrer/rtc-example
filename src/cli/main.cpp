@@ -9,15 +9,15 @@
 #include <vector>
 #include <future>
 
+using namespace baldr;
 
-namespace po = myboost::program_options;
-namespace json = myboost::json;
+namespace po = boost::program_options;
 
 json::value parse_json(const std::string& input) {
     // Try to parse as inline JSON
     try {
         return json::parse(input);
-    } catch (const myboost::system::system_error&) {
+    } catch (const boost::system::system_error&) {
         // If parsing fails, assume it's a file path
         std::ifstream file(input);
         if (!file) {
@@ -60,16 +60,7 @@ int main(int argc, char* argv[]) {
         for (const auto& component_config : config) {
             auto& comp_config_obj = component_config.as_object();
 
-            auto component_type = sardine::json::opt_to<std::string>(comp_config_obj, "component").value();
-
-            if (component_type == "camera")
-                locks.push_back( baldr::init_camera_thread(comp_config_obj) );
-
-            if (component_type == "rtc")
-                locks.push_back( baldr::init_rtc_thread(comp_config_obj) );
-
-            if (component_type == "dm")
-                locks.push_back( baldr::init_dm_thread(comp_config_obj) );
+            locks.push_back( baldr::init_component_thread(comp_config_obj) );
         }
 
         fmt::print("All component initialized\n");

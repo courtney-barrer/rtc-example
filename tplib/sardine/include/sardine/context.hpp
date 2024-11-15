@@ -2,7 +2,7 @@
 
 #ifdef SARDINE_CUDA
 #include <cuda/api.hpp>
-#endif
+#endif // SARDINE_CUDA
 
 #include <memory>
 
@@ -36,7 +36,7 @@ namespace sardine
             return stream_->device();
         }
     };
-#endif
+#endif // SARDINE_CUDA
 
     using default_context = host_context;
 

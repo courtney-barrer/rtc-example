@@ -14,7 +14,6 @@
 #include <sardine/region/host/manager.hpp>
 #include <sardine/region/host/utility.hpp>
 #include <sardine/region/local.hpp>
-#include <sardine/region/cuda/device.hpp>
 #include <sardine/region/managed.hpp>
 #include <sardine/region/managed/manager.hpp>
 #include <sardine/region/managed/utility.hpp>

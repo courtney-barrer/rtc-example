@@ -1,3 +1,5 @@
+#include <sardine/config.hpp>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
 #include <pybind11/stl.h>
@@ -5,7 +7,7 @@
 #include <emu/pybind11.hpp>
 
 namespace py = pybind11;
-namespace json = myboost::json;
+namespace json = EMU_BOOST_NAMESPACE::json;
 
 namespace sardine::json
 {
@@ -117,7 +119,7 @@ struct type_caster<sardine::json::value> {
         return sardine::json::as_pyobject(src);
     }
 
-    PYBIND11_TYPE_CASTER(sardine::json::value, _("myboost::json::value"));
+    PYBIND11_TYPE_CASTER(sardine::json::value, _("boost::json::value"));
 };
 
 template <>
@@ -135,7 +137,7 @@ struct type_caster<sardine::json::object> {
         return sardine::json::as_pyobject(src);
     }
 
-    PYBIND11_TYPE_CASTER(sardine::json::object, _("myboost::json::object"));
+    PYBIND11_TYPE_CASTER(sardine::json::object, _("boost::json::object"));
 };
 
 
@@ -153,7 +155,7 @@ struct type_caster<sardine::json::array> {
         return sardine::json::as_pyobject(src);
     }
 
-    PYBIND11_TYPE_CASTER(sardine::json::array, _("myboost::json::array"));
+    PYBIND11_TYPE_CASTER(sardine::json::array, _("boost::json::array"));
 };
 
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <baldr/rtc.hpp>
+#include <baldr/component/rtc.hpp>
 
 namespace baldr::benrtc
 {

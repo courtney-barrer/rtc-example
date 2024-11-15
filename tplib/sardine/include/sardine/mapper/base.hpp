@@ -15,6 +15,7 @@
 #include <sardine/type.hpp>
 #include <sardine/error.hpp>
 #include <sardine/mapping_descriptor.hpp>
+#include <sardine/sink.hpp>
 
 #include <emu/type_traits.hpp>
 #include <emu/concepts.hpp>
@@ -73,7 +74,7 @@ namespace mapper_cpts
 
         emu::capsule capsule;
 
-        static result< mapper > from_mapping_descriptor(const interface::mapping_descriptor& md, emu::capsule capsule) {
+        static result< mapper > from_mapping_descriptor(const interface::mapping_descriptor& md, emu::capsule&& capsule) {
             EMU_TRUE_OR_RETURN_UN_EC_LOG(md.item_size() == sizeof(value_type), error::mapper_item_size_mismatch,
                 "incompatible item size between mapping : {} and requested type {} : {}", md.item_size(), emu::type_name<value_type>, sizeof(value_type));
             EMU_TRUE_OR_RETURN_UN_EC(md.extents().size() == 0            , error::mapper_not_scalar);
@@ -91,10 +92,17 @@ namespace mapper_cpts
         size_t offset() const { return offset_; }
         // size_t lead_stride() const { return 1; }
 
-        T& convert(span_b buffer) const {
+        T& convert(span_b buffer) const & {
             //Note: We do nothing with the capsule here, since we don't have "scalar" types that takes it.
             EMU_ASSERT_MSG(buffer.size() >= sizeof(value_type), "Buffer size is invalid.");
             return *(reinterpret_cast<value_type*>(buffer.data()) + offset_);
+        }
+
+        T& convert(span_b buffer) && {
+            // Mapper will be destroyed after this call, so we need to keep the capsule alive.
+            sink(std::move(capsule));
+
+            return static_cast<const mapper*>(this)->convert(buffer);
         }
 
         template<typename TT>
@@ -161,7 +169,7 @@ namespace mapper_cpts
         size_t offset() const { return offset_; }
         size_t lead_stride() const { return 1; }
 
-        T convert(span_b buffer) const {
+        T convert(span_b buffer) const & {
             EMU_ASSERT_MSG(buffer.size() >= size() * sizeof(value_type), "Buffer size is invalid.");
 
             auto view = emu::as_t<element_type>(buffer).subspan(offset_, size_);
@@ -170,6 +178,14 @@ namespace mapper_cpts
                 return T(view.begin(), view.end(), capsule);
             else
                 return T(view.begin(), view.end());
+        }
+
+        T convert(span_b buffer) && {
+            // Mapper will be destroyed after this call, so we need to keep the capsule alive.
+            if constexpr (not mapper_cpts::capsule_container<T>)
+                sink(std::move(capsule));
+
+            return static_cast<const mapper*>(this)->convert(buffer);
         }
 
         template<typename TT>
@@ -250,7 +266,7 @@ namespace mapper_cpts
             return submdspan(0);
         }
 
-        T convert(span_b buffer) const {
+        T convert(span_b buffer) const & {
             auto view = emu::as_t<element_type>(buffer).subspan(offset_);
 
             EMU_ASSERT_MSG(view.size() >= mapping_.required_span_size(), "Buffer size is invalid.");
@@ -259,6 +275,14 @@ namespace mapper_cpts
                 return T(view.data(), mapping_, capsule);
             else
                 return T(view.data(), mapping_);
+        }
+
+        T convert(span_b buffer) && {
+            // Mapper will be destroyed after this call, so we need to keep the capsule alive.
+            if constexpr (not mapper_cpts::capsule_container<T>)
+                sink(std::move(capsule));
+
+            return static_cast<const mapper*>(this)->convert(buffer);
         }
 
         template<typename TT>

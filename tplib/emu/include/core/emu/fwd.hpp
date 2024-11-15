@@ -1,16 +1,10 @@
 #pragma once
 
-#include <cstddef>
 #include <emu/detail/mdspan_types.hpp>
+
+#include <cstddef>
 #include <type_traits>
-
-namespace std
-{
-
-    template <typename T>
-    struct optional;
-
-} // namespace std
+#include <optional>
 
 namespace tl
 {

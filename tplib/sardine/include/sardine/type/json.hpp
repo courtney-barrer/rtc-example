@@ -16,10 +16,10 @@ namespace cpts
 {
 
     template<typename T>
-    concept has_json_to = myboost::json::has_value_to< T >::value;
+    concept has_json_to = boost::json::has_value_to< T >::value;
 
     template<typename T>
-    concept has_json_from = myboost::json::has_value_from< T >::value;
+    concept has_json_from = boost::json::has_value_from< T >::value;
 
 } // namespace cpts
 
@@ -27,7 +27,7 @@ namespace json
 {
 
     //TODO: use specific types instead
-    namespace bj = myboost::json;
+    namespace bj = boost::json;
     using bj::value;
     using bj::object;
     using bj::array;
@@ -68,7 +68,7 @@ namespace json
 
     // template<typename Fn, std::convertible_to<string_view>... Names>
     // constexpr auto try_find_all(Fn&& f, const object& obj, Names&&... names) {
-    //     namespace ct = myboost::callable_traits;
+    //     namespace ct = boost::callable_traits;
 
     //     return [&] (auto... its) -> result< ct::return_type_t<Fn> > {
     //         if (((its != obj.end()) && ...))
@@ -80,7 +80,7 @@ namespace json
 
     // template<typename Fn, std::convertible_to<string_view>... Names>
     // auto try_invoke_if_all(Fn&& f, const object& obj, Names&&... names) {
-    //     namespace ct = myboost::callable_traits;
+    //     namespace ct = boost::callable_traits;
 
     //     return try_find_all([&f] (const auto&... values) -> result< ct::return_type_t<Fn> > {
     //         return emu::invoke_with_args([&]<typename... Ts> (emu::type_pack<Ts...>) {
@@ -194,22 +194,22 @@ namespace json
 //         if( arr.size() != 4 )
 //             return make_error_code( std::errc::invalid_argument );
 
-//         myboost::system::result< unsigned char > oct1
+//         boost::system::result< unsigned char > oct1
 //             = try_value_to< unsigned char >( arr[0] );
 //         if( !oct1 )
 //             return make_error_code( std::errc::invalid_argument );
 
-//         myboost::system::result< unsigned char > oct2
+//         boost::system::result< unsigned char > oct2
 //             = try_value_to< unsigned char >( arr[1] );
 //         if( !oct2 )
 //             return make_error_code( std::errc::invalid_argument );
 
-//         myboost::system::result< unsigned char > oct3
+//         boost::system::result< unsigned char > oct3
 //             = try_value_to< unsigned char >( arr[2] );
 //         if( !oct3 )
 //             return make_error_code( std::errc::invalid_argument );
 
-//         myboost::system::result< unsigned char > oct4
+//         boost::system::result< unsigned char > oct4
 //             = try_value_to< unsigned char >( arr[3] );
 //         if( !oct4 )
 //             return make_error_code( std::errc::invalid_argument );

@@ -1,7 +1,13 @@
 #pragma once
 
+#include <sardine/config.hpp>
+
 #include <emu/type_traits.hpp>
+#include <emu/fwd.hpp>
 #include <emu/error.hpp>
+
+#include <boost/url.hpp>
+#include <boost/json.hpp>
 
 namespace std
 {
@@ -10,28 +16,6 @@ namespace std
 
 } // namespace std
 
-
-namespace myboost::urls
-{
-
-    struct url;
-    struct url_view;
-
-    struct params_view;
-    struct params_ref;
-
-    struct parse_uri;
-    struct parse_uri_reference;
-
-} // namespace myboost::urls
-
-namespace myboost::json
-{
-
-    struct value;
-
-
-} // namespace myboost::json
 
 
 namespace tl
@@ -50,16 +34,16 @@ namespace sardine
 
     using emu::result;
 
-    using myboost::urls::url;
-    using myboost::urls::url_view;
+    using boost::urls::url;
+    using boost::urls::url_view;
 
 namespace urls
 {
-    using myboost::urls::params_view;
-    using myboost::urls::params_ref;
+    using boost::urls::params_view;
+    using boost::urls::params_ref;
 
-    using myboost::urls::parse_uri;
-    using myboost::urls::parse_uri_reference;
+    using boost::urls::parse_uri;
+    using boost::urls::parse_uri_reference;
 
 } // namespace urls
 

@@ -28,7 +28,7 @@ cpp-dev *args:
     -@cp build/*/compile_commands.json build/
 
 python-dev *args:
-    pip install --no-build-isolation -ve . {{args}}
+    pip install -ve . --no-build-isolation {{args}}
 
 build build_type="release":
     just cpp-build {{build_type}}
@@ -38,7 +38,7 @@ cpp-build build_type="release":
     cmake --build --preset "conan-{{build_type}}"
 
 python-build:
-    pip install --no-build-isolation -Ceditable.rebuild=true -ve .
+    pip install -ve . --no-build-isolation -Ceditable.rebuild=true
 
 # Run tests
 test build_type="release":

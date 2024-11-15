@@ -144,9 +144,9 @@ namespace sardine::ring
         size_t element_size;
 
         view_t(sardine::url data_url, span_b data, index idx, size_t size, size_t offset, size_t stride)
-            : data_url(move(data_url))
-            , data(move(data))
-            , idx(move(idx))
+            : data_url(std::move(data_url))
+            , data(std::move(data))
+            , idx(std::move(idx))
             , size(size)
             , offset(offset)
             , stride((stride == std::dynamic_extent) ? size : stride)
@@ -155,7 +155,7 @@ namespace sardine::ring
         view_t(const view_t&) = default;
 
         // view_t(interface_t data, index idx, size_t size, size_t offset = 0, size_t stride = std::dynamic_extent)
-        //     : view_t(sardine::view_t<T>(move(data)), move(idx), size, offset, stride)
+        //     : view_t(sardine::view_t<T>(std::move(data)), std::move(idx), size, offset, stride)
         // {}
 
         byte* data_handle() {
@@ -181,7 +181,7 @@ namespace sardine::ring
 
         // static result< view_t > create(span_b data, index idx, size_t size, size_t offset = 0, size_t stride = std::dynamic_extent) {
         //     return url_from_bytes(data).map([&](auto url) {
-        //         return view_t(url, move(data), move(idx), size, offset, stride);
+        //         return view_t(url, std::move(data), std::move(idx), size, offset, stride);
         //     });
         // }
     };
@@ -193,7 +193,7 @@ namespace sardine::ring
         using view_t::view_t;
 
         producer(view_t view)
-            : view_t(move(view))
+            : view_t(std::move(view))
         {
             // producer always set index to the next buffer.
             this->idx.incr_local();
@@ -216,7 +216,7 @@ namespace sardine::ring
         using view_t::view_t;
 
         consumer(view_t view)
-            : view_t(move(view))
+            : view_t(std::move(view))
         {}
 
         void recv(Ctx& ctx) {
@@ -230,7 +230,7 @@ namespace sardine::ring
     };
 
 
-    template<typename T, typename Ctx>
+    template<typename Ctx>
     struct factory : sardine::buffer::interface::factory<Ctx>
     {
         default_mapping_descriptor mapping_descriptor_;
@@ -238,8 +238,8 @@ namespace sardine::ring
         size_t offset_; // should I keep the offset ?
 
         factory(default_mapping_descriptor mapping_descriptor, url_view u, span_b shm_data, index idx, size_t size, size_t offset, size_t stride)
-            : mapping_descriptor_(move(mapping_descriptor))
-            , view(u, shm_data, move(idx), size, offset, stride)
+            : mapping_descriptor_(std::move(mapping_descriptor))
+            , view(u, shm_data, std::move(idx), size, offset, stride)
         {}
 
         const sardine::interface::mapping_descriptor& mapping_descriptor() const {
@@ -268,7 +268,7 @@ namespace sardine::ring
             return buffer::make_s_consumer<Ctx>(consumer<Ctx>{view});
         }
 
-        static result< buffer::s_factory<Ctx> > create( url_view u ) {
+        static result< buffer::s_factory<Ctx> > create( url_view u, emu::dlpack::device_type_t requested_dt) {
             auto params = u.params();
 
             auto size = EMU_UNWRAP_OR_RETURN_UNEXPECTED(urls::try_parse_at<size_t>(params, size_key),
@@ -283,12 +283,12 @@ namespace sardine::ring
             auto idx_url = EMU_UNWRAP_OR_RETURN_UNEXPECTED(urls::try_get_at(params, index_key),
                                                            error::ring_url_missing_index);
 
-            auto memory_h = EMU_UNWRAP(detail::bytes_from_url<T>(data_url) );
+            auto memory_h = EMU_UNWRAP(detail::bytes_from_url(data_url, requested_dt) );
 
             auto mapping_desc = EMU_UNWRAP(make_mapping_descriptor(params));
 
             return index::open(url(idx_url)).map([&](auto idx) {
-                return std::make_shared<factory>(move(mapping_desc), u, memory_h, move(idx), size, offset, stride);
+                return std::make_shared<factory>(std::move(mapping_desc), u, memory_h, std::move(idx), size, offset, stride);
             });
 
         }
@@ -316,10 +316,10 @@ namespace detail
 
         return sardine::detail::url_from_bytes(view, requested_device_type).map([&](auto url) {
             return std::make_pair(
-                move(closed_accessor),
+                std::move(closed_accessor),
                 view_t(
-                    move(url), view,
-                    move(idx),
+                    std::move(url), view,
+                    std::move(idx),
                     closed_accessor.size() * t_size,
                     offset * t_size,
                     mapper.lead_stride() * t_size
@@ -333,29 +333,29 @@ namespace detail
 
     template<typename T>
     auto make_view(T&& data, index idx, size_t offset = 0) {
-        return detail::make_view(EMU_FWD(data), move(idx), offset).map([&](auto pair) {
-            auto [accessor, view] = move(pair);
+        return detail::make_view(EMU_FWD(data), std::move(idx), offset).map([&](auto pair) {
+            auto [accessor, view] = std::move(pair);
             using data_view_t = typename decltype(accessor)::type;
-            return sardine::view_t<data_view_t>(accessor, buffer::make_s_view(move(view)));
+            return sardine::view_t<data_view_t>(accessor, buffer::make_s_view(std::move(view)));
         });
     }
 
 
     template<typename Ctx, typename T>
     auto make_producer(T&& data, index idx, size_t offset = 0) {
-        return detail::make_view(EMU_FWD(data), move(idx), offset).map([&](auto pair) {
-            auto [accessor, view] = move(pair);
+        return detail::make_view(EMU_FWD(data), std::move(idx), offset).map([&](auto pair) {
+            auto [accessor, view] = std::move(pair);
             using data_view_t = typename decltype(accessor)::view_type;
-            return sardine::producer<data_view_t, Ctx>(accessor, buffer::make_s_producer<Ctx>(producer<Ctx>(move(view))));
+            return sardine::producer<data_view_t, Ctx>(accessor, buffer::make_s_producer<Ctx>(producer<Ctx>(std::move(view))));
         });
     }
 
     template<typename Ctx, typename T>
     auto make_consumer(T&& data, index idx, size_t offset = 0) {
-        return detail::make_view(EMU_FWD(data), move(idx), offset).map([&](auto pair) {
-            auto [accessor, view] = move(pair);
+        return detail::make_view(EMU_FWD(data), std::move(idx), offset).map([&](auto pair) {
+            auto [accessor, view] = std::move(pair);
             using data_view_t = typename decltype(accessor)::view_type;
-            return sardine::consumer<data_view_t, Ctx>(accessor, buffer::make_s_consumer<Ctx>(consumer<Ctx>(move(view))));
+            return sardine::consumer<data_view_t, Ctx>(accessor, buffer::make_s_consumer<Ctx>(consumer<Ctx>(std::move(view))));
         });
     }
 

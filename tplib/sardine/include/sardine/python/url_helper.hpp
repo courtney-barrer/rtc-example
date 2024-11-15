@@ -14,16 +14,16 @@ namespace sardine
         using requested_type = emu::not_default_or<RequestedType, T>;
         cls
             .def_static("__from_url__", [](url u) -> pybind11::object {
-                auto res = EMU_UNWRAP_OR_THROW(sardine::from_url<requested_type>(u));
+                decltype(auto) res = EMU_UNWRAP_RES_OR_THROW(sardine::from_url<requested_type>(u));
 
                 if constexpr (emu::cpts::specialization_of<decltype(res), std::reference_wrapper>)
-                    return pybind11::cast(res.get(), pybind11::return_value_policy::reference);
+                    return pybind11::cast(res.get(), pybind11::return_value_policy::reference); // Returns reference as reference.
                 else
-                    return pybind11::cast(res);
+                    return pybind11::cast(res); // default policy should work here.
 
             })
             .def("__url_of__", [](const T& value) -> url {
-                return EMU_UNWRAP_OR_THROW(sardine::url_of(value));
+                return sardine::url_of(value).value();
             });
     }
 

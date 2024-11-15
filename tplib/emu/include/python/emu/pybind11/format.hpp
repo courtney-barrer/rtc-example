@@ -33,7 +33,7 @@ struct formatter<T, Char> : fmt::formatter<const Char *, Char> {
     }
 
     template <typename FormatContext>
-    auto format(const T& obj, FormatContext& ctx) const {
+    auto format(const T& obj, FormatContext& ctx) {
         return base::format(nanobind::str(format_spec.data(), format_spec.size()).format(obj).c_str(), ctx);
     }
 };

@@ -4,7 +4,7 @@
 #include <sardine/region/host/utility.hpp>
 
 #include <emu/cstring_view.hpp>
-#include <emu/unordered_map.hpp>
+#include <emu/associative_container.hpp>
 
 namespace sardine::region::host
 {

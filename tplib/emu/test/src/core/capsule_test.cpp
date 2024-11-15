@@ -148,7 +148,7 @@ namespace
         int called_nb = 0;
         scoped incr_at_destruction([&]{ called_nb++; });
 
-        capsule cap{ move(incr_at_destruction) };
+        capsule cap{ std::move(incr_at_destruction) };
 
         EXPECT_EQ(called_nb, 0);
 

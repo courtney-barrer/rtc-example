@@ -6,16 +6,16 @@ fixed bug in components / flicam.cpp
 /home/heimdallr/.conan2/p/b/boost371beca2b3497/p/include/boost/json/value_to.hpp:91:5: error: static assertion failed: ! std::is_reference<T>::value
    91 |     BOOST_STATIC_ASSERT(! std::is_reference<T>::value);
 
-seems to work but frame is cropped to 512,512 and not updating 
+seems to work but frame is cropped to 512,512 and not updating
 
-testing with 
+testing with
 from pyBaldr import ZWFS
 zwfs = ZWFS.ZWFS(DM_serial_number="17DW019#113", cameraIndex=0, DMshapes_path = 'DMShapes/' )
 zwfs.start_camera()
-zwfs.get_image() 
+zwfs.get_image()
 and we gut updated images with size 512,640
 
-rebuild 
+rebuild
     rm -rf build
     just dev
     conan build .
@@ -23,10 +23,10 @@ rebuild
     pip install .
 
 
-29/10/24  
----------  
+29/10/24
+---------
 test_gui.py - test for the gui showing dm and camera in SHM.
-script_test_fli.py - simulation of actual setup we want with 
+script_test_fli.py - simulation of actual setup we want with
 4 DM and RTCs  (each with own processw ) and a single camera
 reading configurations from json files.
 
@@ -35,37 +35,37 @@ reading configurations from json files.
 
 31/10/24
 -------------
-test julien camera branch to use observer 
+test julien camera branch to use observer
 
-rebuild 
+rebuild
     rm -rf build
     just dev
     conan build .
     conan editable add .
     pip install .
 
-in just dev failed flicam.cpp two line 139, 238 same name for method and memeber. line 238 edit 
-last_frame() -> LOOK_last_frame()
-then error in camera.hpp lines 39, 66 calling last_frame(). changed to LOOK_last_frame()
-also camera.cpp, fakecam.cpp, 
+in just dev failed flicam.cpp two line 139, 238 same name for method and memeber. line 238 edit
+last_frame() -> get_last_frame()
+then error in camera.hpp lines 39, 66 calling last_frame(). changed to get_last_frame()
+also camera.cpp, fakecam.cpp,
 
-after these changes installed!! 
+after these changes installed!!
 
-set up cred3_script_test.py which configs cred3. Runs fine, but when i call frame from SHM 
+set up cred3_script_test.py which configs cred3. Runs fine, but when i call frame from SHM
 its the right size (512,640) but only has non-zero entries for the first 32 rows. 32*512=2**14
 
-testing with previous python script : 
+testing with previous python script :
 
     from pyBaldr import ZWFS
     zwfs = ZWFS.ZWFS(DM_serial_number="17DW019#113", cameraIndex=0, DMshapes_path = 'DMShapes/' )
     zwfs.start_camera()
-    zwfs.get_image() 
-    and we gut updated images with correct size. 
+    zwfs.get_image()
+    and we gut updated images with correct size.
 
 BUG ::
-bmd -> bmc 
+bmd -> bmc
 
-cred3_script_test.py - works on single DM 
+cred3_script_test.py - works on single DM
 cred3_4dm_scipt_test.py - works , but some bug with multiple rtc initiations.
 
 
@@ -74,47 +74,47 @@ cred3_4dm_scipt_test.py - works , but some bug with multiple rtc initiations.
 
 
 Setting up in sydney July 2024
-- installing FLI / BMC software SDK for ubuntu 20.04 - all fine 
+- installing FLI / BMC software SDK for ubuntu 20.04 - all fine
 - FLI gui works
-- go to python to import SDK 
+- go to python to import SDK
 import sys
    ...: sys.path.insert(1, '/opt/FirstLightImaging/FliSdk/Python/demo/')
    ...: sys.path.insert(1,'/opt/Boston Micromachines/lib/Python3/site-packages/'
    ...: )
 import FliSdk_V2
 
-gave error 
+gave error
 
 OSError: /lib/x86_64-linux-gnu/libgobject-2.0.so.0: undefined symbol: ffi_type_uint32, version LIBFFI_BASE_7.0
 
-fix: in terminal 
+fix: in terminal
 export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libffi.so.7
 
 then could import without issue. Added to .bashrc file
 
 
 INSTALLING ON Ubuntu 20.04 at ANU,
- - main issue was there has been some merge with libblas and libclass, so need to use the later. This was done from /usr/lib do symbolic link >sudo ln -s libblas.so.3 libcblas.so.3 
+ - main issue was there has been some merge with libblas and libclass, so need to use the later. This was done from /usr/lib do symbolic link >sudo ln -s libblas.so.3 libcblas.so.3
 
 
 RTC notes - easier to see in visual studio code - main menu
 ===================
 
-nanobind to connect c++ to python 
+nanobind to connect c++ to python
 
 TO DO
 ====
  - in miniconda python still need to install python version of bmc (we installed c++ version and RTC class initializes DM). Now need to install FLi SDK for both python and c++ in this python environment.
- - simulate a matrix multiplication to get a float DM command with basic error checking and send to the DM. 
+ - simulate a matrix multiplication to get a float DM command with basic error checking and send to the DM.
 
 28/5/24 notes
 -----
 to go back to old python version. go to home directory->menu->show hidden files-> bashrc -> comment out last line "export PATH=/home/baldr/miniconda3/bin:$PATH"
 
-if making changes to rtc recompile 
+if making changes to rtc recompile
 baldr@baldr-Precision-T1600:~/Documents/rtc-example$ pip install --no-build-isolation -e .
 
-to run in python 
+to run in python
 baldr@baldr-Precision-T1600:~/Documents/rtc-example$ ipython
 
 
@@ -131,14 +131,14 @@ ip addr show
 should see
 inet 150.203.89.93/22 brd 150.203.91.255 scope global dynamic noprefixroute eno1
 in visual studio code write
-smthing likr baldr@150.203.89.93, then password. 
+smthing likr baldr@150.203.89.93, then password.
 
 
 import rtc
 r = rtc.RTC()
 
-can make shared variable in c++ by initializing it in RTC class . 
-e.g. 
+can make shared variable in c++ by initializing it in RTC class .
+e.g.
 struct RTC {
 
     DM hdm = {};
@@ -152,13 +152,13 @@ then in python
 In [3]: r.value
 Out[3]: 10.0
 
-After adding in to CMake.txt file 
+After adding in to CMake.txt file
 
 target_link_directories(_rtc PRIVATE "/opt/FirstLightImaging/FliSdk/lib/release")
 
 target_include_directories(_rtc PRIVATE "/opt/FirstLightImaging/FliSdk/include")
 
-and adding in code to RTC module to open FLI camera. It compiles but when importing rtc  in pytho it complains 
+and adding in code to RTC module to open FLI camera. It compiles but when importing rtc  in pytho it complains
 
 ImportError: /home/baldr/miniconda3/lib/python3.12/site-packages/rtc/_rtc.cpython-312-x86_64-linux-gnu.so: undefined symbol: _ZN6FliSdkC1Ev
 
@@ -175,5 +175,4 @@ Cannot specify link libraries for target "Example" which is not built by
 In the end copied to libFliSdk.so /lib
 import rtc
 ImportError: libboost_filesystem.so.1.73.0: cannot open shared object file: No such file or directory
-deleted it from here after 
-
+deleted it from here after

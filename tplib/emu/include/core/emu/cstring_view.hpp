@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+#include <fmt/base.h>
+
 namespace emu
 {
 
@@ -71,6 +73,14 @@ namespace emu
 
         constexpr ~basic_cstring_view() = default;
 
+        constexpr operator string_view_type() const noexcept {
+            return *this;
+        }
+
+        // constexpr operator std::basic_string<CharT, Traits>() const {
+        //     return *this;
+        // }
+
         void remove_prefix( size_type n ) = delete;
 
         [[nodiscard]] constexpr basic_cstring_view substr(size_type pos = 0) const {
@@ -79,10 +89,16 @@ namespace emu
         [[nodiscard]] constexpr string_view_type substr(size_type pos, size_type n) const {
             return string_view_type::substr(pos, n);
         }
-
+        // [[nodiscard]] constexpr CharT* data() noexcept {
+        //     return string_view_type::data();
+        // }
+        // [[nodiscard]] constexpr const CharT* data() const noexcept {
+        //     return string_view_type::data();
+        // }
         [[nodiscard]] constexpr const CharT* c_str() const noexcept {
             return string_view_type::data();
         }
+
 
     };
 
@@ -91,6 +107,7 @@ namespace emu
         using sv_t = basic_cstring_view<CharT, Traits>::string_view_type;
         return static_cast<sv_t>(lhs) <=> static_cast<sv_t>(rhs);
     }
+
 
 namespace literals
 {
@@ -127,6 +144,10 @@ namespace literals
     using cu16string_view = basic_cstring_view< char16_t >;
     using cu32string_view = basic_cstring_view< char32_t >;
 
+    inline std::string fun(cstring_view csv) {
+        return std::string(csv);
+    }
+
 namespace cpts
 {
 
@@ -143,6 +164,10 @@ namespace cpts
 
 } // namespace cpts
 
+
+    static_assert(std::is_convertible_v<const cstring_view&, std::string_view>);
+
+
 } // namespace emu
 
 template<typename CharT, typename Traits>
@@ -153,13 +178,17 @@ struct std::hash<emu::basic_cstring_view<CharT, Traits>> : std::hash<std::basic_
 };
 
 template<typename CharT, typename Traits>
-struct fmt::formatter<emu::basic_cstring_view<CharT, Traits>, CharT> : fmt::formatter<std::basic_string_view<CharT, Traits>, CharT> {
+struct fmt::formatter<emu::basic_cstring_view<CharT, Traits>, CharT>
+    : fmt::formatter<std::basic_string_view<CharT, Traits>, CharT>
+{
 
     using base = fmt::formatter<std::basic_string_view<CharT, Traits>, CharT>;
     using cstring_view = emu::basic_cstring_view<CharT, Traits>;
     using string_view = std::basic_string_view<CharT, Traits>;
 
-    auto format(cstring_view v, format_context& ctx) const {
+    auto format(cstring_view v, format_context& ctx) const
+        -> format_context::iterator
+    {
         return base::format(static_cast<string_view>(v), ctx);
     }
 };

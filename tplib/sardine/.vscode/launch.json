@@ -8,7 +8,7 @@
             "name": "Launch sardine test (gdb)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/test/sardinetest",
+            "program": "${workspaceFolder}/milk/build/Debug/test/sardinemilktest",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

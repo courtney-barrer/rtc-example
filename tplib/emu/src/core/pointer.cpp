@@ -91,7 +91,7 @@ namespace detail
         // It should not be considered an error.
         EMU_UNWRAP_RETURN_IF_TRUE(pointer_descritor_of(ptr).and_then(detail::device_from_descriptor));
 
-        return make_unexpected(error::pointer_device_not_found);
+        return make_unexpected(errc::pointer_device_not_found);
     }
 
 } // namespace emu

@@ -21,8 +21,8 @@ namespace sardine
     template <typename T, typename Ctx>
     box<T, Ctx>::box(interface_t view)
         : base_t(mapper_from(view))
-        , prod_impl(buffer::make_s_producer<Ctx>(buffer::native::producer<host_context>{as_span_of_bytes(view)}))
-        , cons_impl(buffer::make_s_consumer<Ctx>(buffer::native::consumer<host_context>{as_span_of_bytes(view)}))
+        , prod_impl(buffer::make_s_producer<Ctx>(buffer::native::producer<host_context>{sardine::as_bytes(view)}))
+        , cons_impl(buffer::make_s_consumer<Ctx>(buffer::native::consumer<host_context>{sardine::as_bytes(view)}))
         , storage(cons_impl->bytes())
         , value(storage.init(mapper().convert(cons_impl->bytes())))
     {}
@@ -30,19 +30,19 @@ namespace sardine
     template <typename T>
     view_t<T>::view_t(interface_t view)
         : base_t(mapper_from(view))
-        , impl(buffer::make_s_view(buffer::native::view_t{as_span_of_bytes(view)}))
+        , impl(buffer::make_s_view(buffer::native::view_t{sardine::as_bytes(view)}))
     {}
 
     template <typename T, typename Ctx>
     producer<T, Ctx>::producer(interface_t view)
         : base_t(mapper_from(view))
-        , impl(buffer::make_s_producer<Ctx>(buffer::native::producer<Ctx>{as_span_of_bytes(view)}))
+        , impl(buffer::make_s_producer<Ctx>(buffer::native::producer<Ctx>{sardine::as_bytes(view)}))
     {}
 
     template <typename T, typename Ctx>
     consumer<T, Ctx>::consumer(interface_t view)
         : base_t(mapper_from(view))
-        , impl(buffer::make_s_consumer<Ctx>(buffer::native::consumer<Ctx>{as_span_of_bytes(view)}))
+        , impl(buffer::make_s_consumer<Ctx>(buffer::native::consumer<Ctx>{sardine::as_bytes(view)}))
     {}
 
     template<typename T, typename Ctx>
@@ -52,9 +52,9 @@ namespace sardine
         constexpr static auto requested_device_type = emu::location_type_of<T>::device_type;
 
         if (scheme == ring::url_scheme)
-            return ring::factory<T, Ctx>::create(u);
+            return ring::factory<Ctx>::create(u, requested_device_type);
         else
-            return buffer::bytes_factory<T, Ctx>::create(u);
+            return buffer::bytes_factory<Ctx>::create(u, requested_device_type);
     }
 
     template<typename T, typename Ctx>
@@ -148,7 +148,7 @@ struct fmt::formatter<sardine::box<T, Ctx>, CharT> {
     }
 
     template<typename FormatContext>
-    auto format(const sardine::box<T, Ctx>& box, FormatContext& ctx) const {
+    auto format(const sardine::box<T, Ctx>& box, FormatContext& ctx) {
         return fmt::format_to(ctx.out(), "value({})", box.value);
     }
 };
@@ -161,7 +161,7 @@ struct fmt::formatter<sardine::producer<T, Ctx>, CharT> {
     }
 
     template<typename FormatContext>
-    auto format(const sardine::producer<T, Ctx>& value, FormatContext& ctx) const {
+    auto format(const sardine::producer<T, Ctx>& value, FormatContext& ctx) {
         return fmt::format_to(ctx.out(), "producer({})", value.view());
     }
 };
@@ -174,7 +174,7 @@ struct fmt::formatter<sardine::consumer<T, Ctx>, CharT> {
     }
 
     template<typename FormatContext>
-    auto format(const sardine::consumer<T, Ctx>& value, FormatContext& ctx) const {
+    auto format(const sardine::consumer<T, Ctx>& value, FormatContext& ctx) {
         return fmt::format_to(ctx.out(), "consumer({})", value.view());
     }
 };

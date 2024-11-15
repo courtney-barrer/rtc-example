@@ -9,7 +9,7 @@
 namespace sardine::region::host
 {
     // A handle to a shared memory region.
-    using handle = myboost::interprocess::mapped_region;
+    using handle = boost::interprocess::mapped_region;
 
     // A pointer to a shared memory location.
     struct shm_handle {

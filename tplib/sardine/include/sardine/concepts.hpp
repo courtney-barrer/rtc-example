@@ -17,12 +17,17 @@ namespace sardine::cpts
                       or std::same_as<T, sardine::urls::params_view>;
 
     template<typename T>
-    concept url_aware = requires(const T& t) {
+    concept url_of_aware = requires(const T& t) {
         { t.url() } -> cpts::url;
     };
 
+    template<typename T>
+    concept from_url_aware = requires(const sardine::url_view& url) {
+        { T::from_url(url) };
+    };
+
     // template<typename T>
-    // concept loadable = requires(const myboost::json::value& jv) {
+    // concept loadable = requires(const boost::json::value& jv) {
     //     { T::load(jv) } -> std::same_as< result<T> >;
     // };
 

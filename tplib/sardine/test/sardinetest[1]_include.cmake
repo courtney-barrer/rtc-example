@@ -1,0 +1,5 @@
+if(EXISTS "/home/jbernard/workspace/next/sardine/test/sardinetest[1]_tests.cmake")
+  include("/home/jbernard/workspace/next/sardine/test/sardinetest[1]_tests.cmake")
+else()
+  add_test(sardinetest_NOT_BUILT sardinetest_NOT_BUILT)
+endif()

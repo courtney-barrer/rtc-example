@@ -18,14 +18,14 @@ namespace
 
         ASSERT_TRUE(maybe_url) << "Could not create url: " << maybe_url.error().message();
 
-        auto maybe_scalar2 = sardine::from_url<double>(*maybe_url);
+        auto maybe_scalar2 = sardine::from_url<int>(*maybe_url);
 
         ASSERT_TRUE(maybe_scalar2) << "Could not open url: " << maybe_scalar2.error().message() << " url: " << maybe_url.value();
 
-        double& scalar2 = maybe_scalar2.value();
+        int& scalar2 = maybe_scalar2.value();
 
-        // ASSERT_EQ(scalar2, 42);
-        // ASSERT_EQ(&scalar, &scalar2);
+        ASSERT_EQ(scalar2, 42);
+        ASSERT_EQ(&scalar, &scalar2);
     }
 
     TEST(Url, StringTest)

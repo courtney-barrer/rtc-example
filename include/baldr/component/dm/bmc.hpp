@@ -1,6 +1,6 @@
 #pragma once
 
-#include <baldr/dm.hpp>
+#include <baldr/component/dm.hpp>
 
 namespace baldr::bmc
 {

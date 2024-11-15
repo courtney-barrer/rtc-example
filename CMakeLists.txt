@@ -2,46 +2,53 @@ cmake_minimum_required(VERSION 3.27)
 
 project(baldr VERSION 0.1.0 LANGUAGES CXX)
 
+option(CONAN_ARGS "Additional conan args" "")
+
 # Always generate compile_commands.json. Used by clangd and other tools.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN")
-set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+# Only when building the python module
+if(SKBUILD)
+    set(CONAN_INSTALL_ARGS "--build=missing;--options=baldr/*:python_module=True;")
+    if (CONAN_ARGS)
+        set(CONAN_INSTALL_ARGS "${CONAN_INSTALL_ARGS};${CONAN_ARGS}")
+    endif()
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-
-add_subdirectory(tplib/emu)
-add_subdirectory(tplib/sardine)
+    # We install all the libs next to each other in the sardine package.
+    # Let them simply link together when installed.
+    set(CMAKE_INSTALL_RPATH "$ORIGIN")
+endif()
 
 #################
 # BALDR LIBRARY #
 #################
 
 add_library(baldr
-    src/baldr/baldr.cpp
-    src/baldr/component/dm/fakedm.cpp
-    src/baldr/component/camera/fakecam.cpp
-    src/baldr/component/rtc/ben.cpp
-    src/baldr/component/rtc/fakertc.cpp
-    src/baldr/rtc.cpp
-    src/baldr/dm.cpp
-    src/baldr/camera.cpp
-    src/baldr/utility/command.cpp
-
-    src/baldr/component/camera/flicam.cpp
-    src/baldr/component/dm/bmc.cpp
+    src/lib/baldr.cpp
+    src/lib/component/dm/fakedm.cpp
+    src/lib/component/camera/fakecam.cpp
+    src/lib/component/rtc/ben.cpp
+    src/lib/component/rtc/fakertc.cpp
+    src/lib/component/rtc.cpp
+    src/lib/component/dm.cpp
+    src/lib/component/camera.cpp
+    src/lib/utility/command.cpp
+    src/lib/component/camera/flicam.cpp
+    src/lib/component/dm/bmc.cpp
+    src/lib/component/base.cpp
+    src/lib/utility/component_info.cpp
 )
 
 target_sources(baldr
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
-    include/baldr/dm.hpp
+    include/baldr/component/dm.hpp
     include/baldr/utility/push_record.hpp
     include/baldr/utility/span_cast.hpp
     include/baldr/utility/span_format.hpp
     include/baldr/utility/runner.hpp
     include/baldr/utility/updatable.hpp
     include/baldr/utility/command.hpp
-    include/baldr/rtc.hpp
+    include/baldr/component/rtc.hpp
     include/baldr/type.hpp
     include/baldr/component/camera/fakecam.hpp
     include/baldr/component/camera/flicam.hpp
@@ -49,13 +56,18 @@ target_sources(baldr
     include/baldr/component/dm/bmc.hpp
     include/baldr/component/rtc/ben.hpp
     include/baldr/baldr.hpp
-    include/baldr/camera.hpp
+    include/baldr/component/camera.hpp
 )
 
 target_compile_features(baldr PUBLIC cxx_std_20)
 
+find_package(sardine REQUIRED)
+find_package(Boost REQUIRED)
+
 target_link_libraries(baldr PUBLIC
     sardine::sardine
+    Boost::boost
+    Boost::json
 )
 
 
@@ -108,13 +120,6 @@ else()
     message(STATUS "Could not find FliSdk. Skipping...")
 endif()
 
-###########
-# INSTALL #
-###########
-
-install(TARGETS baldr
-    FILE_SET HEADERS
-)
 
 ####################
 # BALDR EXECUTABLE #
@@ -122,14 +127,53 @@ install(TARGETS baldr
 
 add_executable(baldr_main src/cli/main.cpp)
 
-find_package(Boost REQUIRED url json program_options)
-
 target_link_libraries(baldr_main PUBLIC
     baldr
-    Boost::url
-    Boost::json
-    Boost::program_options
 )
+
+
+if (NOT SKBUILD)
+
+    ###############
+    # C++ INSTALL #
+    ###############
+
+    install(TARGETS baldr
+        FILE_SET HEADERS
+    )
+
+else() # When building with scikit-build
+
+    # in this configuration, pybind11 can't find the python interpreter by itself.
+    find_package(Python 3.8
+        REQUIRED COMPONENTS Interpreter Development.Module
+        OPTIONAL_COMPONENTS Development.SABIModule)
+    find_package(pybind11 CONFIG REQUIRED)
+
+    pybind11_add_module(_baldr
+        src/python/_baldr.cpp
+    )
+
+    set_target_properties(baldr PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(_baldr PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+    target_compile_features(_baldr PUBLIC cxx_std_20)
+
+    target_link_libraries(_baldr PRIVATE
+        baldr
+    )
+
+    # Install the python module in the sardine python package.
+    install(TARGETS _baldr LIBRARY DESTINATION baldr)
+
+    # We also copy every shared libraries to the destination
+    install(TARGETS baldr DESTINATION baldr)
+    install(TARGETS baldr_main DESTINATION baldr/bin)
+    file(GLOB SHARED_LIBS "${CMAKE_BINARY_DIR}/[!_]*.so*")
+    install(FILES ${SHARED_LIBS} DESTINATION baldr)
+
+endif()
+
 
 ########
 # TEST #

@@ -1,10 +1,34 @@
 default: install
 
+conan_opt := "--options=boost/*:namespace=me_boost"
+
 configure:
-    # Configure conan and adds additional deps
-    curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s -- --skip-install
-    just tplib/emu/dev -o python=True
-    just tplib/sardine/dev
+    # curl -sS https://raw.githubusercontent.com/raplonu/cosmic-center-index/master/install.sh | bash -s -- --skip-install
+    @conan editable remove tplib/emu
+    conan create tplib/emu -b missing {{conan_opt}}
+    @conan editable remove tplib/sardine
+    conan create tplib/sardine -b missing {{conan_opt}}
+    @conan editable remove tplib/sardine/milk
+    conan create tplib/sardine/milk -b missing {{conan_opt}}
+
+    pip install tplib/sardine --config-settings=cmake.define.CONAN_ARGS={{conan_opt}}
+    pip install tplib/sardine/milk --config-settings=cmake.define.CONAN_ARGS={{conan_opt}}
+
+configure-dev:
+    conan build tplib/emu -b missing {{conan_opt}}
+    @conan editable add tplib/emu
+    conan build tplib/sardine -b missing {{conan_opt}}
+    @conan editable add tplib/sardine
+    conan build tplib/sardine/milk -b missing {{conan_opt}}
+    @conan editable add tplib/sardine/milk
+
+    pip install --no-build-isolation -e tplib/sardine --config-settings=cmake.define.CONAN_ARGS={{conan_opt}}
+    pip install --no-build-isolation -e tplib/sardine/milk --config-settings=cmake.define.CONAN_ARGS={{conan_opt}}
+
+# Install rtc in developer mode (editable) in conan and pip
+dev *args:
+    just cpp-dev {{args}}
+    just python-dev
 
 # Install rtc in conan cache and in pip
 install *args:
@@ -21,11 +45,6 @@ cpp-install *args:
 # Install sardine-python
 python-install *args:
     pip install .  {{args}}
-
-# Install rtc in developer mode (editable) in conan and pip
-dev *args:
-    just cpp-dev {{args}}
-    just python-dev
 
 cpp-dev *args:
     just register
@@ -44,7 +63,7 @@ cpp-build build_type="release":
     cmake --build --preset "conan-{{build_type}}"
 
 python-build:
-    pip install --no-build-isolation -Ceditable.rebuild=true -ve .
+    pip install --no-build-isolation -ve .
 
 # Run tests
 test build_type="release":
@@ -63,6 +82,12 @@ cpp-test build_type="release":
 
 @clean:
     just unregister
-    rm -rf						        \
-        build					        \
-        CMakeUserPresets.json
+    rm -rf					                        \
+        build				                        \
+        CMakeUserPresets.json                       \
+        tplib/emu/build                             \
+        tplib/emu/CMakeUserPresets.json             \
+        tplib/sardine/build                         \
+        tplib/sardine/CMakeUserPresets.json         \
+        tplib/sardine/milk/build                    \
+        tplib/sardine/milk/CMakeUserPresets.json

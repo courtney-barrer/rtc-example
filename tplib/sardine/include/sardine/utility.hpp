@@ -49,8 +49,15 @@ namespace sardine
             return t;
     }
 
+    inline bool is_contained(span_cb region, span_cb data) {
+        // Check if data is entirely within the region
+        return (data.data() >= region.data()) &&
+            (data.data() + data.size() <= region.data() + region.size());
+    }
+
+
     // template<typename T>
-    // constexpr result<T> as_result(myboost::system::result<T> res) {
+    // constexpr result<T> as_result(boost::system::result<T> res) {
     //     if (res)
     //         return wrap_ref(res.value());
     //     else
@@ -58,7 +65,7 @@ namespace sardine
     // }
 
     inline void remove(cstring_view name) {
-        myboost::interprocess::shared_memory_object::remove(name.c_str());
+        boost::interprocess::shared_memory_object::remove(name.c_str());
     }
 
     // auto split_string(std::string_view words, std::string_view delim = " ") {
@@ -168,6 +175,6 @@ namespace detail
 
 } // namespace detail
 
-    using myboost::hana::make;
+    using boost::hana::make;
 
 } // namespace sardine

@@ -1,9 +1,9 @@
 [project]
-name = "sardine"
+name = "cosmic-sardine"
 version = "0.1.0"
 description = "Shared memory for Sardine"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 license = { "file" = "LICENSE" }
 authors = [{ "name" = "Julien Bernard", "email" = "julientom.bernard@anu.edu.au" }]
 keywords = ["shm", "pybind11"]
@@ -11,26 +11,32 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Operating System :: POSIX :: Linux"
 ]
-dependencies = []
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+milk = ["cosmic-sardine-milk"]
+cuda = ["cosmic-sardine-cuda"]
 
 [project.scripts]
-sardine = "sardine.main:main"
+sardine-cli = "sardine_cli.cli:main"
+
+[tool.uv.sources]
+cosmic-sardine-cuda = { workspace = true }
+cosmic-sardine-milk = { workspace = true }
+
+[tool.uv.workspace]
+members = ["cuda", "milk", "project_name"]
 
 [build-system]
-requires = ["scikit-build-core >=0.10.3", "pybind11 >= 2.13.1", "cmake >=3.27", "conan >= 2.8.0"]
-
+requires = ["scikit-build-core >=0.10.3", "pybind11 >= 2.13.1", "conan >= 2.8.0", "cmake >= 3.28"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
 # path to the wrapper CMakeLists.txt file
-cmake.source-dir = "python"
-editable.rebuild = false
+editable.rebuild = true
 
 # Setuptools-style build caching in build directory
 build-dir = "build/{wheel_tag}"
@@ -40,6 +46,7 @@ build-dir = "build/{wheel_tag}"
 minimum-version = "0.10"
 # Build stable ABI wheels for CPython 3.12+
 wheel.py-api = "cp312"
+wheel.packages = ["src/sardine", "src/sardine_cli"]
 
 [tool.scikit-build.cmake.define]
 # Use conan for dependencies directly in CMake

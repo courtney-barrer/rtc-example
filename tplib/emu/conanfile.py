@@ -14,12 +14,12 @@ class EmuConan(ConanFile):
 
     exports_sources = 'CMakeLists.txt', 'include/*', 'src/*', 'test/*'
 
-    # generates header_only, shared and fpic logic. Experimental for now. Keep it commented
-    # implements = ['auto_shared_fpic']
+    # Generate the logic between shared and fPic
+    implements = ['auto_shared_fpic']
 
     options = {
-        'cuda'          : [True, False],
-        'python'        : [True, False],
+        'cuda'          : [True, False], # Build the emu cuda extension
+        'python'        : [True, False], # Build the emu python tests, change nothing regarding the emu python extension
         'shared'        : [True, False],
         'fPIC'          : [True, False],
     }
@@ -29,12 +29,11 @@ class EmuConan(ConanFile):
         'python'     : False,
         'shared'     : False,
         'fPIC'       : True,
-        'boost/*:namespace' : 'myboost',
     }
 
     def requirements(self):
-        self.requires('fmt/11.0.0', transitive_headers=True)
-        self.requires('boost/1.84.0', transitive_headers=True)
+        self.requires('fmt/11.0.0', transitive_headers=True, transitive_libs=True)
+        self.requires('boost/1.84.0', transitive_headers=True, transitive_libs=True)
         self.requires('ms-gsl/4.0.0', transitive_headers=True)
         self.requires('mdspan/0.6.0', transitive_headers=True)
         self.requires('tl-expected/1.1.0', transitive_headers=True)
@@ -46,14 +45,12 @@ class EmuConan(ConanFile):
 
         if self.options.cuda:
             self.requires('cuda-api-wrappers/0.7.0', transitive_headers=True)
-
-            self.requires('matx/0.8.0', transitive_headers=True)
-
-        # We keep the python package as a set of header. No deps.
-        if self.options.python:
-            self.requires('pybind11/2.13.1', transitive_headers=True)\
+            # self.requires('matx/0.8.0', transitive_headers=True)
 
         self.test_requires('gtest/1.13.0')
+
+        if self.options.python:
+            self.test_requires('pybind11/2.13.1')
 
     # Cannot be optional (link to the use of cuda or not).
     python_requires = 'conan_cuda/[>=1 <2]'
@@ -63,6 +60,8 @@ class EmuConan(ConanFile):
         self.cpp.source.components['core'].includedirs = ['include/core']
         self.cpp.build.components['core'].libdirs = self.cpp.build.libdirs
 
+        self.cpp.source.components['python'].includedirs = ['include/python']
+
         if self.options.cuda:
             cuda_prop = self.python_requires['conan_cuda'].module.properties()
 
@@ -70,8 +69,6 @@ class EmuConan(ConanFile):
             self.cpp.build.components['cuda'].libdirs = [*self.cpp.build.libdirs, cuda_prop.library]
             self.cpp.build.components['cuda'].system_libs = ['cuda', 'cudart', 'cublas']
 
-        if self.options.python:
-            self.cpp.source.components['python'].includedirs = ['include/python']
 
     generators = 'CMakeDeps'
 
@@ -79,7 +76,7 @@ class EmuConan(ConanFile):
         tc = CMakeToolchain(self)
 
         tc.variables['emu_build_cuda'] = self.options.cuda
-        tc.variables['emu_build_python'] = self.options.python
+        tc.variables['emu_build_python_test'] = self.options.python
         tc.variables['emu_boost_namespace'] = self.dependencies['boost'].options.namespace
 
         tc.generate()
@@ -113,6 +110,10 @@ class EmuConan(ConanFile):
 
         self.cpp_info.components['core'].defines = ['EMU_BOOST_NAMESPACE={}'.format(self.dependencies['boost'].options.namespace)]
 
+        self.cpp_info.components['python'].bindirs = []
+        self.cpp_info.components['python'].libdirs = []
+        self.cpp_info.components['python'].requires = ['core'] # , 'pybind11::pybind11'
+
         if self.options.cuda:
             # Conan does not provide a cuda 'package'. conan_cuda allows to retrieve
             # cuda lib dir and include dir and append it to emucuda
@@ -122,7 +123,7 @@ class EmuConan(ConanFile):
             self.cpp_info.components['cuda'].requires = [
                 'core',
                 'cuda-api-wrappers::cuda-api-wrappers',
-                'matx::matx'
+                # 'matx::matx'
             ]
             #TODO: check if FMT_USE_CONSTEXPR is still needed to use {fmt} in .cu files
             self.cpp_info.components['cuda'].defines = ['EMU_CUDA', 'FMT_USE_CONSTEXPR=1']
@@ -132,8 +133,3 @@ class EmuConan(ConanFile):
                 self.cpp_info.components['cuda'].exelinkflags = ['-Wl,-u,emu_cuda_device_pointer']
 
             self.python_requires['conan_cuda'].module.append_cuda(self.cpp_info.components['cuda'], ['cuda', 'cudart', 'cublas'])
-
-        if self.options.python:
-            self.cpp_info.components['python'].bindirs = []
-            self.cpp_info.components['python'].libdirs = []
-            self.cpp_info.components['python'].requires = ['core', 'pybind11::pybind11']

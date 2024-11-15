@@ -31,7 +31,7 @@
         #endif
     #endif
     #define DLL_LOCAL
-#else
+    #else
     #if __GNUC__ >= 4
         #define DLL_PUBLIC __attribute__ ((visibility ("default")))
         #define DLL_LOCAL  __attribute__ ((visibility ("hidden")))
@@ -43,7 +43,8 @@
 
 namespace emu
 {
-
+    // local alias of boost namespace.
+    // Allow to use boost with custom namespace name to avoid conflict with other libraries
     namespace boost = ::EMU_BOOST_NAMESPACE;
 
 } // namespace emu

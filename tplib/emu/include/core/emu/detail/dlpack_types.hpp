@@ -34,6 +34,14 @@ namespace emu::dlpack
 
         uint16_t lanes;
 
+        constexpr operator data_type_t() const {
+            return {
+                .code = code,
+                .bits = static_cast<uint8_t>(bits),
+                .lanes = lanes
+            };
+        }
+
         constexpr bool operator==(data_type_ext_t const& rhs) const noexcept {
             return code == rhs.code && bits == rhs.bits && lanes == rhs.lanes;
         }
@@ -65,6 +73,41 @@ namespace emu::dlpack
     using device_type_under_t = std::underlying_type_t<device_type_t>;
     using data_type_code_under_t = std::underlying_type_t<data_type_code_t>;
 
+namespace dtype
+{
+    // All types listed here does not have to necessarily to make sense.
+    // Most of them are fully supported by DLPack.
+    // The exception are the types with bits >= 256.
+
+    constexpr data_type_ext_t boolean = {kDLBool, 1, 1};
+
+    constexpr data_type_ext_t int8   = {kDLInt, 8, 1};
+    constexpr data_type_ext_t int16  = {kDLInt, 16, 1};
+    constexpr data_type_ext_t int32  = {kDLInt, 32, 1};
+    constexpr data_type_ext_t int64  = {kDLInt, 64, 1};
+    constexpr data_type_ext_t int128 = {kDLInt, 128, 1};
+
+    constexpr data_type_ext_t uint8   = {kDLUInt, 8, 1};
+    constexpr data_type_ext_t uint16  = {kDLUInt, 16, 1};
+    constexpr data_type_ext_t uint32  = {kDLUInt, 32, 1};
+    constexpr data_type_ext_t uint64  = {kDLUInt, 64, 1};
+    constexpr data_type_ext_t uint128 = {kDLUInt, 128, 1};
+
+    constexpr data_type_ext_t float8   = {kDLFloat, 8, 1};
+    constexpr data_type_ext_t float16  = {kDLFloat, 16, 1};
+    constexpr data_type_ext_t float32  = {kDLFloat, 32, 1};
+    constexpr data_type_ext_t float64  = {kDLFloat, 64, 1};
+    constexpr data_type_ext_t float128 = {kDLFloat, 128, 1};
+
+    constexpr data_type_ext_t bfloat16 = {kDLBfloat, 16, 1};
+
+    constexpr data_type_ext_t complex32  = {kDLComplex, 32, 1};
+    constexpr data_type_ext_t complex64  = {kDLComplex, 64, 1};
+    constexpr data_type_ext_t complex128 = {kDLComplex, 128, 1};
+    constexpr data_type_ext_t complex256 = {kDLComplex, 256, 1};
+
+} // namespace dtype
+
 } // namespace emu::dlpack
 
 inline std::string_view format_as(DLDeviceType dt) {
@@ -95,9 +138,9 @@ inline std::string_view format_as(DLDataTypeCode dtc) {
         case kDLInt:          return "int";
         case kDLUInt:         return "uint";
         case kDLFloat:        return "float";
-        case kDLOpaqueHandle: return "object";
-        case kDLBfloat:       return "bfloat";
         case kDLComplex:      return "complex";
+        case kDLBfloat:       return "bfloat";
+        case kDLOpaqueHandle: return "object";
         case kDLBool:         return "bool";
         default:              return "unknow";
     }
@@ -120,13 +163,20 @@ struct fmt::formatter<emu::dlpack::device_t, Char>
 template<typename Char>
 struct fmt::formatter<emu::dlpack::data_type_t, Char>
 {
-    constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator {
+    constexpr auto parse(format_parse_context& ctx)
+        -> format_parse_context::iterator
+    {
         return ctx.end();
     }
 
-    auto format(const emu::dlpack::data_type_t& value, format_context& ctx) const -> format_context::iterator {
+    auto format(const emu::dlpack::data_type_t& value, format_context& ctx) const
+        -> format_context::iterator
+    {
         // ignore the lanes for now.
-        ctx.advance_to(fmt::format_to(ctx.out(), "dtype('{}{}", static_cast<emu::dlpack::data_type_code_t>(value.code), value.bits));
+        ctx.advance_to(fmt::format_to(ctx.out(), "dtype('{}{}",
+            static_cast<emu::dlpack::data_type_code_t>(value.code), value.bits
+        ));
+
         if (value.lanes > 1) // when vectorized types.
             ctx.advance_to(fmt::format_to(ctx.out(), "[{}]", value.lanes));
 
@@ -138,13 +188,20 @@ struct fmt::formatter<emu::dlpack::data_type_t, Char>
 template<typename Char>
 struct fmt::formatter<emu::dlpack::data_type_ext_t, Char>
 {
-    constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator {
+    constexpr auto parse(format_parse_context& ctx)
+        -> format_parse_context::iterator
+    {
         return ctx.end();
     }
 
-    auto format(const emu::dlpack::data_type_ext_t& value, format_context& ctx) const -> format_context::iterator {
+    auto format(const emu::dlpack::data_type_ext_t& value, format_context& ctx) const
+        -> format_context::iterator
+    {
         // ignore the lanes for now.
-        ctx.advance_to(fmt::format_to(ctx.out(), "dtype('{}{}", static_cast<emu::dlpack::data_type_code_t>(value.code), value.bits));
+        ctx.advance_to(fmt::format_to(ctx.out(), "dtype('{}{}",
+            static_cast<emu::dlpack::data_type_code_t>(value.code), value.bits
+        ));
+
         if (value.lanes > 1) // when vectorized types.
             ctx.advance_to(fmt::format_to(ctx.out(), "[{}]", value.lanes));
 
@@ -153,6 +210,9 @@ struct fmt::formatter<emu::dlpack::data_type_ext_t, Char>
 
 };
 
-constexpr bool operator==(emu::dlpack::data_type_t const& lhs, emu::dlpack::data_type_t const& rhs) noexcept {
+constexpr bool operator==(
+    emu::dlpack::data_type_t const& lhs,
+    emu::dlpack::data_type_t const& rhs) noexcept
+{
     return lhs.code == rhs.code && lhs.bits == rhs.bits && lhs.lanes == rhs.lanes;
 }

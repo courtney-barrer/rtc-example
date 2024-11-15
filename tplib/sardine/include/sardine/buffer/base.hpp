@@ -22,7 +22,7 @@ namespace sardine
         using base_t::mapper_t;
         using base_t::mapper;
 
-        using interface_t = buffer::interface_type<T>;
+        using interface_t = base_t::view_type;
 
         buffer::s_producer<Ctx> prod_impl;
         buffer::s_consumer<Ctx> cons_impl;
@@ -35,9 +35,9 @@ namespace sardine
         box(interface_t view);
 
         box( sardine::mapper<T> a, buffer::s_producer<Ctx> p_impl, buffer::s_consumer<Ctx> c_impl )
-            : base_t(move(a))
-            , prod_impl(move(p_impl))
-            , cons_impl(move(c_impl))
+            : base_t(std::move(a))
+            , prod_impl(std::move(p_impl))
+            , cons_impl(std::move(c_impl))
             , storage(cons_impl->bytes())
             , value(storage.init(this->convert(cons_impl->bytes())))
         {}
@@ -79,15 +79,15 @@ namespace sardine
         using base_t::mapper_t;
         using base_t::mapper;
 
-        using interface_t = buffer::interface_type<T>;
+        using interface_t = base_t::view_type;
 
         buffer::s_view impl;
 
         view_t(interface_t view);
 
         view_t(sardine::mapper<T> a, buffer::s_view i)
-            : base_t(move(a))
-            , impl(move(i))
+            : base_t(std::move(a))
+            , impl(std::move(i))
         {}
 
         auto view() const -> decltype(auto) {
@@ -114,15 +114,15 @@ namespace sardine
         using base_t::mapper_t;
         using base_t::mapper;
 
-        using interface_t = buffer::interface_type<T>;
+        using interface_t = base_t::view_type;
 
         buffer::s_producer<Ctx> impl;
 
         producer(interface_t view);
 
         producer(sardine::mapper<T> a, buffer::s_producer<Ctx> i)
-            : base_t(move(a))
-            , impl(move(i))
+            : base_t(std::move(a))
+            , impl(std::move(i))
         {}
 
         auto view() const -> decltype(auto) {
@@ -158,15 +158,15 @@ namespace sardine
         using base_t::mapper_t;
         using base_t::mapper;
 
-        using interface_t = buffer::interface_type<T>;
+        using interface_t = base_t::view_type;
 
         buffer::s_consumer<Ctx> impl;
 
         consumer(interface_t view);
 
         consumer(sardine::mapper<T> a, buffer::s_consumer<Ctx> i)
-            : base_t(move(a))
-            , impl(move(i))
+            : base_t(std::move(a))
+            , impl(std::move(i))
         {}
 
         auto view() const -> decltype(auto) {
@@ -206,8 +206,8 @@ namespace sardine
 
 
         factory(buffer::s_factory<Ctx> impl, sardine::mapper<T> mapper)
-            : impl(move(impl))
-            , mapper(move(mapper))
+            : impl(std::move(impl))
+            , mapper(std::move(mapper))
             , mapping_desc(this->mapper.mapping_descriptor())
         {}
 
@@ -216,13 +216,13 @@ namespace sardine
 
         result< producer<T, Ctx> > create_producer() {
             return impl->create_producer().map([&](buffer::s_producer<Ctx> s_prod) {
-                return producer<T, Ctx>{ mapper, move(s_prod) };
+                return producer<T, Ctx>{ mapper, std::move(s_prod) };
             });
         }
 
         result< consumer<T, Ctx> > create_consumer() {
             return impl->create_consumer().map([&](buffer::s_consumer<Ctx> s_cons) {
-                return consumer<T, Ctx>{ mapper, move(s_cons) };
+                return consumer<T, Ctx>{ mapper, std::move(s_cons) };
             });
         }
 

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <baldr/camera.hpp>
+#include <baldr/component/camera.hpp>
 
 namespace baldr::flicam
 {
 
-    std::unique_ptr<interface::Camera> make_camera(CameraLogic cam_logic, json::object config);
+    std::future<void> make_camera(ComponentInfo& ci, CameraLogic cam_logic, json::object config, bool async);
 
 } // namespace baldr::flicam

@@ -18,13 +18,14 @@ add_executable(sardinetest
     src/producer_consumer_test.cpp
 )
 
-if(sardine_build_cuda)
-    target_sources(sardinetest PRIVATE
-        src/device_shm_test.cpp
-    )
-endif()
+# if(sardine_build_cuda)
+#     target_sources(sardinetest PRIVATE
+#         src/device_shm_test.cpp
+#     )
+# endif()
 
 target_include_directories(sardinetest PRIVATE include)
 
 target_link_libraries(sardinetest PRIVATE GTest::gtest sardine)
+
 gtest_discover_tests(sardinetest)

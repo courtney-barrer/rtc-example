@@ -74,7 +74,7 @@ namespace dlpack
         if (sv == "Hexagon") return kDLHexagon;
         if (sv == "Maia") return kDLMAIA;
 
-        return make_unexpected(error::dlpack_unkown_device_type);
+        return make_unexpected(errc::dlpack_unkown_device_type);
     }
 
     inline result<data_type_code_t> data_type_code_from_string(std::string_view sv)
@@ -89,7 +89,7 @@ namespace dlpack
         if(sv == "complex") return kDLComplex;
         if(sv == "bool") return kDLBool;
 
-        return make_unexpected(error::dlpack_unkown_data_type_code);
+        return make_unexpected(errc::dlpack_unkown_data_type_code);
     }
 
 
@@ -119,7 +119,7 @@ namespace detail
         int64_t highest_offset = 0;
 
         int64_t current_offset = 0;
-        for (int64_t i = 0; i < shape.size(); ++i) {
+        for (size_t i = 0; i < shape.size(); ++i) {
             int64_t stride = strides.empty() ? 1 : strides[i];
             int64_t max_offset = (shape[i] - 1) * stride;
             current_offset += max_offset;
@@ -142,7 +142,7 @@ namespace detail
         constexpr auto rank = Mapping::extents_type::rank();
         using array_t = std::array<size_t, rank>;
 
-        EMU_TRUE_OR_RETURN_UN_EC(tensor.ndim == rank, error::dlpack_rank_mismatch);
+        EMU_TRUE_OR_RETURN_UN_EC(tensor.ndim == rank, errc::dlpack_rank_mismatch);
 
         array_t extents; std::copy_n(tensor.shape, tensor.ndim, extents.begin());
 
@@ -383,14 +383,13 @@ namespace spe
         }
 
         static result<T&> import_(const dlpack::scoped_tensor& t) {
-            using location_p = location_type_of<T>;
 
-            EMU_TRUE_OR_RETURN_UN_EC(is_const<T> or not t.read_only(), error::dlpack_read_only);
+            EMU_TRUE_OR_RETURN_UN_EC(is_const<T> or not t.read_only(), errc::dlpack_read_only);
 
-            EMU_TRUE_OR_RETURN_UN_EC(t.rank() == 0, error::dlpack_rank_mismatch);
-            EMU_TRUE_OR_RETURN_UN_EC(t.dtype() == dtype, error::dlpack_type_mismatch);
+            EMU_TRUE_OR_RETURN_UN_EC(t.rank() == 0, errc::dlpack_rank_mismatch);
+            EMU_TRUE_OR_RETURN_UN_EC(t.dtype() == dtype, errc::dlpack_type_mismatch);
 
-            EMU_TRUE_OR_RETURN_UN_EC(not t.has_strides(), error::dlpack_strides_not_supported);
+            EMU_TRUE_OR_RETURN_UN_EC(not t.has_strides(), errc::dlpack_strides_not_supported);
 
             auto ptr = reinterpret_cast<T*>(t.get());
 
@@ -424,14 +423,13 @@ namespace spe
         }
 
         static result<SpanType> import_(const dlpack::scoped_tensor& t) {
-            using location_p = location_type_of<SpanType>;
 
-            EMU_TRUE_OR_RETURN_UN_EC(is_const<typename SpanType::element_type> or not t.read_only(), error::dlpack_read_only);
+            EMU_TRUE_OR_RETURN_UN_EC(is_const<typename SpanType::element_type> or not t.read_only(), errc::dlpack_read_only);
 
-            EMU_TRUE_OR_RETURN_UN_EC(t.rank() == 1, error::dlpack_rank_mismatch);
-            EMU_TRUE_OR_RETURN_UN_EC(t.dtype() == dtype, error::dlpack_type_mismatch);
+            EMU_TRUE_OR_RETURN_UN_EC(t.rank() == 1, errc::dlpack_rank_mismatch);
+            EMU_TRUE_OR_RETURN_UN_EC(t.dtype() == dtype, errc::dlpack_type_mismatch);
 
-            EMU_TRUE_OR_RETURN_UN_EC(not t.has_strides(), error::dlpack_strides_not_supported);
+            EMU_TRUE_OR_RETURN_UN_EC(not t.has_strides(), errc::dlpack_strides_not_supported);
 
             auto ptr = reinterpret_cast<typename SpanType::element_type*>(t.get());
 
@@ -509,13 +507,13 @@ namespace spe
         }
 
         static result<mdpan_type> import_(const dlpack::scoped_tensor& t) {
-            EMU_TRUE_OR_RETURN_UN_EC(is_const<typename MdSpanType::element_type> or not t.read_only(), error::dlpack_read_only);
+            EMU_TRUE_OR_RETURN_UN_EC(is_const<typename MdSpanType::element_type> or not t.read_only(), errc::dlpack_read_only);
 
-            EMU_TRUE_OR_RETURN_UN_EC(t.rank() == extents_type::rank(), error::dlpack_rank_mismatch);
-            EMU_TRUE_OR_RETURN_UN_EC(t.dtype() == dtype, error::dlpack_type_mismatch);
+            EMU_TRUE_OR_RETURN_UN_EC(t.rank() == extents_type::rank(), errc::dlpack_rank_mismatch);
+            EMU_TRUE_OR_RETURN_UN_EC(t.dtype() == dtype, errc::dlpack_type_mismatch);
 
             if constexpr (not mdpan_type::is_always_exhaustive()) {
-                EMU_TRUE_OR_RETURN_UN_EC(t.has_strides(), error::dlpack_strides_not_supported);
+                EMU_TRUE_OR_RETURN_UN_EC(t.has_strides(), errc::dlpack_strides_not_supported);
             }
 
             auto b_ptr = reinterpret_cast<typename MdSpanType::element_type*>(t.get());

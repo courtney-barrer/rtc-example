@@ -29,7 +29,7 @@ namespace sardine::buffer
 
         default_producer_consumer(span_b data, sardine::url u)
             : shm_data(data)
-            , u(move(u))
+            , u(std::move(u))
         {}
 
         byte* data_handle() {
@@ -164,7 +164,7 @@ namespace impl
         return std::make_shared< impl::consumer<Ctx, Impl> >(std::move(impl));
     }
 
-    template<typename T, typename Ctx>
+    template<typename Ctx>
     struct bytes_factory : interface::factory<Ctx>
     {
         span_b shm_data;
@@ -173,7 +173,7 @@ namespace impl
 
         bytes_factory(span_b shm_data, default_mapping_descriptor mapping_descriptor, url_view u)
             : shm_data(shm_data)
-            , mapping_descriptor_(move(mapping_descriptor))
+            , mapping_descriptor_(std::move(mapping_descriptor))
             , u(u)
         {}
 
@@ -195,8 +195,8 @@ namespace impl
             return buffer::make_s_consumer<Ctx>(buffer::default_producer_consumer<Ctx>{shm_data, u});
         }
 
-        static result< buffer::s_factory<Ctx> > create(url_view u) {
-            auto memory_h = sardine::detail::bytes_from_url<T>(u);
+        static result< buffer::s_factory<Ctx> > create(url_view u, emu::dlpack::device_type_t requested_dt) {
+            auto memory_h = sardine::detail::bytes_from_url(u, requested_dt);
             EMU_TRUE_OR_RETURN_ERROR(memory_h);
 
             auto md = make_mapping_descriptor(u.params());

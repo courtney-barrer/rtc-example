@@ -1,9 +1,8 @@
 #pragma once
 
-#include <emu/error.hpp>
+#include <sardine/logger.hpp>
 
-#include <stdexcept>
-#include <system_error>
+#include <emu/error.hpp>
 
 namespace sardine
 {
@@ -11,8 +10,8 @@ namespace sardine
 
     struct error_category: public std::error_category
     {
-        const char * name() const noexcept;
-        std::string message( int ev ) const;
+        [[nodiscard]] std::string message( int ev ) const override;
+        [[nodiscard]] const char * name() const noexcept override;
 
         static const std::error_category& instance();
     };

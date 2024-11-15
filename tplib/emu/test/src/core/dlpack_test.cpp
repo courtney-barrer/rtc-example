@@ -101,7 +101,7 @@ namespace
 
             EXPECT_FALSE(span_result);
 
-            EXPECT_EQ(span_result.error(), emu::make_error_code(emu::error::dlpack_read_only));
+            EXPECT_EQ(span_result.error(), emu::make_error_code(emu::errc::dlpack_read_only));
         }
     }
 
@@ -352,7 +352,7 @@ namespace
             EXPECT_TRUE(v_result);
 
             // Unwrap the vector from the result.
-            auto v2 = EMU_UNWRAP_OR_THROW(std::move(v_result));
+            auto v2 = EMU_UNWRAP_RES_OR_THROW(std::move(v_result));
 
             EXPECT_EQ(v2.size(), 1);
         }

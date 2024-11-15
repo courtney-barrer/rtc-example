@@ -1,3 +1,4 @@
 build/
 .py-build-cmake_cache/
+__pycache__/
 CMakeUserPresets.json

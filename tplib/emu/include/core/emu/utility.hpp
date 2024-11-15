@@ -21,7 +21,7 @@
 namespace emu
 {
 
-    using std::size_t, std::ptrdiff_t, std::move, std::byte;
+    using std::size_t, std::ptrdiff_t, std::byte;
 
     using std::string_view;
 

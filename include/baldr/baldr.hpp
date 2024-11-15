@@ -1,5 +1,8 @@
 #pragma once
 
-#include <baldr/rtc.hpp>
-#include <baldr/dm.hpp>
-#include <baldr/camera.hpp>
+#include <baldr/config.hpp>
+#include <baldr/type.hpp>
+#include <baldr/component/rtc.hpp>
+#include <baldr/component/dm.hpp>
+#include <baldr/component/camera.hpp>
+#include <baldr/component/base.hpp>

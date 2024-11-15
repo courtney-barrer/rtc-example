@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sardine/type.hpp>
+#include <sardine/type/url.hpp>
 #include <sardine/mapping_descriptor/base.hpp>
 
 #include <memory>

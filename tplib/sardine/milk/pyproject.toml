@@ -1,0 +1,54 @@
+[project]
+name = "cosmic-sardine-milk"
+version = "0.1.0"
+description = "Shared memory for Sardine"
+# readme = "../README.md"
+requires-python = ">=3.7"
+# license = { "file" = "LICENSE" }
+authors = [{ "name" = "Julien Bernard", "email" = "julientom.bernard@anu.edu.au" }]
+keywords = ["shm", "pybind11"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: POSIX :: Linux"
+]
+dependencies = []
+
+# [project.scripts]
+# sardine = "sardine.main:main"
+
+[build-system]
+requires = ["scikit-build-core >=0.10.3", "pybind11 >= 2.13.1", "conan >= 2.8.0"]
+
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+# path to the wrapper CMakeLists.txt file
+# cmake.source-dir = "python"
+editable.rebuild = true
+
+# Setuptools-style build caching in build directory
+build-dir = "build/{wheel_tag}"
+
+#TODO: audit the 2 following options
+# Protect the configuration against future changes in scikit-build-core
+minimum-version = "0.10"
+# Build stable ABI wheels for CPython 3.12+
+wheel.py-api = "cp312"
+
+[tool.scikit-build.cmake.define]
+# Use conan for dependencies directly in CMake
+CMAKE_PROJECT_TOP_LEVEL_INCLUDES = "cmake/conan_provider.cmake"
+
+[tool.cibuildwheel]
+# Necessary to see build output from the actual compilation
+build-verbosity = 1
+
+# # Run pytest to ensure that the package was correctly built
+# test-command = "pytest {project}/tests"
+# test-requires = "pytest"
