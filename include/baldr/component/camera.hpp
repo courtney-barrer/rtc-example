@@ -55,7 +55,7 @@ namespace interface
 } // namespace interface
 
     template<typename Camera>
-    std::future<void> spawn_async_runner(Camera component, ComponentInfo& ci) {
+    std::future<void> spawn_async_camera_runner(std::unique_ptr<Camera> component, ComponentInfo& ci) {
         return std::async(std::launch::async, [comp = std::move(component), &ci] () mutable {
             fmt::print("starting loop for {}\n", ci.name());
 
@@ -66,7 +66,7 @@ namespace interface
                 new_cmd = ci.wait_new_cmd(new_cmd);
 
                 auto new_cmd = ci.cmd();
-                comp.set_command(new_cmd);
+                comp->set_command(new_cmd);
 
                 // If it was exit, we just exit the while loop and end the thread.
                 if (new_cmd == Command::exit)

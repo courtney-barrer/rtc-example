@@ -26,6 +26,7 @@ namespace baldr
             ci.set_status(Status::running);
 
             while (true) {
+
                 auto new_cmd = ci.cmd();
 
                 if (new_cmd == Command::pause) {

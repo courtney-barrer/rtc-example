@@ -17,9 +17,9 @@ commands_url = sa.url_of(commands)
 
 cim = ba.ComponentInfoManager.get()
 
-cam_command = cim.create_component_info("cam")
-rtc_command = cim.create_component_info("rtc")
-dm_command = cim.create_component_info("dm")
+cam = cim.create_component_info("cam")
+rtc = cim.create_component_info("rtc")
+dm = cim.create_component_info("dm")
 
 frame_lock = ba.SpinLock.create()
 commands_lock = ba.SpinLock.create()
@@ -44,7 +44,7 @@ cam_config = {
         'notify': frame_lock_url.geturl(),
         'idx': 0,
     },
-    'cinfo': sa.url_of(cam_command).geturl(),
+    'cinfo': sa.url_of(cam).geturl(),
     'async': True
 }
 
@@ -65,7 +65,7 @@ rtc_config = {
         'wait': frame_lock_url.geturl(),
         'notify': commands_lock_url.geturl(),
     },
-    'cinfo': sa.url_of(rtc_command).geturl(),
+    'cinfo': sa.url_of(rtc).geturl(),
 }
 
 dm_config = {
@@ -77,15 +77,15 @@ dm_config = {
     'sync': {
         'wait': commands_lock_url.geturl(),
     },
-    'cinfo': sa.url_of(dm_command).geturl(),
+    'cinfo': sa.url_of(dm).geturl(),
 }
 
 baldr_config_file = open("baldr_config.json", "+w")
 
 json.dump([
     cam_config,
-    # rtc_config,
-    # dm_config
+    rtc_config,
+    dm_config
 ], baldr_config_file)
 
 baldr_config_file.close()
@@ -93,9 +93,9 @@ baldr_config_file.close()
 class clean_exit:
     def __del__(self):
         print("killing all")
-        cam_command.exit()
-        rtc_command.exit()
-        dm_command.exit()
+        cam.exit()
+        rtc.exit()
+        dm.exit()
 
         frame_lock.unlock()
         commands_lock.unlock()

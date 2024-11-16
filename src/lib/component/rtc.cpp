@@ -32,7 +32,6 @@ namespace node
     void RTC::operator()() {
         // waiting on the frame lock
         wait_lock->lock(wait_idx);
-        std::cout << "frame recieved doing computer " << std::endl;
         // ingore for now
         frame.recv(ctx);
 

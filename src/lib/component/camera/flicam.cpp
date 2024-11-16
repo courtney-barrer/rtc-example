@@ -387,16 +387,19 @@ namespace baldr::flicam
 
     struct FliCam final : interface::Camera, IRawImageReceivedObserver
     {
+        ComponentInfo* ci;
         CameraSettings camera_settings;
         std::unique_ptr<FliSdk> fli_sdk;
 
         std::span<const uint16_t> last_frame;
+        uint16_t previous_frame_number = 0;
 
         bool running = false;
 
 
-        FliCam(CameraLogic cam_logic, json::object config)
-            : interface::Camera(std::move(cam_logic))
+        FliCam(ComponentInfo& ci, CameraLogic cam_logic, json::object config, bool async)
+            : ci(&ci)
+            , interface::Camera(std::move(cam_logic))
             , camera_settings(boost::json::value_to<CameraSettings>(json::value(config)))
             ,  fli_sdk(std::make_unique<FliSdk>())
         {
@@ -441,16 +444,18 @@ namespace baldr::flicam
 
             apply_camera_settings(*fli_sdk, camera_settings);
 
-
-
-            // We don't care about fli internal ring buffer. We disable it.
-            fli_sdk->enableRingBuffer(true);
-
-            // We register the current object as an observer of the camera.
-            // We directly work on the grabber buffer hence the "beforeCopy".
-            fli_sdk->addRawImageReceivedObserver(this, /* beforeCopy = */ false ) ;//true);
-
             fli_sdk->imageProcessing()->enableAutoClip(true);
+
+            if (async) {
+                // We don't care about fli internal ring buffer. We disable it.
+                fli_sdk->enableRingBuffer(true);
+
+                // We register the current object as an observer of the camera.
+                // We directly work on the grabber buffer hence the "beforeCopy".
+                fli_sdk->addRawImageReceivedObserver(this, /* beforeCopy = */ true);
+            }
+
+
         }
 
         ~FliCam() {
@@ -488,6 +493,19 @@ namespace baldr::flicam
             }
         }
 
+        void compute() {
+            if (running) {
+                std::span<const uint16_t> current_frame(reinterpret_cast<const uint16_t*>(fli_sdk->getRawImage()), camera_settings.full_image_length);
+
+                auto frame_number = current_frame[0];
+
+                if (frame_number != previous_frame_number) {
+                    ci->loop_count.add(1);
+                    send_frame(current_frame);
+                    previous_frame_number = frame_number;
+                }
+            }
+        }
 
         std::span<const uint16_t> get_last_frame() const override // implement interface::Camera
         {
@@ -496,18 +514,18 @@ namespace baldr::flicam
 
         void imageReceived(const uint8_t* image) override // implement IRawImageReceivedObserver
         {
-            last_frame = std::span{reinterpret_cast<const uint16_t*>(image), camera_settings.full_image_length};
-
             if (running) {
-                static int cnt = 0;
-                //fmt::print("cnt = {}\n", cnt++);
+                last_frame = std::span{reinterpret_cast<const uint16_t*>(image), camera_settings.full_image_length};
+                // no need to test frame number. It is handle by the camera
                 send_frame(last_frame);
+                ci->loop_count.add(1);
             }
         }
 
         uint16_t fpsTrigger() override // implement IRawImageReceivedObserver
         {
             // Determine the fps. 0 means "as soon as their is a new frame".
+            //TODO: adds a parameter to set the fps
             return 0;
         }
 
@@ -515,7 +533,16 @@ namespace baldr::flicam
 
 
     std::future<void> make_camera(ComponentInfo& ci, CameraLogic cam_logic, json::object config, bool async) {
-        return std::make_unique<FliCam>(std::move(cam_logic), config);
+        auto camera = std::make_unique<FliCam>(ci, std::move(cam_logic), config, async);
+
+        if (async) {
+            return spawn_async_camera_runner(std::move(camera), ci);
+        } else {
+            return spawn_runner([camera = std::move(camera)]() mutable {
+                camera->compute();
+
+            }, ci);
+        }
     }
 
 } // namespace baldr::flicam
@@ -525,7 +552,7 @@ namespace baldr::flicam
 namespace baldr::flicam
 {
 
-    std::future<void> make_camera(ComponentInfo& ci, CameraLogic cam_logic, json::object config, bool async) {
+    std::future<void> make_camera(ComponentInfo&, CameraLogic, json::object, bool) {
         throw std::runtime_error("Error fli camera support is not compiled");
     }
 

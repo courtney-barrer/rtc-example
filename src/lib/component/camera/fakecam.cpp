@@ -54,7 +54,7 @@ namespace baldr::fakecam
         {
             fill_with_random_values(data);
 
-            thread = std::jthread([&, this](std::stop_token stoken) mutable {
+            thread = std::jthread([this](std::stop_token stoken) mutable {
                 while(true) {
                     if (stoken.stop_requested()) {
                         fmt::print("fakecam worker is requested to stop\n");
@@ -89,7 +89,7 @@ namespace baldr::fakecam
 
             if (elapsed < latency) {
                 auto remaining = latency - elapsed;
-                fmt::print("sleeping for {}ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+                // fmt::print("sleeping for {}ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
                 std::this_thread::sleep_for(latency - elapsed);
             }
         }
@@ -126,13 +126,13 @@ namespace baldr::fakecam
             throw std::runtime_error("missing frame latency");
         }).value() );
 
-        FakeCamera camera(ci, std::move(cam_logic), frame_size, frame_number, latency);
+        auto camera = std::make_unique<FakeCamera>(ci, std::move(cam_logic), frame_size, frame_number, latency);
 
         if (async) {
-            return spawn_async_runner(std::move(camera), ci);
+            return spawn_async_camera_runner(std::move(camera), ci);
         } else {
             return spawn_runner([camera = std::move(camera)]() mutable {
-                camera.compute();
+                camera->compute();
 
             }, ci);
         }

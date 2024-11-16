@@ -18,7 +18,7 @@ namespace sardine
         // Only insert if the capsule is not empty.
         if (c) {
 #ifndef NDEBUG // Debug mode
-            EMU_LOGGER("Sinking capsule: {}\n", c);
+            EMU_LOGGER("Sinking capsule\n");
 #endif
             capsule_holder_instance().insert(std::move(c));
         }
